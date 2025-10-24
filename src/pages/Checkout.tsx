@@ -63,7 +63,7 @@ export default function Checkout() {
       const orderData = {
         user_id: user.id,
         customer_email: data.email,
-        status: 'pending',
+        status: 'pending' as const,
         items: items.map(item => ({
           product_id: item.product_id,
           name: item.product?.name,
@@ -115,7 +115,7 @@ export default function Checkout() {
             await supabase
               .from('orders')
               .update({
-                status: 'processing',
+                status: 'processing' as const,
                 paystack_reference: transaction.reference,
                 paystack_status: 'success'
               })

@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
 import { sendEmail } from '@/utils/emailService';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -28,6 +29,25 @@ export default function Auth() {
     const { error } = await signIn(email, password);
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      setLoading(false);
+      return;
+    }
+
+    // Check if user is admin and redirect accordingly
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: roles } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('role', 'admin')
+        .maybeSingle();
+      
+      if (roles) {
+        navigate('/admin');
+      } else {
+        navigate('/');
+      }
     }
     setLoading(false);
   };

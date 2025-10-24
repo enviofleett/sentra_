@@ -14,6 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      cart_items: {
+        Row: {
+          created_at: string
+          id: string
+          product_id: string
+          quantity: number
+          session_id: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          product_id: string
+          quantity?: number
+          session_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          product_id?: string
+          quantity?: number
+          session_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cart_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       categories: {
         Row: {
           created_at: string
@@ -35,6 +73,39 @@ export type Database = {
           id?: string
           image_url?: string | null
           name?: string
+        }
+        Relationships: []
+      }
+      email_templates: {
+        Row: {
+          created_at: string
+          html_content: string
+          id: string
+          subject: string
+          template_id: string
+          text_content: string | null
+          updated_at: string
+          variables: Json | null
+        }
+        Insert: {
+          created_at?: string
+          html_content: string
+          id?: string
+          subject: string
+          template_id: string
+          text_content?: string | null
+          updated_at?: string
+          variables?: Json | null
+        }
+        Update: {
+          created_at?: string
+          html_content?: string
+          id?: string
+          subject?: string
+          template_id?: string
+          text_content?: string | null
+          updated_at?: string
+          variables?: Json | null
         }
         Relationships: []
       }
@@ -77,6 +148,101 @@ export type Database = {
         }
         Relationships: []
       }
+      orders: {
+        Row: {
+          billing_address: Json
+          created_at: string
+          customer_email: string
+          id: string
+          items: Json
+          paystack_reference: string | null
+          paystack_status: string | null
+          shipping_address: Json
+          shipping_cost: number | null
+          status: Database["public"]["Enums"]["order_status"]
+          subtotal: number
+          tax: number | null
+          total_amount: number
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          billing_address: Json
+          created_at?: string
+          customer_email: string
+          id?: string
+          items: Json
+          paystack_reference?: string | null
+          paystack_status?: string | null
+          shipping_address: Json
+          shipping_cost?: number | null
+          status?: Database["public"]["Enums"]["order_status"]
+          subtotal: number
+          tax?: number | null
+          total_amount: number
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          billing_address?: Json
+          created_at?: string
+          customer_email?: string
+          id?: string
+          items?: Json
+          paystack_reference?: string | null
+          paystack_status?: string | null
+          shipping_address?: Json
+          shipping_cost?: number | null
+          status?: Database["public"]["Enums"]["order_status"]
+          subtotal?: number
+          tax?: number | null
+          total_amount?: number
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      product_reviews: {
+        Row: {
+          created_at: string
+          id: string
+          is_approved: boolean | null
+          is_verified_purchase: boolean | null
+          product_id: string
+          rating: number
+          review_text: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_approved?: boolean | null
+          is_verified_purchase?: boolean | null
+          product_id: string
+          rating: number
+          review_text?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_approved?: boolean | null
+          is_verified_purchase?: boolean | null
+          product_id?: string
+          rating?: number
+          review_text?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_reviews_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           category_id: string | null
@@ -89,6 +255,7 @@ export type Database = {
           name: string
           original_price: number | null
           price: number
+          scent_profile: Database["public"]["Enums"]["scent_profile"] | null
           stock_quantity: number
         }
         Insert: {
@@ -102,6 +269,7 @@ export type Database = {
           name: string
           original_price?: number | null
           price?: number
+          scent_profile?: Database["public"]["Enums"]["scent_profile"] | null
           stock_quantity?: number
         }
         Update: {
@@ -115,6 +283,7 @@ export type Database = {
           name?: string
           original_price?: number | null
           price?: number
+          scent_profile?: Database["public"]["Enums"]["scent_profile"] | null
           stock_quantity?: number
         }
         Relationships: [
@@ -126,6 +295,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          default_billing_address: Json | null
+          default_shipping_address: Json | null
+          email: string
+          full_name: string | null
+          id: string
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          default_billing_address?: Json | null
+          default_shipping_address?: Json | null
+          email: string
+          full_name?: string | null
+          id: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          default_billing_address?: Json | null
+          default_shipping_address?: Json | null
+          email?: string
+          full_name?: string | null
+          id?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       testimonials: {
         Row: {
@@ -194,6 +396,8 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      is_order_processor: { Args: never; Returns: boolean }
+      is_product_manager: { Args: never; Returns: boolean }
     }
     Enums: {
       app_role:
@@ -202,6 +406,21 @@ export type Database = {
         | "user"
         | "product_manager"
         | "order_processor"
+      order_status:
+        | "pending"
+        | "processing"
+        | "shipped"
+        | "delivered"
+        | "cancelled"
+      scent_profile:
+        | "floral"
+        | "citrus"
+        | "woody"
+        | "oriental"
+        | "fresh"
+        | "spicy"
+        | "aquatic"
+        | "gourmand"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -335,6 +554,23 @@ export const Constants = {
         "user",
         "product_manager",
         "order_processor",
+      ],
+      order_status: [
+        "pending",
+        "processing",
+        "shipped",
+        "delivered",
+        "cancelled",
+      ],
+      scent_profile: [
+        "floral",
+        "citrus",
+        "woody",
+        "oriental",
+        "fresh",
+        "spicy",
+        "aquatic",
+        "gourmand",
       ],
     },
   },

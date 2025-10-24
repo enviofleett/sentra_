@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { Sparkles, Truck, Shield, Star } from 'lucide-react';
+import heroPerfume from '@/assets/hero-perfume.jpg';
 
 export default function Index() {
   const [heroItems, setHeroItems] = useState<any[]>([]);
@@ -51,20 +52,27 @@ export default function Index() {
       <Navbar />
 
       {/* Hero Section */}
-      <section className="relative h-[600px] md:h-[700px] overflow-hidden bg-gradient-subtle">
-        <div className="absolute inset-0 bg-gradient-primary opacity-90" />
+      <section className="relative h-[600px] md:h-[700px] overflow-hidden">
+        <div className="absolute inset-0">
+          <img 
+            src={heroPerfume} 
+            alt="Luxury Perfume Collection" 
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-primary/90 via-primary/70 to-transparent" />
+        </div>
         <div className="relative container mx-auto px-4 h-full flex items-center">
-          <div className="max-w-2xl text-center mx-auto space-y-6 text-primary-foreground">
+          <div className="max-w-2xl text-left space-y-6 text-white">
             {currentHero.subtitle && (
-              <p className="text-lg md:text-xl font-light tracking-wide">
+              <p className="text-lg md:text-xl font-light tracking-wide text-white/90">
                 {currentHero.subtitle}
               </p>
             )}
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold leading-tight">
+            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold leading-tight text-white drop-shadow-lg">
               {currentHero.title}
             </h1>
             {currentHero.description && (
-              <p className="text-lg md:text-xl opacity-90">
+              <p className="text-lg md:text-xl text-white/80">
                 {currentHero.description}
               </p>
             )}
@@ -84,7 +92,7 @@ export default function Index() {
                 key={idx}
                 onClick={() => setCurrentSlide(idx)}
                 className={`w-2 h-2 rounded-full transition-all ${
-                  idx === currentSlide ? 'bg-secondary w-8' : 'bg-primary-foreground/50'
+                  idx === currentSlide ? 'bg-secondary w-8' : 'bg-white/50'
                 }`}
               />
             ))}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
@@ -32,6 +32,7 @@ export default function Checkout() {
   const { user } = useAuth();
   const { items, subtotal, clearCart } = useCart();
   const [processing, setProcessing] = useState(false);
+  const [termsContent, setTermsContent] = useState('');
 
   const form = useForm<CheckoutFormData>({
     resolver: zodResolver(checkoutSchema),
@@ -44,6 +45,22 @@ export default function Checkout() {
       state: '',
     }
   });
+
+  useEffect(() => {
+    fetchTerms();
+  }, []);
+
+  const fetchTerms = async () => {
+    const { data } = await supabase
+      .from('app_config')
+      .select('value')
+      .eq('key', 'terms_and_conditions')
+      .maybeSingle();
+    
+    if (data?.value && typeof data.value === 'object' && 'content' in data.value) {
+      setTermsContent(data.value.content as string);
+    }
+  };
 
   if (!user) {
     navigate('/auth');
@@ -270,6 +287,14 @@ export default function Checkout() {
                         )}
                       />
                     </div>
+
+                    {termsContent && (
+                      <div className="rounded-md border p-4 bg-muted/50">
+                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                          {termsContent}
+                        </p>
+                      </div>
+                    )}
 
                     <Button type="submit" size="lg" className="w-full" disabled={processing}>
                       {processing ? 'Processing...' : 'Place Order'}

@@ -3,9 +3,8 @@ import {
   LayoutDashboard, 
   Package, 
   ShoppingCart, 
-  Users, 
   FolderTree, 
-  Mail,
+  Settings,
   Menu,
   X
 } from 'lucide-react';
@@ -17,9 +16,8 @@ const navigation = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { name: 'Products', href: '/admin/products', icon: Package },
   { name: 'Orders', href: '/admin/orders', icon: ShoppingCart },
-  { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'Categories', href: '/admin/categories', icon: FolderTree },
-  { name: 'Email Templates', href: '/admin/email-templates', icon: Mail },
+  { name: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 
 export function AdminHeader() {

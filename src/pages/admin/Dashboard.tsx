@@ -7,8 +7,7 @@ import { DashboardAnalytics } from './DashboardAnalytics';
 import { ProductsManagement } from './ProductsManagement';
 import { CategoriesManagement } from './CategoriesManagement';
 import { OrdersManagement } from './OrdersManagement';
-import { EmailTemplatesManagement } from './EmailTemplatesManagement';
-import { UsersManagement } from './UsersManagement';
+import SettingsManagement from './SettingsManagement';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -66,8 +65,7 @@ export default function AdminDashboard() {
           <Route path="/products" element={<ProductsManagement />} />
           <Route path="/categories" element={<CategoriesManagement />} />
           <Route path="/orders" element={<OrdersManagement />} />
-          <Route path="/email-templates" element={<EmailTemplatesManagement />} />
-          <Route path="/users" element={<UsersManagement />} />
+          <Route path="/settings" element={<SettingsManagement />} />
         </Routes>
       </main>
     </div>

@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Pencil, Trash2, Plus } from 'lucide-react';
+import { Pencil, Trash2, Plus, Upload, X } from 'lucide-react';
 
 interface Product {
   id: string;
@@ -36,6 +36,9 @@ export function ProductsManagement() {
   const [loading, setLoading] = useState(true);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const emptyProduct: Omit<Product, 'id'> = {
     name: '',
@@ -78,9 +81,76 @@ export function ProductsManagement() {
     setCategories(data || []);
   };
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please select an image file');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Image size must be less than 5MB');
+        return;
+      }
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
+    }
+  };
+
+  const clearImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+  };
+
+  const uploadImage = async (file: File): Promise<string | null> => {
+    try {
+      setUploading(true);
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('product-images')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        toast.error('Failed to upload image');
+        return null;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(filePath);
+
+      return publicUrl;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      toast.error('Failed to upload image');
+      return null;
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    
+    let imageUrl = editingProduct?.image_url || null;
+
+    // Upload new image if selected
+    if (imageFile) {
+      const uploadedUrl = await uploadImage(imageFile);
+      if (uploadedUrl) {
+        imageUrl = uploadedUrl;
+      } else {
+        return; // Stop if upload failed
+      }
+    }
     
     const scentValue = formData.get('scent_profile') as string;
     const validScents = ['aquatic', 'citrus', 'floral', 'fresh', 'gourmand', 'oriental', 'spicy', 'woody'];
@@ -92,7 +162,7 @@ export function ProductsManagement() {
       original_price: formData.get('original_price') ? parseFloat(formData.get('original_price') as string) : null,
       stock_quantity: parseInt(formData.get('stock_quantity') as string),
       category_id: formData.get('category_id') as string || null,
-      image_url: formData.get('image_url') as string || null,
+      image_url: imageUrl,
       is_featured: formData.get('is_featured') === 'true',
       is_active: formData.get('is_active') === 'true',
       scent_profile: (scentValue && validScents.includes(scentValue) ? scentValue : null) as any,
@@ -110,6 +180,7 @@ export function ProductsManagement() {
       } else {
         toast.success('Product updated successfully');
         setIsDialogOpen(false);
+        clearImage();
         fetchProducts();
       }
     } else {
@@ -123,6 +194,7 @@ export function ProductsManagement() {
       } else {
         toast.success('Product created successfully');
         setIsDialogOpen(false);
+        clearImage();
         fetchProducts();
       }
     }
@@ -147,6 +219,10 @@ export function ProductsManagement() {
 
   const openDialog = (product?: Product) => {
     setEditingProduct(product || null);
+    clearImage();
+    if (product?.image_url) {
+      setImagePreview(product.image_url);
+    }
     setIsDialogOpen(true);
   };
 
@@ -206,8 +282,51 @@ export function ProductsManagement() {
                 </div>
               </div>
               <div>
-                <Label htmlFor="image_url">Image URL</Label>
-                <Input id="image_url" name="image_url" defaultValue={editingProduct?.image_url || ''} />
+                <Label htmlFor="image">Product Image</Label>
+                <div className="space-y-4">
+                  {imagePreview && (
+                    <div className="relative inline-block">
+                      <img 
+                        src={imagePreview} 
+                        alt="Preview" 
+                        className="h-32 w-32 object-cover rounded-lg border"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0"
+                        onClick={clearImage}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="image"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      className="hidden"
+                    />
+                    <Label
+                      htmlFor="image"
+                      className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md cursor-pointer hover:bg-primary/90"
+                    >
+                      <Upload className="h-4 w-4" />
+                      {imageFile ? 'Change Image' : 'Upload Image'}
+                    </Label>
+                    {imageFile && (
+                      <span className="text-sm text-muted-foreground">
+                        {imageFile.name}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Recommended: Square image, max 5MB
+                  </p>
+                </div>
               </div>
               <div>
                 <Label htmlFor="scent_profile">Scent Profile</Label>
@@ -255,7 +374,9 @@ export function ProductsManagement() {
               </div>
               <div className="flex gap-2 justify-end">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button type="submit">{editingProduct ? 'Update' : 'Create'}</Button>
+                <Button type="submit" disabled={uploading}>
+                  {uploading ? 'Uploading...' : (editingProduct ? 'Update' : 'Create')}
+                </Button>
               </div>
             </form>
           </DialogContent>

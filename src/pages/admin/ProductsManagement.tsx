@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -39,6 +39,7 @@ export function ProductsManagement() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [description, setDescription] = useState('');
 
   const emptyProduct: Omit<Product, 'id'> = {
     name: '',
@@ -157,7 +158,7 @@ export function ProductsManagement() {
     
     const productData = {
       name: formData.get('name') as string,
-      description: formData.get('description') as string,
+      description: description,
       price: parseFloat(formData.get('price') as string),
       original_price: formData.get('original_price') ? parseFloat(formData.get('original_price') as string) : null,
       stock_quantity: parseInt(formData.get('stock_quantity') as string),
@@ -219,6 +220,7 @@ export function ProductsManagement() {
 
   const openDialog = (product?: Product) => {
     setEditingProduct(product || null);
+    setDescription(product?.description || '');
     clearImage();
     if (product?.image_url) {
       setImagePreview(product.image_url);
@@ -250,7 +252,11 @@ export function ProductsManagement() {
               </div>
               <div>
                 <Label htmlFor="description">Description</Label>
-                <Textarea id="description" name="description" defaultValue={editingProduct?.description || ''} />
+                <RichTextEditor 
+                  content={description}
+                  onChange={setDescription}
+                  placeholder="Enter product description..."
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

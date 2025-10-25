@@ -98,75 +98,62 @@ export default function Checkout() {
 
       if (orderError) throw orderError;
 
-      // Initialize Paystack (mock for now)
-      const paystackPublicKey = 'pk_test_xxxxxxxxxxxxxxxxxxxxxx';
-
-      // In production, you would use:
-      // @ts-ignore
-      if (typeof PaystackPop !== 'undefined') {
-        // @ts-ignore
-        const handler = PaystackPop.setup({
-          key: paystackPublicKey,
-          email: data.email,
-          amount: subtotal * 100, // in kobo
-          ref: order.id,
-          onSuccess: async (transaction: any) => {
-            // Update order status
-            await supabase
-              .from('orders')
-              .update({
-                status: 'processing' as const,
-                paystack_reference: transaction.reference,
-                paystack_status: 'success'
-              })
-              .eq('id', order.id);
-
-            // Send confirmation email
-            await sendEmail(data.email, 'ORDER_CONFIRMATION', {
-              customer_name: data.fullName,
-              order_id: order.id.slice(0, 8),
-              total_amount: subtotal.toLocaleString()
-            });
-
-            // Clear cart
-            await clearCart();
-
-            toast({
-              title: 'Order placed successfully!',
-              description: 'Check your email for confirmation'
-            });
-
-            navigate('/profile/orders');
-          },
-          onCancel: () => {
-            toast({
-              title: 'Payment cancelled',
-              description: 'Your order has been saved and can be completed later',
-              variant: 'destructive'
-            });
-          }
-        });
-
-        handler.openIframe();
-      } else {
-        // Fallback for development/testing
-        console.log('Paystack not loaded. Order created:', order.id);
-        
-        await sendEmail(data.email, 'ORDER_CONFIRMATION', {
-          customer_name: data.fullName,
-          order_id: order.id.slice(0, 8),
-          total_amount: subtotal.toLocaleString()
-        });
-
-        await clearCart();
-
-        toast({
-          title: 'Order placed successfully!',
-          description: '(Demo mode - no actual payment processed)'
-        });
-
-        navigate('/profile/orders');
+      // Get Paystack public key from environment
+      // TODO: Store this in Supabase secrets and fetch it
+      const paystackPublicKey = 'pk_test_xxxxxxxxxxxxxxxxxxxxxx'; // Replace with your live key
+      
+      // @ts-ignore - PaystackPop is loaded from script in index.html
+      if (typeof PaystackPop === 'undefined') {
+        throw new Error('Paystack payment library not loaded. Please refresh the page.');
       }
+
+      // @ts-ignore
+      const handler = PaystackPop.setup({
+        key: paystackPublicKey,
+        email: data.email,
+        amount: subtotal * 100, // Convert to kobo
+        ref: order.id, // Use order ID as reference
+        metadata: {
+          order_id: order.id,
+          customer_name: data.fullName,
+        },
+        onSuccess: async (transaction: any) => {
+          console.log('Payment successful:', transaction.reference);
+          
+          // Note: The webhook will handle the final order status update
+          // This is just for user feedback
+          toast({
+            title: 'Payment successful!',
+            description: 'Processing your order...'
+          });
+
+          // Send confirmation email (will also be sent by webhook)
+          await sendEmail(data.email, 'ORDER_CONFIRMATION', {
+            customer_name: data.fullName,
+            order_id: order.id.slice(0, 8),
+            total_amount: subtotal.toLocaleString()
+          });
+
+          // Clear cart
+          await clearCart();
+
+          // Redirect to orders page
+          navigate('/profile/orders');
+        },
+        onCancel: () => {
+          console.log('Payment cancelled');
+          toast({
+            title: 'Payment cancelled',
+            description: 'Your order has been saved. You can complete payment later.',
+            variant: 'destructive'
+          });
+          
+          // Optionally redirect to orders page
+          navigate('/profile/orders');
+        }
+      });
+
+      handler.openIframe();
     } catch (error: any) {
       console.error('Checkout error:', error);
       toast({

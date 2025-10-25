@@ -4,8 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Navbar } from '@/components/layout/Navbar';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card } from '@/components/ui/card';
 import { 
   LayoutDashboard, 
   Package, 
@@ -14,91 +13,12 @@ import {
   Users,
   Settings
 } from 'lucide-react';
-
-function Dashboard() {
-  return (
-    <div className="space-y-6">
-      <h2 className="text-3xl font-bold">Dashboard</h2>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Total Products</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">0</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Total Orders</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">0</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Revenue</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">₦0</p>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-function ProductsManagement() {
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold">Products</h2>
-        <Button>Add Product</Button>
-      </div>
-      <p className="text-muted-foreground">Product management coming soon...</p>
-    </div>
-  );
-}
-
-function CategoriesManagement() {
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold">Categories</h2>
-        <Button>Add Category</Button>
-      </div>
-      <p className="text-muted-foreground">Category management coming soon...</p>
-    </div>
-  );
-}
-
-function OrdersManagement() {
-  return (
-    <div className="space-y-6">
-      <h2 className="text-3xl font-bold">Orders</h2>
-      <p className="text-muted-foreground">Order management coming soon...</p>
-    </div>
-  );
-}
-
-function EmailTemplates() {
-  return (
-    <div className="space-y-6">
-      <h2 className="text-3xl font-bold">Email Templates</h2>
-      <p className="text-muted-foreground">Template editor coming soon...</p>
-    </div>
-  );
-}
-
-function UsersManagement() {
-  return (
-    <div className="space-y-6">
-      <h2 className="text-3xl font-bold">Users & Roles</h2>
-      <p className="text-muted-foreground">User management coming soon...</p>
-    </div>
-  );
-}
+import { DashboardAnalytics } from './DashboardAnalytics';
+import { ProductsManagement } from './ProductsManagement';
+import { CategoriesManagement } from './CategoriesManagement';
+import { OrdersManagement } from './OrdersManagement';
+import { EmailTemplatesManagement } from './EmailTemplatesManagement';
+import { UsersManagement } from './UsersManagement';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -188,11 +108,11 @@ export default function AdminDashboard() {
           {/* Main Content */}
           <div className="lg:col-span-4">
             <Routes>
-              <Route index element={<Dashboard />} />
+              <Route index element={<DashboardAnalytics />} />
               <Route path="products" element={<ProductsManagement />} />
               <Route path="categories" element={<CategoriesManagement />} />
               <Route path="orders" element={<OrdersManagement />} />
-              <Route path="templates" element={<EmailTemplates />} />
+              <Route path="templates" element={<EmailTemplatesManagement />} />
               <Route path="users" element={<UsersManagement />} />
             </Routes>
           </div>

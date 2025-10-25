@@ -22,8 +22,31 @@ export default function ProductDetail() {
   useEffect(() => {
     if (id) {
       loadProduct();
+      trackProductView();
     }
   }, [id]);
+
+  const trackProductView = async () => {
+    if (!id) return;
+    
+    // Get or create session ID
+    let sessionId = localStorage.getItem('session_id');
+    if (!sessionId) {
+      sessionId = crypto.randomUUID();
+      localStorage.setItem('session_id', sessionId);
+    }
+
+    try {
+      await supabase.from('product_analytics').insert({
+        product_id: id,
+        event_type: 'view',
+        user_id: user?.id || null,
+        session_id: sessionId
+      });
+    } catch (error) {
+      console.error('Error tracking view:', error);
+    }
+  };
 
   const loadProduct = async () => {
     const { data, error } = await supabase

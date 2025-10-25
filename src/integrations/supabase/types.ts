@@ -202,6 +202,44 @@ export type Database = {
         }
         Relationships: []
       }
+      product_analytics: {
+        Row: {
+          created_at: string | null
+          event_type: string
+          id: string
+          product_id: string | null
+          quantity: number | null
+          session_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          event_type: string
+          id?: string
+          product_id?: string | null
+          quantity?: number | null
+          session_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          event_type?: string
+          id?: string
+          product_id?: string | null
+          quantity?: number | null
+          session_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_analytics_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_reviews: {
         Row: {
           created_at: string

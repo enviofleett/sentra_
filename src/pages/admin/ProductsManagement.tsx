@@ -10,6 +10,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { Pencil, Trash2, Plus, Upload, X } from 'lucide-react';
+import { ProductPerformanceChart } from '@/components/admin/ProductPerformanceChart';
+import { TopProductsWidget } from '@/components/admin/TopProductsWidget';
+import { getTopProductsByViews, getTopProductsByPurchases } from '@/utils/analytics';
 
 interface Product {
   id: string;
@@ -40,6 +43,10 @@ export function ProductsManagement() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [description, setDescription] = useState('');
+  const [period, setPeriod] = useState<'today' | 'week' | 'month'>('today');
+  const [topByViews, setTopByViews] = useState<any[]>([]);
+  const [topByPurchases, setTopByPurchases] = useState<any[]>([]);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   const emptyProduct: Omit<Product, 'id'> = {
     name: '',
@@ -57,7 +64,29 @@ export function ProductsManagement() {
   useEffect(() => {
     fetchProducts();
     fetchCategories();
+    fetchAnalytics();
   }, []);
+
+  useEffect(() => {
+    fetchAnalytics();
+  }, [period]);
+
+  const fetchAnalytics = async () => {
+    setAnalyticsLoading(true);
+    try {
+      const days = period === 'today' ? 1 : period === 'week' ? 7 : 30;
+      const [views, purchases] = await Promise.all([
+        getTopProductsByViews(days, 10),
+        getTopProductsByPurchases(days, 10)
+      ]);
+      setTopByViews(views);
+      setTopByPurchases(purchases);
+    } catch (error) {
+      console.error('Error fetching analytics:', error);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
 
   const fetchProducts = async () => {
     const { data, error } = await supabase
@@ -228,12 +257,66 @@ export function ProductsManagement() {
     setIsDialogOpen(true);
   };
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-[400px]">
+      <p className="text-muted-foreground">Loading products...</p>
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold">Products</h2>
+    <div className="space-y-6 animate-fade-in">
+      {/* Page Header */}
+      <div>
+        <h2 className="text-3xl font-bold tracking-tight">Product Management</h2>
+        <p className="text-muted-foreground">Manage your product catalog and track performance</p>
+      </div>
+
+      {/* Analytics Section */}
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xl font-semibold">Product Analytics</h3>
+          <div className="flex gap-2">
+            <Button
+              variant={period === 'today' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setPeriod('today')}
+            >
+              Today
+            </Button>
+            <Button
+              variant={period === 'week' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setPeriod('week')}
+            >
+              This Week
+            </Button>
+            <Button
+              variant={period === 'month' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setPeriod('month')}
+            >
+              This Month
+            </Button>
+          </div>
+        </div>
+
+        {/* Top Products Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <TopProductsWidget products={topByViews} type="views" loading={analyticsLoading} />
+          <TopProductsWidget products={topByPurchases} type="purchases" loading={analyticsLoading} />
+        </div>
+
+        {/* Performance Chart */}
+        <ProductPerformanceChart 
+          viewsData={topByViews} 
+          purchasesData={topByPurchases}
+          loading={analyticsLoading}
+        />
+      </div>
+
+      {/* Products Table Section */}
+      <div className="flex items-center justify-between pt-6 border-t">
+        <h3 className="text-xl font-semibold">All Products</h3>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={() => openDialog()}>

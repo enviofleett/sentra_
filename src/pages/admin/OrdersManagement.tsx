@@ -6,7 +6,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Eye } from 'lucide-react';
+import { Eye, Clock, Package, TruckIcon, CheckCircle, XCircle } from 'lucide-react';
+import { getOrderStatusBreakdown, getOrdersTimeline, OrderStatusBreakdown } from '@/utils/analytics';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface Order {
   id: string;
@@ -24,10 +26,30 @@ export function OrdersManagement() {
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [statusBreakdown, setStatusBreakdown] = useState<OrderStatusBreakdown[]>([]);
+  const [timelineData, setTimelineData] = useState<any[]>([]);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
 
   useEffect(() => {
     fetchOrders();
+    fetchAnalytics();
   }, []);
+
+  const fetchAnalytics = async () => {
+    setAnalyticsLoading(true);
+    try {
+      const [breakdown, timeline] = await Promise.all([
+        getOrderStatusBreakdown(),
+        getOrdersTimeline(30)
+      ]);
+      setStatusBreakdown(breakdown);
+      setTimelineData(timeline);
+    } catch (error) {
+      console.error('Error fetching analytics:', error);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
 
   const fetchOrders = async () => {
     const { data, error } = await supabase
@@ -70,12 +92,85 @@ export function OrdersManagement() {
     }
   };
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-[400px]">
+      <p className="text-muted-foreground">Loading orders...</p>
+    </div>
+  );
+
+  const statusIcons = {
+    pending: Clock,
+    processing: Package,
+    shipped: TruckIcon,
+    delivered: CheckCircle,
+    cancelled: XCircle
+  };
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-3xl font-bold">Orders</h2>
+    <div className="space-y-6 animate-fade-in">
+      {/* Page Header */}
+      <div>
+        <h2 className="text-3xl font-bold tracking-tight">Order Management</h2>
+        <p className="text-muted-foreground">Track and manage all customer orders</p>
+      </div>
 
+      {/* Order Status Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        {statusBreakdown.map(({ status, count, total_value }) => {
+          const Icon = statusIcons[status as keyof typeof statusIcons] || Clock;
+          const colorClass = getStatusColor(status);
+          
+          return (
+            <Card key={status} className="hover-scale">
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <Icon className={`h-4 w-4 ${colorClass}`} />
+                  <CardTitle className="text-sm font-medium capitalize">{status}</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{count}</div>
+                <p className="text-xs text-muted-foreground">₦{total_value.toLocaleString()}</p>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Orders Timeline Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Orders Timeline (Last 30 Days)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {analyticsLoading ? (
+            <div className="h-80 flex items-center justify-center">
+              <p className="text-muted-foreground">Loading chart...</p>
+            </div>
+          ) : timelineData.length === 0 ? (
+            <div className="h-80 flex items-center justify-center">
+              <p className="text-muted-foreground">No order data available</p>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={320}>
+              <BarChart data={timelineData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="pending" stackId="a" fill="#eab308" name="Pending" />
+                <Bar dataKey="processing" stackId="a" fill="#3b82f6" name="Processing" />
+                <Bar dataKey="shipped" stackId="a" fill="#8b5cf6" name="Shipped" />
+                <Bar dataKey="delivered" stackId="a" fill="#22c55e" name="Delivered" />
+                <Bar dataKey="cancelled" stackId="a" fill="#ef4444" name="Cancelled" />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Orders Table */}
       <Card>
         <CardHeader>
           <CardTitle>All Orders ({orders.length})</CardTitle>

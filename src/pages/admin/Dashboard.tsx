@@ -1,18 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Navbar } from '@/components/layout/Navbar';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { 
-  LayoutDashboard, 
-  Package, 
-  FolderTree, 
-  Mail, 
-  Users,
-  Settings
-} from 'lucide-react';
+import { AdminHeader } from '@/components/admin/AdminHeader';
 import { DashboardAnalytics } from './DashboardAnalytics';
 import { ProductsManagement } from './ProductsManagement';
 import { CategoriesManagement } from './CategoriesManagement';
@@ -22,7 +12,6 @@ import { UsersManagement } from './UsersManagement';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -31,7 +20,7 @@ export default function AdminDashboard() {
 
   const checkAccess = async () => {
     if (!user) {
-      navigate('/auth');
+      setHasAccess(false);
       return;
     }
 
@@ -42,82 +31,45 @@ export default function AdminDashboard() {
 
     const roles = data?.map(r => r.role) || [];
     const isAdmin = roles.includes('admin');
-
-    if (!isAdmin) {
-      setHasAccess(false);
-    } else {
-      setHasAccess(true);
-    }
+    setHasAccess(isAdmin);
   };
 
   if (hasAccess === null) {
     return (
-      <div className="min-h-screen bg-background">
-        <Navbar />
-        <div className="container mx-auto px-4 py-20 text-center">
-          <p>Loading...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <p>Loading...</p>
       </div>
     );
   }
 
-  if (hasAccess === false) {
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  if (!hasAccess) {
     return (
-      <div className="min-h-screen bg-background">
-        <Navbar />
-        <div className="container mx-auto px-4 py-20 text-center">
-          <h1 className="text-4xl font-bold mb-4">Access Denied</h1>
-          <p className="text-muted-foreground mb-8">You don't have permission to access this area.</p>
-          <Button asChild>
-            <Link to="/">Go Home</Link>
-          </Button>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="max-w-md w-full p-8 bg-card rounded-lg border shadow-sm">
+          <h2 className="text-2xl font-bold mb-4">Access Denied</h2>
+          <p className="text-muted-foreground">You don't have permission to access the admin panel.</p>
         </div>
       </div>
     );
   }
-
-  const navigation = [
-    { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-    { name: 'Products', href: '/admin/products', icon: Package },
-    { name: 'Categories', href: '/admin/categories', icon: FolderTree },
-    { name: 'Orders', href: '/admin/orders', icon: Settings },
-    { name: 'Email Templates', href: '/admin/templates', icon: Mail },
-    { name: 'Users & Roles', href: '/admin/users', icon: Users },
-  ];
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
-      
-      <div className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-          {/* Sidebar */}
-          <Card className="lg:col-span-1 p-4 h-fit">
-            <nav className="space-y-2">
-              {navigation.map((item) => (
-                <Link key={item.name} to={item.href}>
-                  <Button variant="ghost" className="w-full justify-start">
-                    <item.icon className="h-4 w-4 mr-2" />
-                    {item.name}
-                  </Button>
-                </Link>
-              ))}
-            </nav>
-          </Card>
-
-          {/* Main Content */}
-          <div className="lg:col-span-4">
-            <Routes>
-              <Route index element={<DashboardAnalytics />} />
-              <Route path="products" element={<ProductsManagement />} />
-              <Route path="categories" element={<CategoriesManagement />} />
-              <Route path="orders" element={<OrdersManagement />} />
-              <Route path="templates" element={<EmailTemplatesManagement />} />
-              <Route path="users" element={<UsersManagement />} />
-            </Routes>
-          </div>
-        </div>
-      </div>
+      <AdminHeader />
+      <main className="container mx-auto px-4 py-8">
+        <Routes>
+          <Route path="/" element={<DashboardAnalytics />} />
+          <Route path="/products" element={<ProductsManagement />} />
+          <Route path="/categories" element={<CategoriesManagement />} />
+          <Route path="/orders" element={<OrdersManagement />} />
+          <Route path="/email-templates" element={<EmailTemplatesManagement />} />
+          <Route path="/users" element={<UsersManagement />} />
+        </Routes>
+      </main>
     </div>
   );
 }

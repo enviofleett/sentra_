@@ -49,9 +49,10 @@ export function DashboardAnalytics() {
   }, [revenuePeriod]);
 
   const fetchAnalytics = async () => {
+    // CRITICAL: Only count paid orders (paystack_status = 'success') for revenue calculations
     const [productsRes, ordersRes] = await Promise.all([
       supabase.from('products').select('id', { count: 'exact', head: true }),
-      supabase.from('orders').select('total_amount, status, created_at'),
+      supabase.from('orders').select('total_amount, status, created_at').eq('paystack_status', 'success'),
     ]);
 
     const totalProducts = productsRes.count || 0;

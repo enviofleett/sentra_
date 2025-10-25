@@ -1,6 +1,18 @@
 import { supabase } from '@/integrations/supabase/client';
 import { startOfDay, startOfWeek, startOfMonth, subDays, subWeeks, subMonths, format } from 'date-fns';
 
+/**
+ * CRITICAL BUSINESS RULE:
+ * All revenue calculations MUST only include orders with paystack_status = 'success'
+ * This ensures revenue reflects only paid orders, not pending/failed payments.
+ * 
+ * The paystack_status field is set by the paystack-webhook edge function:
+ * - 'success': Payment confirmed by Paystack webhook
+ * - 'failed': Payment failed
+ * - 'amount_mismatch': Payment amount doesn't match order total
+ * - null: Payment not yet attempted/completed
+ */
+
 export interface RevenueData {
   date: string;
   revenue: number;
@@ -58,7 +70,8 @@ export async function getRevenueByPeriod(period: 'day' | 'week' | 'month'): Prom
     .from('orders')
     .select('created_at, total_amount, status')
     .gte('created_at', startDate.toISOString())
-    .neq('status', 'cancelled');
+    .neq('status', 'cancelled')
+    .eq('paystack_status', 'success'); // Only count paid orders
 
   if (error) throw error;
 
@@ -173,7 +186,8 @@ export async function getTopProductsByPurchases(days: number, limit: number = 10
 export async function getOrderStatusBreakdown(): Promise<OrderStatusBreakdown[]> {
   const { data, error } = await supabase
     .from('orders')
-    .select('status, total_amount');
+    .select('status, total_amount')
+    .eq('paystack_status', 'success'); // Only count paid orders
 
   if (error) throw error;
 
@@ -200,7 +214,8 @@ export async function getOrdersTimeline(days: number): Promise<{ date: string; p
   const { data, error } = await supabase
     .from('orders')
     .select('created_at, status')
-    .gte('created_at', startDate.toISOString());
+    .gte('created_at', startDate.toISOString())
+    .eq('paystack_status', 'success'); // Only count paid orders
 
   if (error) throw error;
 
@@ -227,7 +242,8 @@ export async function getOrdersTimeline(days: number): Promise<{ date: string; p
 export async function getAverageOrderMetrics(): Promise<OrderMetrics> {
   const { data, error } = await supabase
     .from('orders')
-    .select('total_amount, status, created_at');
+    .select('total_amount, status, created_at')
+    .eq('paystack_status', 'success'); // Only count paid orders
 
   if (error) throw error;
 

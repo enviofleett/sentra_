@@ -13,7 +13,6 @@ import { Pencil, Trash2, Plus, Upload, X } from 'lucide-react';
 import { ProductPerformanceChart } from '@/components/admin/ProductPerformanceChart';
 import { TopProductsWidget } from '@/components/admin/TopProductsWidget';
 import { getTopProductsByViews, getTopProductsByPurchases } from '@/utils/analytics';
-
 interface Product {
   id: string;
   name: string;
@@ -27,12 +26,10 @@ interface Product {
   is_active: boolean;
   scent_profile: string | null;
 }
-
 interface Category {
   id: string;
   name: string;
 }
-
 export function ProductsManagement() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -47,7 +44,6 @@ export function ProductsManagement() {
   const [topByViews, setTopByViews] = useState<any[]>([]);
   const [topByPurchases, setTopByPurchases] = useState<any[]>([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
-
   const emptyProduct: Omit<Product, 'id'> = {
     name: '',
     description: '',
@@ -58,27 +54,21 @@ export function ProductsManagement() {
     image_url: null,
     is_featured: false,
     is_active: true,
-    scent_profile: null,
+    scent_profile: null
   };
-
   useEffect(() => {
     fetchProducts();
     fetchCategories();
     fetchAnalytics();
   }, []);
-
   useEffect(() => {
     fetchAnalytics();
   }, [period]);
-
   const fetchAnalytics = async () => {
     setAnalyticsLoading(true);
     try {
       const days = period === 'today' ? 1 : period === 'week' ? 7 : 30;
-      const [views, purchases] = await Promise.all([
-        getTopProductsByViews(days, 10),
-        getTopProductsByPurchases(days, 10)
-      ]);
+      const [views, purchases] = await Promise.all([getTopProductsByViews(days, 10), getTopProductsByPurchases(days, 10)]);
       setTopByViews(views);
       setTopByPurchases(purchases);
     } catch (error) {
@@ -87,13 +77,13 @@ export function ProductsManagement() {
       setAnalyticsLoading(false);
     }
   };
-
   const fetchProducts = async () => {
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .order('created_at', { ascending: false });
-
+    const {
+      data,
+      error
+    } = await supabase.from('products').select('*').order('created_at', {
+      ascending: false
+    });
     if (error) {
       toast.error('Failed to load products');
       console.error(error);
@@ -102,15 +92,12 @@ export function ProductsManagement() {
     }
     setLoading(false);
   };
-
   const fetchCategories = async () => {
-    const { data } = await supabase
-      .from('categories')
-      .select('id, name')
-      .order('name');
+    const {
+      data
+    } = await supabase.from('categories').select('id, name').order('name');
     setCategories(data || []);
   };
-
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -126,36 +113,32 @@ export function ProductsManagement() {
       setImagePreview(URL.createObjectURL(file));
     }
   };
-
   const clearImage = () => {
     setImageFile(null);
     setImagePreview(null);
   };
-
   const uploadImage = async (file: File): Promise<string | null> => {
     try {
       setUploading(true);
       const fileExt = file.name.split('.').pop();
       const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
       const filePath = `${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('product-images')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
+      const {
+        error: uploadError
+      } = await supabase.storage.from('product-images').upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
       if (uploadError) {
         console.error('Upload error:', uploadError);
         toast.error('Failed to upload image');
         return null;
       }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('product-images')
-        .getPublicUrl(filePath);
-
+      const {
+        data: {
+          publicUrl
+        }
+      } = supabase.storage.from('product-images').getPublicUrl(filePath);
       return publicUrl;
     } catch (error) {
       console.error('Error uploading image:', error);
@@ -165,11 +148,9 @@ export function ProductsManagement() {
       setUploading(false);
     }
   };
-
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    
     let imageUrl = editingProduct?.image_url || null;
 
     // Upload new image if selected
@@ -181,10 +162,8 @@ export function ProductsManagement() {
         return; // Stop if upload failed
       }
     }
-    
     const scentValue = formData.get('scent_profile') as string;
     const validScents = ['aquatic', 'citrus', 'floral', 'fresh', 'gourmand', 'oriental', 'spicy', 'woody'];
-    
     const productData = {
       name: formData.get('name') as string,
       description: description,
@@ -195,15 +174,12 @@ export function ProductsManagement() {
       image_url: imageUrl,
       is_featured: formData.get('is_featured') === 'true',
       is_active: formData.get('is_active') === 'true',
-      scent_profile: (scentValue && validScents.includes(scentValue) ? scentValue : null) as any,
+      scent_profile: (scentValue && validScents.includes(scentValue) ? scentValue : null) as any
     };
-
     if (editingProduct) {
-      const { error } = await supabase
-        .from('products')
-        .update(productData)
-        .eq('id', editingProduct.id);
-
+      const {
+        error
+      } = await supabase.from('products').update(productData).eq('id', editingProduct.id);
       if (error) {
         toast.error('Failed to update product');
         console.error(error);
@@ -214,10 +190,9 @@ export function ProductsManagement() {
         fetchProducts();
       }
     } else {
-      const { error } = await supabase
-        .from('products')
-        .insert([productData]);
-
+      const {
+        error
+      } = await supabase.from('products').insert([productData]);
       if (error) {
         toast.error('Failed to create product');
         console.error(error);
@@ -229,15 +204,11 @@ export function ProductsManagement() {
       }
     }
   };
-
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this product?')) return;
-
-    const { error } = await supabase
-      .from('products')
-      .delete()
-      .eq('id', id);
-
+    const {
+      error
+    } = await supabase.from('products').delete().eq('id', id);
     if (error) {
       toast.error('Failed to delete product');
       console.error(error);
@@ -246,7 +217,6 @@ export function ProductsManagement() {
       fetchProducts();
     }
   };
-
   const openDialog = (product?: Product) => {
     setEditingProduct(product || null);
     setDescription(product?.description || '');
@@ -256,15 +226,10 @@ export function ProductsManagement() {
     }
     setIsDialogOpen(true);
   };
-
-  if (loading) return (
-    <div className="flex items-center justify-center min-h-[400px]">
+  if (loading) return <div className="flex items-center justify-center min-h-[400px]">
       <p className="text-muted-foreground">Loading products...</p>
-    </div>
-  );
-
-  return (
-    <div className="space-y-6 animate-fade-in">
+    </div>;
+  return <div className="space-y-6 animate-fade-in">
       {/* Page Header */}
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Product Management</h2>
@@ -274,27 +239,15 @@ export function ProductsManagement() {
       {/* Analytics Section */}
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h3 className="text-xl font-semibold">Product Analytics</h3>
+          <h3 className="text-xl font-semibold">Product Management</h3>
           <div className="flex gap-2">
-            <Button
-              variant={period === 'today' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setPeriod('today')}
-            >
+            <Button variant={period === 'today' ? 'default' : 'outline'} size="sm" onClick={() => setPeriod('today')}>
               Today
             </Button>
-            <Button
-              variant={period === 'week' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setPeriod('week')}
-            >
+            <Button variant={period === 'week' ? 'default' : 'outline'} size="sm" onClick={() => setPeriod('week')}>
               This Week
             </Button>
-            <Button
-              variant={period === 'month' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setPeriod('month')}
-            >
+            <Button variant={period === 'month' ? 'default' : 'outline'} size="sm" onClick={() => setPeriod('month')}>
               This Month
             </Button>
           </div>
@@ -307,11 +260,7 @@ export function ProductsManagement() {
         </div>
 
         {/* Performance Chart */}
-        <ProductPerformanceChart 
-          viewsData={topByViews} 
-          purchasesData={topByPurchases}
-          loading={analyticsLoading}
-        />
+        <ProductPerformanceChart viewsData={topByViews} purchasesData={topByPurchases} loading={analyticsLoading} />
       </div>
 
       {/* Products Table Section */}
@@ -335,11 +284,7 @@ export function ProductsManagement() {
               </div>
               <div>
                 <Label htmlFor="description">Description</Label>
-                <RichTextEditor 
-                  content={description}
-                  onChange={setDescription}
-                  placeholder="Enter product description..."
-                />
+                <RichTextEditor content={description} onChange={setDescription} placeholder="Enter product description..." />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -363,9 +308,7 @@ export function ProductsManagement() {
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                      ))}
+                      {categories.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -373,44 +316,21 @@ export function ProductsManagement() {
               <div>
                 <Label htmlFor="image">Product Image</Label>
                 <div className="space-y-4">
-                  {imagePreview && (
-                    <div className="relative inline-block">
-                      <img 
-                        src={imagePreview} 
-                        alt="Preview" 
-                        className="h-32 w-32 object-cover rounded-lg border"
-                      />
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="destructive"
-                        className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0"
-                        onClick={clearImage}
-                      >
+                  {imagePreview && <div className="relative inline-block">
+                      <img src={imagePreview} alt="Preview" className="h-32 w-32 object-cover rounded-lg border" />
+                      <Button type="button" size="sm" variant="destructive" className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0" onClick={clearImage}>
                         <X className="h-4 w-4" />
                       </Button>
-                    </div>
-                  )}
+                    </div>}
                   <div className="flex items-center gap-2">
-                    <Input
-                      id="image"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageChange}
-                      className="hidden"
-                    />
-                    <Label
-                      htmlFor="image"
-                      className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md cursor-pointer hover:bg-primary/90"
-                    >
+                    <Input id="image" type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+                    <Label htmlFor="image" className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md cursor-pointer hover:bg-primary/90">
                       <Upload className="h-4 w-4" />
                       {imageFile ? 'Change Image' : 'Upload Image'}
                     </Label>
-                    {imageFile && (
-                      <span className="text-sm text-muted-foreground">
+                    {imageFile && <span className="text-sm text-muted-foreground">
                         {imageFile.name}
-                      </span>
-                    )}
+                      </span>}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Recommended: Square image, max 5MB
@@ -464,7 +384,7 @@ export function ProductsManagement() {
               <div className="flex gap-2 justify-end">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                 <Button type="submit" disabled={uploading}>
-                  {uploading ? 'Uploading...' : (editingProduct ? 'Update' : 'Create')}
+                  {uploading ? 'Uploading...' : editingProduct ? 'Update' : 'Create'}
                 </Button>
               </div>
             </form>
@@ -489,8 +409,7 @@ export function ProductsManagement() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {products.map((product) => (
-                <TableRow key={product.id}>
+              {products.map(product => <TableRow key={product.id}>
                   <TableCell className="font-medium">{product.name}</TableCell>
                   <TableCell>₦{product.price.toLocaleString()}</TableCell>
                   <TableCell>{product.stock_quantity}</TableCell>
@@ -510,12 +429,10 @@ export function ProductsManagement() {
                       </Button>
                     </div>
                   </TableCell>
-                </TableRow>
-              ))}
+                </TableRow>)}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
-    </div>
-  );
+    </div>;
 }

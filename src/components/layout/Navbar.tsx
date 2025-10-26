@@ -51,14 +51,9 @@ export const Navbar = () => {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <nav className="container mx-auto flex h-16 items-center justify-between px-4">
         {/* Logo */}
-        <Link to="/" className="flex items-center space-x-2" aria-label="Home">
+        <Link to="/" className="flex items-center space-x-2">
           {logoUrl ? (
-            <img 
-              src={logoUrl} 
-              alt="Sentra - Luxury Perfumes Logo" 
-              className="h-20 max-w-[360px] object-contain" 
-              loading="eager"
-            />
+            <img src={logoUrl} alt="Logo" className="h-10 max-w-[180px] object-contain" />
           ) : (
             <h1 className="text-2xl font-bold gradient-gold bg-clip-text text-transparent">
               Sentra

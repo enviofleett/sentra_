@@ -88,7 +88,7 @@ export default function Index() {
       <section className="py-12 md:py-20 bg-background">
         <div className="container mx-auto px-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-            <div>
+            <div className="text-center">
               <h2 className="text-3xl md:text-4xl font-bold">Exclusive Perfume Collection</h2>
               <p className="text-muted-foreground mt-2">Discover luxury fragrances from top brands</p>
             </div>

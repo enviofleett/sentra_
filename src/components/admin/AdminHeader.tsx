@@ -20,7 +20,6 @@ const navigation = [
   { name: 'Products', href: '/admin/products', icon: Package },
   { name: 'Orders', href: '/admin/orders', icon: ShoppingCart },
   { name: 'Categories', href: '/admin/categories', icon: FolderTree },
-  { name: 'Scent Profiles', href: '/admin/scent-profiles', icon: Sparkles },
   { name: 'Vendors', href: '/admin/vendors', icon: Store },
   { name: 'Group Buys', href: '/admin/groupbuys', icon: Users },
   { name: 'Settings', href: '/admin/settings', icon: Settings },

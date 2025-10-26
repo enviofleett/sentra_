@@ -10,7 +10,6 @@ import { OrdersManagement } from './OrdersManagement';
 import { VendorsManagement } from './VendorsManagement';
 import SettingsManagement from './SettingsManagement';
 import GroupBuyCampaignsManagement from './GroupBuyCampaignsManagement';
-import ScentProfilesManagement from './ScentProfilesManagement';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -67,7 +66,6 @@ export default function AdminDashboard() {
           <Route path="/" element={<DashboardAnalytics />} />
           <Route path="/products" element={<ProductsManagement />} />
           <Route path="/categories" element={<CategoriesManagement />} />
-          <Route path="/scent-profiles" element={<ScentProfilesManagement />} />
           <Route path="/orders" element={<OrdersManagement />} />
           <Route path="/vendors" element={<VendorsManagement />} />
           <Route path="/groupbuys" element={<GroupBuyCampaignsManagement />} />

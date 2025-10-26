@@ -21,6 +21,7 @@ interface Product {
   original_price: number | null;
   stock_quantity: number;
   category_id: string | null;
+  vendor_id: string | null;
   image_url: string | null;
   is_featured: boolean;
   is_active: boolean;
@@ -30,9 +31,15 @@ interface Category {
   id: string;
   name: string;
 }
+interface Vendor {
+  id: string;
+  rep_full_name: string;
+  email: string;
+}
 export function ProductsManagement() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -51,6 +58,7 @@ export function ProductsManagement() {
     original_price: null,
     stock_quantity: 0,
     category_id: null,
+    vendor_id: null,
     image_url: null,
     is_featured: false,
     is_active: true,
@@ -59,6 +67,7 @@ export function ProductsManagement() {
   useEffect(() => {
     fetchProducts();
     fetchCategories();
+    fetchVendors();
     fetchAnalytics();
   }, []);
   useEffect(() => {
@@ -97,6 +106,14 @@ export function ProductsManagement() {
       data
     } = await supabase.from('categories').select('id, name').order('name');
     setCategories(data || []);
+  };
+
+  const fetchVendors = async () => {
+    const { data } = await supabase
+      .from('vendors')
+      .select('id, rep_full_name, email')
+      .order('rep_full_name');
+    setVendors(data || []);
   };
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -171,6 +188,7 @@ export function ProductsManagement() {
       original_price: formData.get('original_price') ? parseFloat(formData.get('original_price') as string) : null,
       stock_quantity: parseInt(formData.get('stock_quantity') as string),
       category_id: formData.get('category_id') as string || null,
+      vendor_id: formData.get('vendor_id') as string || null,
       image_url: imageUrl,
       is_featured: formData.get('is_featured') === 'true',
       is_active: formData.get('is_active') === 'true',
@@ -314,6 +332,17 @@ export function ProductsManagement() {
                 </div>
               </div>
               <div>
+                <Label htmlFor="vendor_id">Vendor</Label>
+                <Select name="vendor_id" defaultValue={editingProduct?.vendor_id || ''}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select vendor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {vendors.map(vendor => <SelectItem key={vendor.id} value={vendor.id}>{vendor.rep_full_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <Label htmlFor="image">Product Image</Label>
                 <div className="space-y-4">
                   {imagePreview && <div className="relative inline-block">
@@ -404,6 +433,7 @@ export function ProductsManagement() {
                 <TableHead>Price</TableHead>
                 <TableHead>Stock</TableHead>
                 <TableHead>Category</TableHead>
+                <TableHead>Vendor</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -414,6 +444,7 @@ export function ProductsManagement() {
                   <TableCell>₦{product.price.toLocaleString()}</TableCell>
                   <TableCell>{product.stock_quantity}</TableCell>
                   <TableCell>{categories.find(c => c.id === product.category_id)?.name || '-'}</TableCell>
+                  <TableCell>{vendors.find(v => v.id === product.vendor_id)?.rep_full_name || '-'}</TableCell>
                   <TableCell>
                     <span className={product.is_active ? 'text-green-600' : 'text-red-600'}>
                       {product.is_active ? 'Active' : 'Inactive'}

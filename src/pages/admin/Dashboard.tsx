@@ -7,6 +7,7 @@ import { DashboardAnalytics } from './DashboardAnalytics';
 import { ProductsManagement } from './ProductsManagement';
 import { CategoriesManagement } from './CategoriesManagement';
 import { OrdersManagement } from './OrdersManagement';
+import { VendorsManagement } from './VendorsManagement';
 import SettingsManagement from './SettingsManagement';
 
 export default function AdminDashboard() {
@@ -65,6 +66,7 @@ export default function AdminDashboard() {
           <Route path="/products" element={<ProductsManagement />} />
           <Route path="/categories" element={<CategoriesManagement />} />
           <Route path="/orders" element={<OrdersManagement />} />
+          <Route path="/vendors" element={<VendorsManagement />} />
           <Route path="/settings" element={<SettingsManagement />} />
         </Routes>
       </main>

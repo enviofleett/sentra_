@@ -319,6 +319,7 @@ export type Database = {
           price: number
           scent_profile: Database["public"]["Enums"]["scent_profile"] | null
           stock_quantity: number
+          vendor_id: string | null
         }
         Insert: {
           category_id?: string | null
@@ -333,6 +334,7 @@ export type Database = {
           price?: number
           scent_profile?: Database["public"]["Enums"]["scent_profile"] | null
           stock_quantity?: number
+          vendor_id?: string | null
         }
         Update: {
           category_id?: string | null
@@ -347,6 +349,7 @@ export type Database = {
           price?: number
           scent_profile?: Database["public"]["Enums"]["scent_profile"] | null
           stock_quantity?: number
+          vendor_id?: string | null
         }
         Relationships: [
           {
@@ -354,6 +357,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
             referencedColumns: ["id"]
           },
         ]
@@ -445,6 +455,39 @@ export type Database = {
         }
         Relationships: []
       }
+      vendors: {
+        Row: {
+          bank_info: Json | null
+          created_at: string
+          email: string
+          id: string
+          phone: string | null
+          rep_full_name: string
+          store_location: string | null
+          updated_at: string
+        }
+        Insert: {
+          bank_info?: Json | null
+          created_at?: string
+          email: string
+          id?: string
+          phone?: string | null
+          rep_full_name: string
+          store_location?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bank_info?: Json | null
+          created_at?: string
+          email?: string
+          id?: string
+          phone?: string | null
+          rep_full_name?: string
+          store_location?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -468,6 +511,7 @@ export type Database = {
         | "user"
         | "product_manager"
         | "order_processor"
+        | "vendor"
       order_status:
         | "pending"
         | "processing"
@@ -616,6 +660,7 @@ export const Constants = {
         "user",
         "product_manager",
         "order_processor",
+        "vendor",
       ],
       order_status: [
         "pending",

@@ -85,7 +85,8 @@ export default function Checkout() {
           product_id: item.product_id,
           name: item.product?.name,
           price: item.product?.price,
-          quantity: item.quantity
+          quantity: item.quantity,
+          vendor_id: item.product?.vendor_id
         })),
         subtotal: subtotal,
         tax: 0,

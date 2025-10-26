@@ -13,6 +13,7 @@ export interface CartItem {
     price: number;
     image_url?: string;
     stock_quantity: number;
+    vendor_id?: string;
   };
 }
 
@@ -50,7 +51,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       .from('cart_items')
       .select(`
         *,
-        product:products(id, name, price, image_url, stock_quantity)
+        product:products(id, name, price, image_url, stock_quantity, vendor_id)
       `)
       .eq('user_id', user.id);
 
@@ -91,7 +92,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         })
         .select(`
           *,
-          product:products(id, name, price, image_url, stock_quantity)
+          product:products(id, name, price, image_url, stock_quantity, vendor_id)
         `)
         .single();
 

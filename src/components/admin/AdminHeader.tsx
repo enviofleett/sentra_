@@ -4,6 +4,7 @@ import {
   Package, 
   ShoppingCart, 
   FolderTree, 
+  Store,
   Settings,
   Menu,
   X
@@ -17,6 +18,7 @@ const navigation = [
   { name: 'Products', href: '/admin/products', icon: Package },
   { name: 'Orders', href: '/admin/orders', icon: ShoppingCart },
   { name: 'Categories', href: '/admin/categories', icon: FolderTree },
+  { name: 'Vendors', href: '/admin/vendors', icon: Store },
   { name: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 

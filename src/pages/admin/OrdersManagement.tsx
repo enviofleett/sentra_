@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -9,6 +10,12 @@ import { toast } from 'sonner';
 import { Eye, Clock, Package, TruckIcon, CheckCircle, XCircle } from 'lucide-react';
 import { getOrderStatusBreakdown, getOrdersTimeline, OrderStatusBreakdown } from '@/utils/analytics';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
+interface Vendor {
+  id: string;
+  rep_full_name: string;
+  email: string;
+}
 
 interface Order {
   id: string;
@@ -23,17 +30,33 @@ interface Order {
 
 export function OrdersManagement() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [statusBreakdown, setStatusBreakdown] = useState<OrderStatusBreakdown[]>([]);
   const [timelineData, setTimelineData] = useState<any[]>([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  const [selectedVendor, setSelectedVendor] = useState<string>('all');
+  const [timePeriod, setTimePeriod] = useState<'day' | 'week' | 'month'>('week');
 
   useEffect(() => {
+    fetchVendors();
     fetchOrders();
     fetchAnalytics();
   }, []);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [selectedVendor, timePeriod]);
+
+  const fetchVendors = async () => {
+    const { data } = await supabase
+      .from('vendors')
+      .select('id, rep_full_name, email')
+      .order('rep_full_name');
+    setVendors(data || []);
+  };
 
   const fetchAnalytics = async () => {
     setAnalyticsLoading(true);
@@ -52,16 +75,44 @@ export function OrdersManagement() {
   };
 
   const fetchOrders = async () => {
-    const { data, error } = await supabase
+    setLoading(true);
+    let query = supabase
       .from('orders')
       .select('*')
       .order('created_at', { ascending: false });
+
+    // Apply time period filter
+    const now = new Date();
+    if (timePeriod === 'day') {
+      const startOfDay = new Date(now.setHours(0, 0, 0, 0));
+      query = query.gte('created_at', startOfDay.toISOString());
+    } else if (timePeriod === 'week') {
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay());
+      startOfWeek.setHours(0, 0, 0, 0);
+      query = query.gte('created_at', startOfWeek.toISOString());
+    } else if (timePeriod === 'month') {
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      query = query.gte('created_at', startOfMonth.toISOString());
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       toast.error('Failed to load orders');
       console.error(error);
     } else {
-      setOrders(data || []);
+      let filteredOrders = data || [];
+      
+      // Filter by vendor (client-side since vendor_id is in items JSON)
+      if (selectedVendor !== 'all') {
+        filteredOrders = filteredOrders.filter(order => {
+          const items = Array.isArray(order.items) ? order.items : [];
+          return items.some((item: any) => item.vendor_id === selectedVendor);
+        });
+      }
+      
+      setOrders(filteredOrders);
     }
     setLoading(false);
   };
@@ -90,6 +141,11 @@ export function OrdersManagement() {
       case 'cancelled': return 'text-red-600';
       default: return 'text-gray-600';
     }
+  };
+
+  const getVendorName = (vendorId: string | null) => {
+    if (!vendorId) return 'N/A';
+    return vendors.find(v => v.id === vendorId)?.rep_full_name || 'Unknown';
   };
 
   if (loading) return (
@@ -167,6 +223,47 @@ export function OrdersManagement() {
               </BarChart>
             </ResponsiveContainer>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Filter Controls */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Filters</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-4">
+            <div className="w-64">
+              <Label>Filter by Vendor</Label>
+              <Select value={selectedVendor} onValueChange={setSelectedVendor}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Vendors" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Vendors</SelectItem>
+                  {vendors.map(vendor => (
+                    <SelectItem key={vendor.id} value={vendor.id}>
+                      {vendor.rep_full_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="w-48">
+              <Label>Time Period</Label>
+              <Select value={timePeriod} onValueChange={(v) => setTimePeriod(v as any)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="day">Today</SelectItem>
+                  <SelectItem value="week">This Week</SelectItem>
+                  <SelectItem value="month">This Month</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -254,6 +351,7 @@ export function OrdersManagement() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Product</TableHead>
+                      <TableHead>Vendor</TableHead>
                       <TableHead>Quantity</TableHead>
                       <TableHead>Price</TableHead>
                     </TableRow>
@@ -262,6 +360,7 @@ export function OrdersManagement() {
                     {selectedOrder.items?.map((item: any, idx: number) => (
                       <TableRow key={idx}>
                         <TableCell>{item.name}</TableCell>
+                        <TableCell>{getVendorName(item.vendor_id)}</TableCell>
                         <TableCell>{item.quantity}</TableCell>
                         <TableCell>₦{item.price?.toLocaleString()}</TableCell>
                       </TableRow>

@@ -120,8 +120,8 @@ export default function ProductDetail() {
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      <div className="container mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+      <div className="container mx-auto px-4 py-6 md:py-12">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-12">
           {/* Product Images */}
           <div className="space-y-4">
             {productImages.length > 0 ? (
@@ -137,7 +137,7 @@ export default function ProductDetail() {
                 
                 {/* Thumbnail Gallery */}
                 {productImages.length > 1 && (
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-4 sm:grid-cols-3 gap-2 sm:gap-3">
                     {productImages.map((image: string, index: number) => (
                       <button
                         key={index}
@@ -166,9 +166,9 @@ export default function ProductDetail() {
           </div>
 
           {/* Product Info */}
-          <div className="space-y-6">
+          <div className="space-y-4 md:space-y-6">
             <div>
-              <h1 className="text-4xl font-bold mb-2">{product.name}</h1>
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2">{product.name}</h1>
               {product.scent_profile && (
                 <p className="text-lg text-muted-foreground capitalize">
                   {product.scent_profile} Fragrance
@@ -176,8 +176,8 @@ export default function ProductDetail() {
               )}
             </div>
 
-            <div className="flex items-baseline gap-4">
-              <span className="text-4xl font-bold text-secondary">
+            <div className="flex items-baseline gap-3 md:gap-4">
+              <span className="text-3xl md:text-4xl font-bold text-secondary">
                 ₦{product.price.toLocaleString()}
               </span>
               {product.original_price && (

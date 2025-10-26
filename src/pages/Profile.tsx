@@ -29,8 +29,8 @@ function ProfileInfo() {
   };
 
   return (
-    <div className="p-6 space-y-6">
-      <h2 className="text-2xl font-bold">My Profile</h2>
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
+      <h2 className="text-xl md:text-2xl font-bold">My Profile</h2>
       <div className="space-y-4">
         <div>
           <label className="text-sm font-medium text-muted-foreground">Email</label>
@@ -85,8 +85,8 @@ function Orders() {
   };
 
   return (
-    <div className="p-6 space-y-6">
-      <h2 className="text-2xl font-bold">My Orders</h2>
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
+      <h2 className="text-xl md:text-2xl font-bold">My Orders</h2>
       
       {loading ? (
         <p className="text-muted-foreground">Loading orders...</p>
@@ -152,28 +152,30 @@ export default function Profile() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <div className="container mx-auto px-4 py-12">
-        <h1 className="text-4xl font-bold mb-8">My Account</h1>
+      <div className="container mx-auto px-4 py-6 md:py-12">
+        <h1 className="text-3xl md:text-4xl font-bold mb-6 md:mb-8">My Account</h1>
         
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-          <Card className="p-4 h-fit">
-            <nav className="space-y-2">
-              <Link to="/profile">
-                <Button variant="ghost" className="w-full justify-start">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 md:gap-8">
+          <Card className="p-3 md:p-4 h-fit md:sticky md:top-24">
+            <nav className="flex md:flex-col gap-2 overflow-x-auto md:overflow-visible">
+              <Link to="/profile" className="flex-shrink-0">
+                <Button variant="ghost" className="w-full justify-start whitespace-nowrap">
                   <UserIcon className="h-4 w-4 mr-2" />
-                  Profile
+                  <span className="hidden sm:inline">Profile</span>
+                  <span className="sm:hidden">Info</span>
                 </Button>
               </Link>
-              <Link to="/profile/orders">
-                <Button variant="ghost" className="w-full justify-start">
+              <Link to="/profile/orders" className="flex-shrink-0">
+                <Button variant="ghost" className="w-full justify-start whitespace-nowrap">
                   <Package className="h-4 w-4 mr-2" />
                   Orders
                 </Button>
               </Link>
-              <Link to="/profile/groupbuys">
-                <Button variant="ghost" className="w-full justify-start">
+              <Link to="/profile/groupbuys" className="flex-shrink-0">
+                <Button variant="ghost" className="w-full justify-start whitespace-nowrap">
                   <ShoppingBag className="h-4 w-4 mr-2" />
-                  Group Buys
+                  <span className="hidden sm:inline">Group Buys</span>
+                  <span className="sm:hidden">Groups</span>
                 </Button>
               </Link>
               <Button 

@@ -61,7 +61,7 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-background">
       <AdminHeader />
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-4 md:py-8">
         <Routes>
           <Route path="/" element={<DashboardAnalytics />} />
           <Route path="/products" element={<ProductsManagement />} />

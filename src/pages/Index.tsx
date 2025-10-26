@@ -52,7 +52,7 @@ export default function Index() {
       <Navbar />
 
       {/* Hero Section */}
-      <section className="relative h-[600px] md:h-[700px] overflow-hidden">
+      <section className="relative h-[500px] md:h-[600px] lg:h-[700px] overflow-hidden">
         <div className="absolute inset-0">
           <img 
             src={heroPerfume} 
@@ -62,17 +62,17 @@ export default function Index() {
           <div className="absolute inset-0 bg-gradient-to-r from-primary/90 via-primary/70 to-transparent" />
         </div>
         <div className="relative container mx-auto px-4 h-full flex items-center">
-          <div className="max-w-2xl text-left space-y-6 text-white">
+          <div className="max-w-2xl text-left space-y-4 md:space-y-6 text-white">
             {currentHero.subtitle && (
-              <p className="text-lg md:text-xl font-light tracking-wide text-white/90">
+              <p className="text-base md:text-lg lg:text-xl font-light tracking-wide text-white/90">
                 {currentHero.subtitle}
               </p>
             )}
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold leading-tight text-white drop-shadow-lg">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold leading-tight text-white drop-shadow-lg">
               {currentHero.title}
             </h1>
             {currentHero.description && (
-              <p className="text-lg md:text-xl text-white/80">
+              <p className="text-base md:text-lg lg:text-xl text-white/80">
                 {currentHero.description}
               </p>
             )}
@@ -101,9 +101,9 @@ export default function Index() {
       </section>
 
       {/* Features */}
-      <section className="py-16 border-b">
+      <section className="py-12 md:py-16 border-b">
         <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 md:gap-8">
             <div className="text-center space-y-4">
               <div className="w-12 h-12 mx-auto bg-secondary/10 rounded-full flex items-center justify-center">
                 <Sparkles className="h-6 w-6 text-secondary" />
@@ -137,10 +137,10 @@ export default function Index() {
 
       {/* Featured Products */}
       {featuredProducts.length > 0 && (
-        <section className="py-20">
+        <section className="py-12 md:py-20">
           <div className="container mx-auto px-4">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl md:text-4xl font-bold mb-4">Featured Collection</h2>
+            <div className="text-center mb-8 md:mb-12">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 md:mb-4">Featured Collection</h2>
               <p className="text-muted-foreground">Discover our most popular fragrances</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -188,10 +188,10 @@ export default function Index() {
 
       {/* Testimonials */}
       {testimonials.length > 0 && (
-        <section className="py-20 bg-accent">
+        <section className="py-12 md:py-20 bg-accent">
           <div className="container mx-auto px-4">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl md:text-4xl font-bold mb-4">What Our Customers Say</h2>
+            <div className="text-center mb-8 md:mb-12">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 md:mb-4">What Our Customers Say</h2>
               <p className="text-muted-foreground">Loved by perfume enthusiasts</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">

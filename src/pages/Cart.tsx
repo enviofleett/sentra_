@@ -32,17 +32,17 @@ export default function Cart() {
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      <div className="container mx-auto px-4 py-12">
-        <h1 className="text-4xl font-bold mb-8">Shopping Cart</h1>
+      <div className="container mx-auto px-4 py-6 md:py-12">
+        <h1 className="text-3xl md:text-4xl font-bold mb-6 md:mb-8">Shopping Cart</h1>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
           {/* Cart Items */}
           <div className="lg:col-span-2 space-y-4">
             {items.map((item) => (
               <Card key={item.id}>
-                <CardContent className="p-4">
-                  <div className="flex gap-4">
-                    <div className="w-24 h-24 bg-accent rounded-lg overflow-hidden flex-shrink-0">
+                <CardContent className="p-3 sm:p-4">
+                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                    <div className="w-full sm:w-24 h-48 sm:h-24 bg-accent rounded-lg overflow-hidden flex-shrink-0">
                       {item.product?.image_url ? (
                         <img
                           src={item.product.image_url}
@@ -54,18 +54,18 @@ export default function Cart() {
                       )}
                     </div>
 
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <Link
                         to={`/products/${item.product_id}`}
-                        className="font-semibold text-lg hover:text-secondary transition-smooth"
+                        className="font-semibold text-base sm:text-lg hover:text-secondary transition-smooth block truncate"
                       >
                         {item.product?.name}
                       </Link>
-                      <p className="text-secondary font-bold mt-1">
+                      <p className="text-secondary font-bold mt-1 text-lg sm:text-xl">
                         ₦{(item.product?.price || 0).toLocaleString()}
                       </p>
 
-                      <div className="flex items-center gap-4 mt-4">
+                      <div className="flex flex-wrap items-center gap-3 sm:gap-4 mt-3 sm:mt-4">
                         <div className="flex items-center gap-2">
                           <Button
                             variant="outline"
@@ -99,8 +99,8 @@ export default function Cart() {
                       </div>
                     </div>
 
-                    <div className="text-right">
-                      <p className="font-bold text-lg">
+                    <div className="text-right sm:self-start">
+                      <p className="font-bold text-base sm:text-lg">
                         ₦{((item.product?.price || 0) * item.quantity).toLocaleString()}
                       </p>
                     </div>
@@ -111,8 +111,8 @@ export default function Cart() {
           </div>
 
           {/* Order Summary */}
-          <div>
-            <Card className="sticky top-24">
+          <div className="lg:sticky lg:top-24">
+            <Card>
               <CardContent className="p-6 space-y-4">
                 <h3 className="text-xl font-bold">Order Summary</h3>
 

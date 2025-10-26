@@ -40,7 +40,7 @@ export function AdminHeader() {
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold">Admin Panel</h1>
+            <h1 className="text-lg sm:text-xl font-bold">Admin Panel</h1>
             <span className="hidden sm:inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
               Admin
             </span>

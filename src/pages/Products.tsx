@@ -149,23 +149,23 @@ export default function Products() {
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">Our Collection</h1>
-          <p className="text-muted-foreground">Discover luxury perfumes crafted to perfection</p>
+      <div className="container mx-auto px-4 py-6 md:py-8">
+        <div className="mb-6 md:mb-8">
+          <h1 className="text-3xl md:text-4xl font-bold mb-2">Our Collection</h1>
+          <p className="text-sm md:text-base text-muted-foreground">Discover luxury perfumes crafted to perfection</p>
         </div>
 
-        <div className="flex gap-8">
+        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
           {/* Desktop Filters */}
           <aside className="hidden lg:block w-64 flex-shrink-0">
             <FilterSidebar />
           </aside>
 
           {/* Mobile Filters */}
-          <div className="lg:hidden mb-4">
+          <div className="lg:hidden w-full">
             <Sheet>
               <SheetTrigger asChild>
-                <Button variant="outline" className="w-full">
+                <Button variant="outline" className="w-full justify-between">
                   <SlidersHorizontal className="h-4 w-4 mr-2" />
                   Filters & Sort
                 </Button>
@@ -195,7 +195,7 @@ export default function Products() {
                 <p className="text-muted-foreground text-lg">No products found</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
                 {products.map((product) => {
                   // Get first image from images array or fallback to image_url
                   const displayImage = product.images && Array.isArray(product.images) && product.images.length > 0

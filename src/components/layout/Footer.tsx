@@ -12,7 +12,12 @@ export const Footer = () => {
           {/* Brand */}
           <div className="space-y-4">
             {logoUrl ? (
-              <img src={logoUrl} alt="Logo" className="h-8 max-w-[150px] object-contain" />
+              <img 
+                src={logoUrl} 
+                alt="Sentra - Luxury Perfumes Logo" 
+                className="h-12 max-w-[225px] object-contain"
+                loading="lazy"
+              />
             ) : (
               <h3 className="text-2xl font-bold gradient-gold bg-clip-text text-transparent">
                 Sentra

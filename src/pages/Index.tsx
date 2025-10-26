@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { ArrowRight, Filter } from 'lucide-react';
-import heroPerfume from '@/assets/hero-perfume.jpg';
+import heroPerfumeBottle from '@/assets/hero-perfume-bottle.jpg';
 
 export default function Index() {
   const [vendors, setVendors] = useState<any[]>([]);
@@ -43,26 +43,23 @@ export default function Index() {
       <Navbar />
 
       {/* Hero Section */}
-      <section className="py-12 md:py-20 lg:py-24 bg-gradient-to-br from-blue-50 to-white dark:from-gray-900 dark:to-gray-800">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+      <section className="py-16 md:py-24 lg:py-32 bg-white dark:bg-gray-950">
+        <div className="container mx-auto px-4 md:px-8 lg:px-16">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 xl:gap-24 items-center">
             {/* Left Column - Content */}
-            <div className="space-y-6 text-center lg:text-left">
-              <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold leading-tight">
+            <div className="space-y-6 md:space-y-8 order-2 lg:order-1">
+              <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold leading-tight text-gray-900 dark:text-white">
                 Discover Your{' '}
-                <span className="gradient-gold bg-clip-text text-transparent">
-                  Signature Scent
-                </span>
+                <span className="block mt-2">Signature Scent</span>
               </h1>
-              <p className="text-lg md:text-xl text-muted-foreground max-w-xl mx-auto lg:mx-0">
-                Explore our curated collection of premium perfumes from the world's most prestigious brands. 
-                Find the perfect fragrance that speaks to your unique style and personality.
+              <p className="text-base md:text-lg lg:text-xl text-gray-600 dark:text-gray-300 leading-relaxed max-w-xl">
+                Explore our curated collection of luxury fragrances that define elegance and sophistication. From fresh notes to oriental mystique.
               </p>
-              <div className="pt-4">
+              <div className="pt-2">
                 <Button 
                   asChild 
                   size="lg" 
-                  className="bg-orange-500 hover:bg-orange-600 text-white shadow-lg hover:shadow-xl transition-all"
+                  className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-8 py-6 text-base rounded-lg shadow-lg hover:shadow-xl transition-all"
                 >
                   <Link to="/products" className="inline-flex items-center gap-2">
                     Shop Collection
@@ -73,18 +70,15 @@ export default function Index() {
             </div>
 
             {/* Right Column - Image */}
-            <div className="relative">
-              <div className="relative rounded-3xl overflow-hidden shadow-2xl bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900/20 dark:to-purple-900/20 p-8 lg:p-12">
+            <div className="relative order-1 lg:order-2">
+              <div className="relative bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 rounded-[2.5rem] p-8 md:p-12 lg:p-16 shadow-2xl">
                 <img 
-                  src={heroPerfume} 
-                  alt="Luxury Perfume Bottle - Premium Fragrance Collection" 
-                  className="w-full h-auto object-contain rounded-2xl"
+                  src={heroPerfumeBottle} 
+                  alt="Luxury Signature Perfume - Premium Fragrance Collection" 
+                  className="w-full h-auto object-contain"
                   loading="eager"
                 />
               </div>
-              {/* Decorative elements */}
-              <div className="absolute -top-4 -right-4 w-24 h-24 bg-orange-400/20 rounded-full blur-2xl" />
-              <div className="absolute -bottom-4 -left-4 w-32 h-32 bg-purple-400/20 rounded-full blur-2xl" />
             </div>
           </div>
         </div>

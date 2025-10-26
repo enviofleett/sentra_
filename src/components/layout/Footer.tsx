@@ -1,113 +1,151 @@
 import { Link } from 'react-router-dom';
-import { Facebook, Instagram, Twitter } from 'lucide-react';
+import { MapPin, Briefcase, HeadphonesIcon, Mail, Phone, Instagram } from 'lucide-react';
 import { useBranding } from '@/hooks/useBranding';
 
 export const Footer = () => {
   const { logoUrl } = useBranding();
   
   return (
-    <footer className="border-t bg-card mt-20">
-      <div className="container mx-auto px-4 py-8 md:py-12">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-          {/* Brand */}
+    <footer className="bg-[#1a2332] text-white mt-20">
+      <div className="container mx-auto px-4 py-12 md:py-16">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 md:gap-12">
+          {/* Address */}
           <div className="space-y-4">
-            {logoUrl ? (
-              <img 
-                src={logoUrl} 
-                alt="Sentra - Luxury Perfumes Logo" 
-                className="h-12 max-w-[225px] object-contain"
-                loading="lazy"
-              />
-            ) : (
-              <h3 className="text-2xl font-bold gradient-gold bg-clip-text text-transparent">
-                Sentra
-              </h3>
-            )}
-            <p className="text-sm text-muted-foreground">
-              Discover luxury perfumes that capture the essence of elegance.
-            </p>
-            <div className="flex space-x-4">
-              <a href="#" className="text-muted-foreground hover:text-secondary transition-smooth">
-                <Facebook className="h-5 w-5" />
-              </a>
-              <a href="#" className="text-muted-foreground hover:text-secondary transition-smooth">
-                <Instagram className="h-5 w-5" />
-              </a>
-              <a href="#" className="text-muted-foreground hover:text-secondary transition-smooth">
-                <Twitter className="h-5 w-5" />
-              </a>
+            <div className="flex items-start gap-3">
+              <MapPin className="h-5 w-5 text-orange-400 flex-shrink-0 mt-1" aria-hidden="true" />
+              <div>
+                <h4 className="font-semibold text-white mb-2">Headquarters:</h4>
+                <address className="text-sm text-gray-300 not-italic leading-relaxed">
+                  123 Luxury Avenue<br />
+                  Victoria Island<br />
+                  Lagos, Nigeria
+                </address>
+              </div>
             </div>
           </div>
 
-          {/* Shop */}
-          <div>
-            <h4 className="font-semibold mb-4">Shop</h4>
-            <ul className="space-y-2 text-sm">
-              <li>
-                <Link to="/products" className="text-muted-foreground hover:text-foreground transition-smooth">
-                  All Products
-                </Link>
-              </li>
-              <li>
-                <Link to="/products?featured=true" className="text-muted-foreground hover:text-foreground transition-smooth">
-                  Featured
-                </Link>
-              </li>
-              <li>
-                <Link to="/products" className="text-muted-foreground hover:text-foreground transition-smooth">
-                  New Arrivals
-                </Link>
-              </li>
-            </ul>
+          {/* Services */}
+          <div className="space-y-4">
+            <div className="flex items-start gap-3">
+              <Briefcase className="h-5 w-5 text-orange-400 flex-shrink-0 mt-1" aria-hidden="true" />
+              <div>
+                <h4 className="font-semibold text-white mb-3">Services</h4>
+                <ul className="space-y-2 text-sm">
+                  <li>
+                    <a 
+                      href="#" 
+                      className="text-gray-300 hover:text-orange-400 transition-colors"
+                      aria-label="Join our affiliate programme"
+                    >
+                      Join affiliate programme
+                    </a>
+                  </li>
+                </ul>
+              </div>
+            </div>
           </div>
 
-          {/* Support */}
-          <div>
-            <h4 className="font-semibold mb-4">Support</h4>
-            <ul className="space-y-2 text-sm">
-              <li>
-                <a href="#" className="text-muted-foreground hover:text-foreground transition-smooth">
-                  Contact Us
-                </a>
-              </li>
-              <li>
-                <a href="#" className="text-muted-foreground hover:text-foreground transition-smooth">
-                  Shipping Info
-                </a>
-              </li>
-              <li>
-                <a href="#" className="text-muted-foreground hover:text-foreground transition-smooth">
-                  Returns
-                </a>
-              </li>
-              <li>
-                <a href="#" className="text-muted-foreground hover:text-foreground transition-smooth">
-                  FAQ
-                </a>
-              </li>
-            </ul>
+          {/* Customer Support */}
+          <div className="space-y-4">
+            <div className="flex items-start gap-3">
+              <HeadphonesIcon className="h-5 w-5 text-orange-400 flex-shrink-0 mt-1" aria-hidden="true" />
+              <div>
+                <h4 className="font-semibold text-white mb-3">Customer Support</h4>
+                <ul className="space-y-2 text-sm">
+                  <li>
+                    <a 
+                      href="#" 
+                      className="text-gray-300 hover:text-orange-400 transition-colors"
+                    >
+                      Shipping Policy
+                    </a>
+                  </li>
+                  <li>
+                    <a 
+                      href="#" 
+                      className="text-gray-300 hover:text-orange-400 transition-colors"
+                    >
+                      Terms & Conditions
+                    </a>
+                  </li>
+                  <li>
+                    <a 
+                      href="#" 
+                      className="text-gray-300 hover:text-orange-400 transition-colors"
+                    >
+                      Privacy Policy
+                    </a>
+                  </li>
+                  <li>
+                    <a 
+                      href="#" 
+                      className="text-gray-300 hover:text-orange-400 transition-colors"
+                    >
+                      FAQ
+                    </a>
+                  </li>
+                  <li>
+                    <Link 
+                      to="/about" 
+                      className="text-gray-300 hover:text-orange-400 transition-colors"
+                    >
+                      About Us
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+            </div>
           </div>
 
-          {/* Legal */}
-          <div>
-            <h4 className="font-semibold mb-4">Legal</h4>
-            <ul className="space-y-2 text-sm">
-              <li>
-                <a href="#" className="text-muted-foreground hover:text-foreground transition-smooth">
-                  Privacy Policy
-                </a>
-              </li>
-              <li>
-                <a href="#" className="text-muted-foreground hover:text-foreground transition-smooth">
-                  Terms of Service
-                </a>
-              </li>
-            </ul>
+          {/* Contact Us */}
+          <div className="space-y-4">
+            <div className="flex items-start gap-3">
+              <Mail className="h-5 w-5 text-orange-400 flex-shrink-0 mt-1" aria-hidden="true" />
+              <div>
+                <h4 className="font-semibold text-white mb-3">Contact Us</h4>
+                <ul className="space-y-3 text-sm">
+                  <li className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-orange-400" aria-hidden="true" />
+                    <a 
+                      href="tel:+2341234567890" 
+                      className="text-gray-300 hover:text-orange-400 transition-colors"
+                      aria-label="Call us at +234 123 456 7890"
+                    >
+                      +234 123 456 7890
+                    </a>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-orange-400" aria-hidden="true" />
+                    <a 
+                      href="mailto:info@sentra.com" 
+                      className="text-gray-300 hover:text-orange-400 transition-colors"
+                      aria-label="Email us at info@sentra.com"
+                    >
+                      info@sentra.com
+                    </a>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Instagram className="h-4 w-4 text-orange-400" aria-hidden="true" />
+                    <a 
+                      href="https://instagram.com/sentra" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-gray-300 hover:text-orange-400 transition-colors"
+                      aria-label="Follow us on Instagram @sentra"
+                    >
+                      @sentra
+                    </a>
+                  </li>
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="mt-12 pt-8 border-t text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} Sentra Perfumes. All rights reserved.</p>
+        <div className="mt-12 pt-8 border-t border-gray-700 text-center">
+          <p className="text-sm text-gray-400">
+            &copy; {new Date().getFullYear()} Sentra Perfumes. All rights reserved.
+          </p>
         </div>
       </div>
     </footer>

@@ -9,6 +9,7 @@ import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Sparkles, Minus, Plus, ShoppingCart } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -18,6 +19,7 @@ export default function ProductDetail() {
   const [product, setProduct] = useState<any>(null);
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   useEffect(() => {
     if (id) {
@@ -106,22 +108,57 @@ export default function ProductDetail() {
 
   if (!product) return null;
 
+  // Get all product images
+  const productImages = product.images && Array.isArray(product.images) && product.images.length > 0 
+    ? product.images 
+    : product.image_url 
+    ? [product.image_url] 
+    : [];
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
 
       <div className="container mx-auto px-4 py-12">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-          {/* Product Image */}
-          <div className="aspect-square bg-accent rounded-lg overflow-hidden shadow-elegant">
-            {product.image_url ? (
-              <img
-                src={product.image_url}
-                alt={product.name}
-                className="w-full h-full object-cover"
-              />
+          {/* Product Images */}
+          <div className="space-y-4">
+            {productImages.length > 0 ? (
+              <>
+                {/* Main Image */}
+                <div className="aspect-square bg-accent rounded-lg overflow-hidden shadow-elegant">
+                  <img
+                    src={productImages[currentImageIndex]}
+                    alt={`${product.name} - Image ${currentImageIndex + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                
+                {/* Thumbnail Gallery */}
+                {productImages.length > 1 && (
+                  <div className="grid grid-cols-3 gap-3">
+                    {productImages.map((image: string, index: number) => (
+                      <button
+                        key={index}
+                        onClick={() => setCurrentImageIndex(index)}
+                        className={`aspect-square rounded-lg overflow-hidden border-2 transition-smooth ${
+                          currentImageIndex === index 
+                            ? 'border-secondary shadow-gold' 
+                            : 'border-border hover:border-secondary/50'
+                        }`}
+                      >
+                        <img
+                          src={image}
+                          alt={`${product.name} - Thumbnail ${index + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
             ) : (
-              <div className="w-full h-full flex items-center justify-center bg-gradient-primary">
+              <div className="aspect-square bg-accent rounded-lg flex items-center justify-center bg-gradient-primary shadow-elegant">
                 <Sparkles className="h-24 w-24 text-primary-foreground/30" />
               </div>
             )}
@@ -152,7 +189,10 @@ export default function ProductDetail() {
             {product.description && (
               <div>
                 <h3 className="font-semibold text-lg mb-2">Description</h3>
-                <p className="text-muted-foreground leading-relaxed">{product.description}</p>
+                <div 
+                  className="text-muted-foreground leading-relaxed prose prose-sm max-w-none"
+                  dangerouslySetInnerHTML={{ __html: product.description }}
+                />
               </div>
             )}
 

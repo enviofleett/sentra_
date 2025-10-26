@@ -196,22 +196,28 @@ export default function Products() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {products.map((product) => (
-                  <Card key={product.id} className="group overflow-hidden shadow-elegant hover:shadow-gold transition-smooth">
-                    <Link to={`/products/${product.id}`}>
-                      <div className="aspect-square bg-accent overflow-hidden">
-                        {product.image_url ? (
-                          <img
-                            src={product.image_url}
-                            alt={product.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-smooth"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-gradient-primary">
-                            <Sparkles className="h-16 w-16 text-primary-foreground/30" />
-                          </div>
-                        )}
-                      </div>
+                {products.map((product) => {
+                  // Get first image from images array or fallback to image_url
+                  const displayImage = product.images && Array.isArray(product.images) && product.images.length > 0
+                    ? product.images[0]
+                    : product.image_url;
+
+                  return (
+                    <Card key={product.id} className="group overflow-hidden shadow-elegant hover:shadow-gold transition-smooth">
+                      <Link to={`/products/${product.id}`}>
+                        <div className="aspect-square bg-accent overflow-hidden">
+                          {displayImage ? (
+                            <img
+                              src={displayImage}
+                              alt={product.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-smooth"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-gradient-primary">
+                              <Sparkles className="h-16 w-16 text-primary-foreground/30" />
+                            </div>
+                          )}
+                        </div>
                       <CardContent className="p-4">
                         <h3 className="font-semibold text-lg mb-2 line-clamp-1">{product.name}</h3>
                         {product.scent_profile && (
@@ -232,7 +238,8 @@ export default function Products() {
                       </CardContent>
                     </Link>
                   </Card>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

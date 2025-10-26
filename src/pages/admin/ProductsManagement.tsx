@@ -23,6 +23,7 @@ interface Product {
   category_id: string | null;
   vendor_id: string | null;
   image_url: string | null;
+  images: any;
   is_featured: boolean;
   is_active: boolean;
   scent_profile: string | null;
@@ -43,8 +44,8 @@ export function ProductsManagement() {
   const [loading, setLoading] = useState(true);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [description, setDescription] = useState('');
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('today');
@@ -60,6 +61,7 @@ export function ProductsManagement() {
     category_id: null,
     vendor_id: null,
     image_url: null,
+    images: [],
     is_featured: false,
     is_active: true,
     scent_profile: null
@@ -116,23 +118,37 @@ export function ProductsManagement() {
     setVendors(data || []);
   };
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+    const files = Array.from(e.target.files || []);
+    
+    if (imageFiles.length + files.length > 3) {
+      toast.error('Maximum 3 images allowed');
+      return;
+    }
+    
+    for (const file of files) {
       if (!file.type.startsWith('image/')) {
-        toast.error('Please select an image file');
+        toast.error('Please select only image files');
         return;
       }
       if (file.size > 5 * 1024 * 1024) {
         toast.error('Image size must be less than 5MB');
         return;
       }
-      setImageFile(file);
-      setImagePreview(URL.createObjectURL(file));
     }
+    
+    const newPreviews = files.map(file => URL.createObjectURL(file));
+    setImageFiles([...imageFiles, ...files]);
+    setImagePreviews([...imagePreviews, ...newPreviews]);
   };
-  const clearImage = () => {
-    setImageFile(null);
-    setImagePreview(null);
+  
+  const removeImage = (index: number) => {
+    setImageFiles(imageFiles.filter((_, i) => i !== index));
+    setImagePreviews(imagePreviews.filter((_, i) => i !== index));
+  };
+  
+  const clearImages = () => {
+    setImageFiles([]);
+    setImagePreviews([]);
   };
   const uploadImage = async (file: File): Promise<string | null> => {
     try {
@@ -168,17 +184,27 @@ export function ProductsManagement() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    let imageUrl = editingProduct?.image_url || null;
-
-    // Upload new image if selected
-    if (imageFile) {
-      const uploadedUrl = await uploadImage(imageFile);
-      if (uploadedUrl) {
-        imageUrl = uploadedUrl;
-      } else {
-        return; // Stop if upload failed
+    
+    // Upload new images if selected
+    const uploadedUrls: string[] = [];
+    if (imageFiles.length > 0) {
+      setUploading(true);
+      for (const file of imageFiles) {
+        const url = await uploadImage(file);
+        if (url) {
+          uploadedUrls.push(url);
+        } else {
+          setUploading(false);
+          return; // Stop if any upload failed
+        }
       }
+      setUploading(false);
     }
+    
+    // Keep existing images if editing and no new images uploaded
+    const finalImages = uploadedUrls.length > 0 
+      ? uploadedUrls 
+      : (editingProduct?.images as string[] || []);
     const scentValue = formData.get('scent_profile') as string;
     const validScents = ['aquatic', 'citrus', 'floral', 'fresh', 'gourmand', 'oriental', 'spicy', 'woody'];
     const productData = {
@@ -189,7 +215,8 @@ export function ProductsManagement() {
       stock_quantity: parseInt(formData.get('stock_quantity') as string),
       category_id: formData.get('category_id') as string || null,
       vendor_id: formData.get('vendor_id') as string || null,
-      image_url: imageUrl,
+      image_url: finalImages[0] || null,
+      images: finalImages,
       is_featured: formData.get('is_featured') === 'true',
       is_active: formData.get('is_active') === 'true',
       scent_profile: (scentValue && validScents.includes(scentValue) ? scentValue : null) as any
@@ -204,7 +231,7 @@ export function ProductsManagement() {
       } else {
         toast.success('Product updated successfully');
         setIsDialogOpen(false);
-        clearImage();
+        clearImages();
         fetchProducts();
       }
     } else {
@@ -217,7 +244,7 @@ export function ProductsManagement() {
       } else {
         toast.success('Product created successfully');
         setIsDialogOpen(false);
-        clearImage();
+        clearImages();
         fetchProducts();
       }
     }
@@ -238,9 +265,11 @@ export function ProductsManagement() {
   const openDialog = (product?: Product) => {
     setEditingProduct(product || null);
     setDescription(product?.description || '');
-    clearImage();
-    if (product?.image_url) {
-      setImagePreview(product.image_url);
+    clearImages();
+    if (product?.images && Array.isArray(product.images)) {
+      setImagePreviews(product.images as string[]);
+    } else if (product?.image_url) {
+      setImagePreviews([product.image_url]);
     }
     setIsDialogOpen(true);
   };
@@ -343,26 +372,50 @@ export function ProductsManagement() {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="image">Product Image</Label>
+                <Label htmlFor="images">Product Images (Optional, up to 3)</Label>
                 <div className="space-y-4">
-                  {imagePreview && <div className="relative inline-block">
-                      <img src={imagePreview} alt="Preview" className="h-32 w-32 object-cover rounded-lg border" />
-                      <Button type="button" size="sm" variant="destructive" className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0" onClick={clearImage}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>}
-                  <div className="flex items-center gap-2">
-                    <Input id="image" type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
-                    <Label htmlFor="image" className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md cursor-pointer hover:bg-primary/90">
-                      <Upload className="h-4 w-4" />
-                      {imageFile ? 'Change Image' : 'Upload Image'}
-                    </Label>
-                    {imageFile && <span className="text-sm text-muted-foreground">
-                        {imageFile.name}
-                      </span>}
-                  </div>
+                  {imagePreviews.length > 0 && (
+                    <div className="flex flex-wrap gap-3">
+                      {imagePreviews.map((preview, index) => (
+                        <div key={index} className="relative inline-block">
+                          <img src={preview} alt={`Preview ${index + 1}`} className="h-24 w-24 object-cover rounded-lg border" />
+                          <Button 
+                            type="button" 
+                            size="sm" 
+                            variant="destructive" 
+                            className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0" 
+                            onClick={() => removeImage(index)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {imagePreviews.length < 3 && (
+                    <div className="flex items-center gap-2">
+                      <Input 
+                        id="images" 
+                        type="file" 
+                        accept="image/*" 
+                        multiple
+                        onChange={handleImageChange} 
+                        className="hidden" 
+                      />
+                      <Label 
+                        htmlFor="images" 
+                        className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md cursor-pointer hover:bg-primary/90"
+                      >
+                        <Upload className="h-4 w-4" />
+                        {imagePreviews.length > 0 ? 'Add More Images' : 'Upload Images'}
+                      </Label>
+                      <span className="text-sm text-muted-foreground">
+                        {imagePreviews.length}/3 images
+                      </span>
+                    </div>
+                  )}
                   <p className="text-xs text-muted-foreground">
-                    Recommended: Square image, max 5MB
+                    Optional: Upload up to 3 images. Square images recommended, max 5MB each.
                   </p>
                 </div>
               </div>

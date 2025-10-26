@@ -47,15 +47,15 @@ export default function Index() {
         <div className="container mx-auto px-4 md:px-8 lg:px-16">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 xl:gap-24 items-center">
             {/* Left Column - Content */}
-            <div className="space-y-6 md:space-y-8 order-2 lg:order-1">
+            <div className="space-y-6 md:space-y-8 order-1 lg:order-1 text-center lg:text-left">
               <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold leading-tight text-gray-900 dark:text-white">
                 Discover Your{' '}
                 <span className="block mt-2">Signature Scent</span>
               </h1>
-              <p className="text-base md:text-lg lg:text-xl text-gray-600 dark:text-gray-300 leading-relaxed max-w-xl">
+              <p className="text-base md:text-lg lg:text-xl text-gray-600 dark:text-gray-300 leading-relaxed max-w-xl mx-auto lg:mx-0">
                 Explore our curated collection of luxury fragrances that define elegance and sophistication. From fresh notes to oriental mystique.
               </p>
-              <div className="pt-2">
+              <div className="pt-2 flex justify-center lg:justify-start">
                 <Button 
                   asChild 
                   size="lg" 
@@ -70,7 +70,7 @@ export default function Index() {
             </div>
 
             {/* Right Column - Image */}
-            <div className="relative order-1 lg:order-2">
+            <div className="relative order-2 lg:order-2">
               <div className="relative bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 rounded-[2.5rem] p-8 md:p-12 lg:p-16 shadow-2xl">
                 <img 
                   src={heroPerfumeBottle} 
@@ -118,7 +118,7 @@ export default function Index() {
             </TabsList>
 
             <TabsContent value={selectedVendor} className="mt-0">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
                 {filteredProducts.map((product) => {
                   const discount = calculateDiscount(product.price, product.original_price);
                   

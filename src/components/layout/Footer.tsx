@@ -1,16 +1,23 @@
 import { Link } from 'react-router-dom';
 import { Facebook, Instagram, Twitter } from 'lucide-react';
+import { useBranding } from '@/hooks/useBranding';
 
 export const Footer = () => {
+  const { logoUrl } = useBranding();
+  
   return (
     <footer className="border-t bg-card mt-20">
       <div className="container mx-auto px-4 py-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand */}
           <div className="space-y-4">
-            <h3 className="text-2xl font-bold gradient-gold bg-clip-text text-transparent">
-              Sentra
-            </h3>
+            {logoUrl ? (
+              <img src={logoUrl} alt="Logo" className="h-8 max-w-[150px] object-contain" />
+            ) : (
+              <h3 className="text-2xl font-bold gradient-gold bg-clip-text text-transparent">
+                Sentra
+              </h3>
+            )}
             <p className="text-sm text-muted-foreground">
               Discover luxury perfumes that capture the essence of elegance.
             </p>

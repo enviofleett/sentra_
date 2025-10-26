@@ -39,6 +39,10 @@ export function OrdersManagement() {
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
   const [selectedVendor, setSelectedVendor] = useState<string>('all');
   const [timePeriod, setTimePeriod] = useState<'day' | 'week' | 'month'>('week');
+  const [dateRange, setDateRange] = useState<{ start: Date; end: Date }>({
+    start: new Date(new Date().setDate(new Date().getDate() - 7)),
+    end: new Date()
+  });
 
   useEffect(() => {
     fetchVendors();
@@ -277,11 +281,12 @@ export function OrdersManagement() {
             <TableHeader>
               <TableRow>
                 <TableHead>Order ID</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Total</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Actions</TableHead>
+                      <TableHead>Customer</TableHead>
+                      <TableHead>Items / Vendors</TableHead>
+                      <TableHead>Total</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -289,6 +294,15 @@ export function OrdersManagement() {
                 <TableRow key={order.id}>
                   <TableCell className="font-mono text-sm">{order.id.slice(0, 8)}</TableCell>
                   <TableCell>{order.customer_email}</TableCell>
+                  <TableCell>
+                    <div className="text-sm space-y-1">
+                      {order.items?.map((item: any, idx: number) => (
+                        <div key={idx} className="text-muted-foreground">
+                          {item.name} - {getVendorName(item.vendor_id)}
+                        </div>
+                      ))}
+                    </div>
+                  </TableCell>
                   <TableCell>₦{order.total_amount.toLocaleString()}</TableCell>
                   <TableCell>
                     <Select

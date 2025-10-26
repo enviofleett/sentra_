@@ -9,11 +9,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
 import { sendEmail } from '@/utils/emailService';
 import { supabase } from '@/integrations/supabase/client';
+import { useBranding } from '@/hooks/useBranding';
 
 export default function Auth() {
   const navigate = useNavigate();
   const { user, signIn, signUp } = useAuth();
   const [loading, setLoading] = useState(false);
+  const { logoUrl } = useBranding();
 
   useEffect(() => {
     if (user) navigate('/');
@@ -74,7 +76,13 @@ export default function Auth() {
     <div className="min-h-screen bg-gradient-primary flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle className="text-2xl text-center gradient-gold bg-clip-text text-transparent">Sentra</CardTitle>
+          {logoUrl ? (
+            <div className="flex justify-center mb-2">
+              <img src={logoUrl} alt="Logo" className="h-12 max-w-[200px] object-contain" />
+            </div>
+          ) : (
+            <CardTitle className="text-2xl text-center gradient-gold bg-clip-text text-transparent">Sentra</CardTitle>
+          )}
           <CardDescription className="text-center">Sign in to your account or create a new one</CardDescription>
         </CardHeader>
         <CardContent>

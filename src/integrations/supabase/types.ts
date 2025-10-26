@@ -320,7 +320,7 @@ export type Database = {
           price: number
           scent_profile: Database["public"]["Enums"]["scent_profile"] | null
           stock_quantity: number
-          vendor_id: string | null
+          vendor_id: string
         }
         Insert: {
           category_id?: string | null
@@ -336,7 +336,7 @@ export type Database = {
           price?: number
           scent_profile?: Database["public"]["Enums"]["scent_profile"] | null
           stock_quantity?: number
-          vendor_id?: string | null
+          vendor_id: string
         }
         Update: {
           category_id?: string | null
@@ -352,7 +352,7 @@ export type Database = {
           price?: number
           scent_profile?: Database["public"]["Enums"]["scent_profile"] | null
           stock_quantity?: number
-          vendor_id?: string | null
+          vendor_id?: string
         }
         Relationships: [
           {

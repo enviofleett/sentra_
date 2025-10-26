@@ -3,6 +3,7 @@ import { ShoppingCart, User, Search, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCart } from '@/contexts/CartContext';
+import { useBranding } from '@/hooks/useBranding';
 import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
@@ -19,6 +20,7 @@ export const Navbar = () => {
   const { user, signOut } = useAuth();
   const { totalItems } = useCart();
   const [isAdmin, setIsAdmin] = useState(false);
+  const { logoUrl } = useBranding();
 
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -50,9 +52,13 @@ export const Navbar = () => {
       <nav className="container mx-auto flex h-16 items-center justify-between px-4">
         {/* Logo */}
         <Link to="/" className="flex items-center space-x-2">
-          <h1 className="text-2xl font-bold gradient-gold bg-clip-text text-transparent">
-            Sentra
-          </h1>
+          {logoUrl ? (
+            <img src={logoUrl} alt="Logo" className="h-8 max-w-[150px] object-contain" />
+          ) : (
+            <h1 className="text-2xl font-bold gradient-gold bg-clip-text text-transparent">
+              Sentra
+            </h1>
+          )}
         </Link>
 
         {/* Desktop Navigation */}

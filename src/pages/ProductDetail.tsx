@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Sparkles, Minus, Plus, ShoppingCart } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
+import { GroupBuyCampaignWidget } from '@/components/groupbuy/GroupBuyCampaignWidget';
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -53,7 +54,7 @@ export default function ProductDetail() {
   const loadProduct = async () => {
     const { data, error } = await supabase
       .from('products')
-      .select('*')
+      .select('*, active_group_buy_id')
       .eq('id', id)
       .eq('is_active', true)
       .single();
@@ -204,48 +205,55 @@ export default function ProductDetail() {
               </p>
             </div>
 
-            {/* Quantity Selector */}
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Quantity</label>
-                <div className="flex items-center gap-4">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    disabled={quantity <= 1}
-                  >
-                    <Minus className="h-4 w-4" />
-                  </Button>
-                  <Input
-                    type="number"
-                    min="1"
-                    max={product.stock_quantity}
-                    value={quantity}
-                    onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-20 text-center"
-                  />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setQuantity(Math.min(product.stock_quantity, quantity + 1))}
-                    disabled={quantity >= product.stock_quantity}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
+            {/* Group Buy or Regular Purchase */}
+            {product.active_group_buy_id ? (
+              <GroupBuyCampaignWidget 
+                campaignId={product.active_group_buy_id} 
+                productId={product.id} 
+              />
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Quantity</label>
+                  <div className="flex items-center gap-4">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                      disabled={quantity <= 1}
+                    >
+                      <Minus className="h-4 w-4" />
+                    </Button>
+                    <Input
+                      type="number"
+                      min="1"
+                      max={product.stock_quantity}
+                      value={quantity}
+                      onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-20 text-center"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setQuantity(Math.min(product.stock_quantity, quantity + 1))}
+                      disabled={quantity >= product.stock_quantity}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
 
-              <Button
-                size="lg"
-                className="w-full"
-                onClick={handleAddToCart}
-                disabled={product.stock_quantity === 0}
-              >
-                <ShoppingCart className="h-5 w-5 mr-2" />
-                Add to Cart
-              </Button>
-            </div>
+                <Button
+                  size="lg"
+                  className="w-full"
+                  onClick={handleAddToCart}
+                  disabled={product.stock_quantity === 0}
+                >
+                  <ShoppingCart className="h-5 w-5 mr-2" />
+                  Add to Cart
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>

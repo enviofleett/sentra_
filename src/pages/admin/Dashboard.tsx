@@ -9,6 +9,7 @@ import { CategoriesManagement } from './CategoriesManagement';
 import { OrdersManagement } from './OrdersManagement';
 import { VendorsManagement } from './VendorsManagement';
 import SettingsManagement from './SettingsManagement';
+import GroupBuyCampaignsManagement from './GroupBuyCampaignsManagement';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -67,6 +68,7 @@ export default function AdminDashboard() {
           <Route path="/categories" element={<CategoriesManagement />} />
           <Route path="/orders" element={<OrdersManagement />} />
           <Route path="/vendors" element={<VendorsManagement />} />
+          <Route path="/groupbuys" element={<GroupBuyCampaignsManagement />} />
           <Route path="/settings" element={<SettingsManagement />} />
         </Routes>
       </main>

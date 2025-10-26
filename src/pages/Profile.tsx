@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
-import { Package, User as UserIcon } from 'lucide-react';
+import { Package, User as UserIcon, ShoppingBag } from 'lucide-react';
+import GroupBuysProfile from './profile/GroupBuysProfile';
 
 function ProfileInfo() {
   const { user } = useAuth();
@@ -169,6 +170,12 @@ export default function Profile() {
                   Orders
                 </Button>
               </Link>
+              <Link to="/profile/groupbuys">
+                <Button variant="ghost" className="w-full justify-start">
+                  <ShoppingBag className="h-4 w-4 mr-2" />
+                  Group Buys
+                </Button>
+              </Link>
               <Button 
                 variant="ghost" 
                 className="w-full justify-start text-destructive hover:text-destructive"
@@ -184,6 +191,7 @@ export default function Profile() {
               <Routes>
                 <Route index element={<ProfileInfo />} />
                 <Route path="orders" element={<Orders />} />
+                <Route path="groupbuys" element={<GroupBuysProfile />} />
               </Routes>
             </Card>
           </div>

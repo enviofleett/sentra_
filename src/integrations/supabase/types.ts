@@ -133,6 +133,123 @@ export type Database = {
         }
         Relationships: []
       }
+      group_buy_campaigns: {
+        Row: {
+          created_at: string | null
+          current_quantity: number
+          discount_price: number
+          expiry_at: string
+          goal_quantity: number
+          id: string
+          payment_mode: Database["public"]["Enums"]["payment_mode"]
+          payment_window_hours: number
+          product_id: string
+          status: Database["public"]["Enums"]["group_buy_status"]
+          updated_at: string | null
+          vendor_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          current_quantity?: number
+          discount_price: number
+          expiry_at: string
+          goal_quantity: number
+          id?: string
+          payment_mode?: Database["public"]["Enums"]["payment_mode"]
+          payment_window_hours?: number
+          product_id: string
+          status?: Database["public"]["Enums"]["group_buy_status"]
+          updated_at?: string | null
+          vendor_id: string
+        }
+        Update: {
+          created_at?: string | null
+          current_quantity?: number
+          discount_price?: number
+          expiry_at?: string
+          goal_quantity?: number
+          id?: string
+          payment_mode?: Database["public"]["Enums"]["payment_mode"]
+          payment_window_hours?: number
+          product_id?: string
+          status?: Database["public"]["Enums"]["group_buy_status"]
+          updated_at?: string | null
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_buy_campaigns_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_buy_campaigns_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_buy_commitments: {
+        Row: {
+          campaign_id: string
+          committed_price: number
+          created_at: string | null
+          id: string
+          order_id: string | null
+          payment_deadline: string | null
+          payment_ref: string | null
+          quantity: number
+          status: Database["public"]["Enums"]["commitment_status"]
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          campaign_id: string
+          committed_price: number
+          created_at?: string | null
+          id?: string
+          order_id?: string | null
+          payment_deadline?: string | null
+          payment_ref?: string | null
+          quantity?: number
+          status?: Database["public"]["Enums"]["commitment_status"]
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          campaign_id?: string
+          committed_price?: number
+          created_at?: string | null
+          id?: string
+          order_id?: string | null
+          payment_deadline?: string | null
+          payment_ref?: string | null
+          quantity?: number
+          status?: Database["public"]["Enums"]["commitment_status"]
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_buy_commitments_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "group_buy_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_buy_commitments_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hero_items: {
         Row: {
           created_at: string
@@ -175,6 +292,7 @@ export type Database = {
       orders: {
         Row: {
           billing_address: Json
+          commitment_id: string | null
           created_at: string
           customer_email: string
           id: string
@@ -192,6 +310,7 @@ export type Database = {
         }
         Insert: {
           billing_address: Json
+          commitment_id?: string | null
           created_at?: string
           customer_email: string
           id?: string
@@ -209,6 +328,7 @@ export type Database = {
         }
         Update: {
           billing_address?: Json
+          commitment_id?: string | null
           created_at?: string
           customer_email?: string
           id?: string
@@ -224,7 +344,15 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "orders_commitment_id_fkey"
+            columns: ["commitment_id"]
+            isOneToOne: false
+            referencedRelation: "group_buy_commitments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       product_analytics: {
         Row: {
@@ -307,6 +435,7 @@ export type Database = {
       }
       products: {
         Row: {
+          active_group_buy_id: string | null
           category_id: string | null
           created_at: string
           description: string | null
@@ -323,6 +452,7 @@ export type Database = {
           vendor_id: string
         }
         Insert: {
+          active_group_buy_id?: string | null
           category_id?: string | null
           created_at?: string
           description?: string | null
@@ -339,6 +469,7 @@ export type Database = {
           vendor_id: string
         }
         Update: {
+          active_group_buy_id?: string | null
           category_id?: string | null
           created_at?: string
           description?: string | null
@@ -355,6 +486,13 @@ export type Database = {
           vendor_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "products_active_group_buy_id_fkey"
+            columns: ["active_group_buy_id"]
+            isOneToOne: false
+            referencedRelation: "group_buy_campaigns"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "products_category_id_fkey"
             columns: ["category_id"]
@@ -515,12 +653,25 @@ export type Database = {
         | "product_manager"
         | "order_processor"
         | "vendor"
+      commitment_status:
+        | "committed_unpaid"
+        | "committed_paid"
+        | "payment_window_expired"
+        | "refunded"
+      group_buy_status:
+        | "pending"
+        | "active"
+        | "goal_met_pending_payment"
+        | "goal_met_finalized"
+        | "failed_expired"
+        | "failed_cancelled"
       order_status:
         | "pending"
         | "processing"
         | "shipped"
         | "delivered"
         | "cancelled"
+      payment_mode: "pay_to_book" | "pay_on_success"
       scent_profile:
         | "floral"
         | "citrus"
@@ -665,6 +816,20 @@ export const Constants = {
         "order_processor",
         "vendor",
       ],
+      commitment_status: [
+        "committed_unpaid",
+        "committed_paid",
+        "payment_window_expired",
+        "refunded",
+      ],
+      group_buy_status: [
+        "pending",
+        "active",
+        "goal_met_pending_payment",
+        "goal_met_finalized",
+        "failed_expired",
+        "failed_cancelled",
+      ],
       order_status: [
         "pending",
         "processing",
@@ -672,6 +837,7 @@ export const Constants = {
         "delivered",
         "cancelled",
       ],
+      payment_mode: ["pay_to_book", "pay_on_success"],
       scent_profile: [
         "floral",
         "citrus",

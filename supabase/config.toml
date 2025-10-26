@@ -5,3 +5,15 @@ verify_jwt = false
 
 [functions.send-email]
 verify_jwt = false
+
+[functions.commit-to-group-buy]
+verify_jwt = false
+
+[functions.process-group-buy-goals]
+verify_jwt = false
+
+[functions.process-payment-deadlines]
+verify_jwt = false
+
+[functions.finalize-group-buy-payment]
+verify_jwt = false

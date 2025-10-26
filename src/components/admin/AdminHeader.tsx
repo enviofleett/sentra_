@@ -7,7 +7,8 @@ import {
   Store,
   Settings,
   Menu,
-  X
+  X,
+  Users
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -19,6 +20,7 @@ const navigation = [
   { name: 'Orders', href: '/admin/orders', icon: ShoppingCart },
   { name: 'Categories', href: '/admin/categories', icon: FolderTree },
   { name: 'Vendors', href: '/admin/vendors', icon: Store },
+  { name: 'Group Buys', href: '/admin/groupbuys', icon: Users },
   { name: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 

@@ -53,7 +53,7 @@ export const Navbar = () => {
         {/* Logo */}
         <Link to="/" className="flex items-center space-x-2">
           {logoUrl ? (
-            <img src={logoUrl} alt="Logo" className="h-8 max-w-[150px] object-contain" />
+            <img src={logoUrl} alt="Logo" className="h-10 max-w-[180px] object-contain" />
           ) : (
             <h1 className="text-2xl font-bold gradient-gold bg-clip-text text-transparent">
               Sentra

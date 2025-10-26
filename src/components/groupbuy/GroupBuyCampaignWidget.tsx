@@ -53,7 +53,7 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
     try {
       const { data, error } = await supabase
         .from('group_buy_campaigns')
-        .select('*, products(name, price, image_url)')
+        .select('*, products!group_buy_campaigns_product_id_fkey(name, price, image_url)')
         .eq('id', campaignId)
         .single();
 

@@ -48,7 +48,7 @@ export default function GroupBuyCampaignsManagement() {
     try {
       const { data, error } = await supabase
         .from('group_buy_campaigns')
-        .select('*, products(name, image_url, vendor_id), vendors(rep_full_name)')
+        .select('*, products!group_buy_campaigns_product_id_fkey(name, image_url, vendor_id), vendors(rep_full_name)')
         .order('created_at', { ascending: false });
 
       if (error) throw error;

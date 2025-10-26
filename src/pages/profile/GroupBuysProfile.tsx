@@ -23,7 +23,7 @@ export default function GroupBuysProfile() {
 
       const { data, error } = await supabase
         .from('group_buy_commitments')
-        .select('*, group_buy_campaigns!inner(*, products(name, image_url))')
+        .select('*, group_buy_campaigns!inner(*, products!group_buy_campaigns_product_id_fkey(name, image_url))')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 

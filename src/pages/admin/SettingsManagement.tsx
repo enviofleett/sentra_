@@ -489,20 +489,20 @@ function BrandingManager() {
         <div>
           <h3 className="text-lg font-semibold mb-2">Application Logo</h3>
           <p className="text-sm text-muted-foreground mb-4">
-            Upload a logo image (max 2MB). Recommended dimensions: 150px × 32px
+            Upload a logo image (max 2MB). Recommended dimensions: 330px × 70.4px
           </p>
           
           {logoUrl && !logoPreview && (
             <div className="mb-4 p-4 border rounded-lg">
               <p className="text-sm text-muted-foreground mb-2">Current Logo:</p>
-              <img src={logoUrl} alt="Current Logo" className="h-8 max-w-[150px] object-contain" />
+              <img src={logoUrl} alt="Current Logo" style={{ width: '330px', height: '70.4px' }} className="object-contain" />
             </div>
           )}
 
           {logoPreview && (
             <div className="mb-4 p-4 border rounded-lg">
               <p className="text-sm text-muted-foreground mb-2">Preview:</p>
-              <img src={logoPreview} alt="Logo Preview" className="h-8 max-w-[150px] object-contain" />
+              <img src={logoPreview} alt="Logo Preview" style={{ width: '330px', height: '70.4px' }} className="object-contain" />
             </div>
           )}
 

@@ -8,7 +8,8 @@ import {
   Settings,
   Menu,
   X,
-  Users
+  Users,
+  Sparkles
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -19,6 +20,7 @@ const navigation = [
   { name: 'Products', href: '/admin/products', icon: Package },
   { name: 'Orders', href: '/admin/orders', icon: ShoppingCart },
   { name: 'Categories', href: '/admin/categories', icon: FolderTree },
+  { name: 'Scent Profiles', href: '/admin/scent-profiles', icon: Sparkles },
   { name: 'Vendors', href: '/admin/vendors', icon: Store },
   { name: 'Group Buys', href: '/admin/groupbuys', icon: Users },
   { name: 'Settings', href: '/admin/settings', icon: Settings },

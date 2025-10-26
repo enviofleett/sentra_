@@ -15,6 +15,7 @@ export default function Products() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [scentProfiles, setScentProfiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedScents, setSelectedScents] = useState<string[]>([]);
@@ -29,11 +30,13 @@ export default function Products() {
   const loadData = async () => {
     setLoading(true);
     
-    const [categoriesData] = await Promise.all([
-      supabase.from('categories').select('*').order('name')
+    const [categoriesData, scentProfilesData] = await Promise.all([
+      supabase.from('categories').select('*').order('name'),
+      supabase.from('scent_profiles').select('*').eq('is_active', true).order('display_order')
     ]);
 
     if (categoriesData.data) setCategories(categoriesData.data);
+    if (scentProfilesData.data) setScentProfiles(scentProfilesData.data);
 
     let query = supabase
       .from('products')
@@ -86,10 +89,6 @@ export default function Products() {
     );
   };
 
-  const scentProfiles = [
-    'floral', 'citrus', 'woody', 'oriental', 'fresh', 'spicy', 'aquatic', 'gourmand'
-  ];
-
   const FilterSidebar = () => (
     <div className="space-y-6">
       <div>
@@ -113,15 +112,15 @@ export default function Products() {
       <div>
         <h3 className="font-semibold mb-4">Scent Profile</h3>
         <div className="space-y-2">
-          {scentProfiles.map((scent) => (
-            <div key={scent} className="flex items-center space-x-2">
+          {scentProfiles.map((profile) => (
+            <div key={profile.id} className="flex items-center space-x-2">
               <Checkbox
-                id={scent}
-                checked={selectedScents.includes(scent)}
-                onCheckedChange={() => toggleScent(scent)}
+                id={profile.id}
+                checked={selectedScents.includes(profile.name)}
+                onCheckedChange={() => toggleScent(profile.name)}
               />
-              <Label htmlFor={scent} className="cursor-pointer capitalize">
-                {scent}
+              <Label htmlFor={profile.id} className="cursor-pointer capitalize">
+                {profile.name}
               </Label>
             </div>
           ))}

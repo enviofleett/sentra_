@@ -22,7 +22,7 @@ serve(async (req) => {
     // Find campaigns that are active and either expired or reached goal
     const { data: campaigns, error: campaignsError } = await supabase
       .from('group_buy_campaigns')
-      .select('*, products(name), vendors(rep_full_name)')
+      .select('*, products!group_buy_campaigns_product_id_fkey(name), vendors(rep_full_name)')
       .eq('status', 'active')
       .or(`expiry_at.lte.${new Date().toISOString()},current_quantity.gte.goal_quantity`);
 

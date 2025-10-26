@@ -39,7 +39,7 @@ serve(async (req) => {
     // Fetch campaign details
     const { data: campaign, error: campaignError } = await supabase
       .from('group_buy_campaigns')
-      .select('*, products(name, price)')
+      .select('*, products!group_buy_campaigns_product_id_fkey(name, price)')
       .eq('id', campaignId)
       .single();
 

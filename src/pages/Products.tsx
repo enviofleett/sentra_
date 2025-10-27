@@ -217,26 +217,34 @@ export default function Products() {
                             </div>
                           )}
                         </div>
-                      <CardContent className="p-4">
-                        <h3 className="font-semibold text-lg mb-2 line-clamp-1">{product.name}</h3>
-                        {product.scent_profile && (
-                          <p className="text-sm text-muted-foreground capitalize mb-2">
-                            {product.scent_profile}
-                          </p>
-                        )}
-                        <div className="flex items-center justify-between">
-                          <span className="text-secondary font-bold text-xl">
-                            ₦{product.price.toLocaleString()}
-                          </span>
-                          {product.original_price && (
-                            <span className="text-muted-foreground line-through text-sm">
-                              ₦{product.original_price.toLocaleString()}
-                            </span>
+                        <CardContent className="p-4 space-y-3">
+                          <h3 className="font-semibold text-base line-clamp-2 min-h-[3rem]">{product.name}</h3>
+                          {product.scent_profile && (
+                            <p className="text-sm text-muted-foreground capitalize">
+                              {product.scent_profile}
+                            </p>
                           )}
-                        </div>
-                      </CardContent>
-                    </Link>
-                  </Card>
+                          <div className="space-y-2">
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-2xl font-bold">
+                                ₦{product.price.toLocaleString()}
+                              </span>
+                              {product.original_price && product.original_price > product.price && (
+                                <span className="text-base text-muted-foreground line-through">
+                                  ₦{product.original_price.toLocaleString()}
+                                </span>
+                              )}
+                            </div>
+                            <Button 
+                              className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold"
+                              size="sm"
+                            >
+                              Buy
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Link>
+                    </Card>
                   );
                 })}
               </div>

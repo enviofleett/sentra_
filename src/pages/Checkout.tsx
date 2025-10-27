@@ -114,6 +114,18 @@ export default function Checkout() {
   }
 
   const onSubmit = async (data: CheckoutFormData) => {
+    // Verify session is still valid
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      setIsAuthModalOpen(true);
+      toast({
+        title: 'Session Expired',
+        description: 'Please sign in again to complete your order.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
     setProcessing(true);
 
     try {
@@ -221,13 +233,16 @@ export default function Checkout() {
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      {/* Authentication Modal */}
-      <Dialog open={isAuthModalOpen} onOpenChange={setIsAuthModalOpen}>
-        <DialogContent className="max-w-md">
+      {/* Authentication Modal - NON-DISMISSIBLE */}
+      <Dialog open={isAuthModalOpen} onOpenChange={() => {}}>
+        <DialogContent className="max-w-sm [&>button]:hidden">
           <DialogHeader>
             <DialogTitle>Sign In to Checkout</DialogTitle>
             <DialogDescription>
               Please sign in or create an account to complete your purchase securely.
+              <span className="block mt-2 text-xs text-muted-foreground">
+                Your cart will be saved and ready when you return.
+              </span>
             </DialogDescription>
           </DialogHeader>
           <AuthFormContent 

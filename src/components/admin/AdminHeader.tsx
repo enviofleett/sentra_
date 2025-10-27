@@ -21,7 +21,8 @@ const navigation = [
   { name: 'Orders', href: '/admin/orders', icon: ShoppingCart },
   { name: 'Categories', href: '/admin/categories', icon: FolderTree },
   { name: 'Vendors', href: '/admin/vendors', icon: Store },
-  { name: 'Group Buys', href: '/admin/groupbuys', icon: Users },
+  { name: 'Group Buys', href: '/admin/groupbuys', icon: Sparkles },
+  { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 

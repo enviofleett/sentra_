@@ -16,9 +16,9 @@ export const Footer = () => {
               <div>
                 <h4 className="font-semibold text-white mb-2">Headquarters:</h4>
                 <address className="text-sm text-gray-300 not-italic leading-relaxed">
-                  123 Luxury Avenue<br />
-                  Victoria Island<br />
-                  Lagos, Nigeria
+                  57 Ebitu Street<br />
+                  Jabi<br />
+                  Abuja, Nigeria
                 </address>
               </div>
             </div>

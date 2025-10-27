@@ -4,8 +4,8 @@ import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { AuthFormContent } from '@/pages/Auth';
 
 const checkoutSchema = z.object({
   fullName: z.string().min(2, 'Name must be at least 2 characters'),
@@ -29,16 +30,18 @@ type CheckoutFormData = z.infer<typeof checkoutSchema>;
 
 export default function Checkout() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { items, subtotal, clearCart } = useCart();
   const [processing, setProcessing] = useState(false);
   const [termsContent, setTermsContent] = useState('');
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [emailPreFilled, setEmailPreFilled] = useState(false);
 
   const form = useForm<CheckoutFormData>({
     resolver: zodResolver(checkoutSchema),
     defaultValues: {
       fullName: '',
-      email: user?.email || '',
+      email: '',
       phone: '',
       address: '',
       city: '',
@@ -62,13 +65,51 @@ export default function Checkout() {
     }
   };
 
-  if (!user) {
-    navigate('/auth');
-    return null;
+  // Handle cart empty check
+  useEffect(() => {
+    if (items.length === 0) {
+      navigate('/cart');
+    }
+  }, [items.length, navigate]);
+
+  // Handle authentication modal
+  useEffect(() => {
+    if (!authLoading && !user) {
+      setIsAuthModalOpen(true);
+    }
+  }, [authLoading, user]);
+
+  // Smart email pre-fill (only once when user logs in)
+  useEffect(() => {
+    if (user?.email && !emailPreFilled) {
+      form.setValue('email', user.email);
+      setEmailPreFilled(true);
+    }
+  }, [user, emailPreFilled, form]);
+
+  // Handle successful authentication
+  const handleAuthSuccess = () => {
+    setIsAuthModalOpen(false);
+    toast({
+      title: 'Welcome!',
+      description: 'You can now complete your checkout.',
+    });
+  };
+
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="text-muted-foreground">Loading checkout...</p>
+        </div>
+      </div>
+    );
   }
 
+  // If cart is empty, effect will redirect
   if (items.length === 0) {
-    navigate('/cart');
     return null;
   }
 
@@ -78,7 +119,7 @@ export default function Checkout() {
     try {
       // Create order
       const orderData = {
-        user_id: user.id,
+        user_id: user!.id,
         customer_email: data.email,
         status: 'pending' as const,
         items: items.map(item => ({
@@ -117,8 +158,7 @@ export default function Checkout() {
       if (orderError) throw orderError;
 
       // Get Paystack public key from environment
-      // TODO: Store this in Supabase secrets and fetch it
-      const paystackPublicKey = 'pk_test_xxxxxxxxxxxxxxxxxxxxxx'; // Replace with your live key
+      const paystackPublicKey = 'pk_test_xxxxxxxxxxxxxxxxxxxxxx';
       
       // @ts-ignore - PaystackPop is loaded from script in index.html
       if (typeof PaystackPop === 'undefined') {
@@ -129,8 +169,8 @@ export default function Checkout() {
       const handler = PaystackPop.setup({
         key: paystackPublicKey,
         email: data.email,
-        amount: subtotal * 100, // Convert to kobo
-        ref: order.id, // Use order ID as reference
+        amount: subtotal * 100,
+        ref: order.id,
         metadata: {
           order_id: order.id,
           customer_name: data.fullName,
@@ -138,24 +178,18 @@ export default function Checkout() {
         onSuccess: async (transaction: any) => {
           console.log('Payment successful:', transaction.reference);
           
-          // Note: The webhook will handle the final order status update
-          // This is just for user feedback
           toast({
             title: 'Payment successful!',
             description: 'Processing your order...'
           });
 
-          // Send confirmation email (will also be sent by webhook)
           await sendEmail(data.email, 'ORDER_CONFIRMATION', {
             customer_name: data.fullName,
             order_id: order.id.slice(0, 8),
             total_amount: subtotal.toLocaleString()
           });
 
-          // Clear cart
           await clearCart();
-
-          // Redirect to orders page
           navigate('/profile/orders');
         },
         onCancel: () => {
@@ -166,7 +200,6 @@ export default function Checkout() {
             variant: 'destructive'
           });
           
-          // Optionally redirect to orders page
           navigate('/profile/orders');
         }
       });
@@ -187,6 +220,22 @@ export default function Checkout() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
+
+      {/* Authentication Modal */}
+      <Dialog open={isAuthModalOpen} onOpenChange={setIsAuthModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Sign In to Checkout</DialogTitle>
+            <DialogDescription>
+              Please sign in or create an account to complete your purchase securely.
+            </DialogDescription>
+          </DialogHeader>
+          <AuthFormContent 
+            onSuccess={handleAuthSuccess}
+            navigate={navigate}
+          />
+        </DialogContent>
+      </Dialog>
 
       <div className="container mx-auto px-4 py-12">
         <h1 className="text-4xl font-bold mb-8">Checkout</h1>

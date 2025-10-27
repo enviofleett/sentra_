@@ -3,74 +3,307 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
 import { sendEmail } from '@/utils/emailService';
 import { supabase } from '@/integrations/supabase/client';
 import { useBranding } from '@/hooks/useBranding';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+
+// Validation schemas
+const signInSchema = z.object({
+  email: z.string().trim().email('Please enter a valid email address'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+});
+
+const signUpSchema = z.object({
+  fullName: z.string().trim().min(2, 'Name must be at least 2 characters').max(100, 'Name is too long'),
+  email: z.string().trim().email('Please enter a valid email address'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+});
+
+type SignInFormData = z.infer<typeof signInSchema>;
+type SignUpFormData = z.infer<typeof signUpSchema>;
+
+// --------------------------------------------------------
+// Reusable Auth Form Component
+// --------------------------------------------------------
+
+interface AuthFormContentProps {
+  onSuccess?: () => void;
+  initialTab?: 'signin' | 'signup';
+  navigate?: ReturnType<typeof useNavigate>;
+}
+
+export const AuthFormContent: React.FC<AuthFormContentProps> = ({ 
+  onSuccess, 
+  initialTab = 'signin',
+  navigate: externalNavigate
+}) => {
+  const defaultNavigate = useNavigate();
+  const navigate = externalNavigate || defaultNavigate;
+  const { signIn, signUp } = useAuth();
+  const [activeTab, setActiveTab] = useState<'signin' | 'signup'>(initialTab);
+
+  const signInForm = useForm<SignInFormData>({
+    resolver: zodResolver(signInSchema),
+    defaultValues: { email: '', password: '' }
+  });
+
+  const signUpForm = useForm<SignUpFormData>({
+    resolver: zodResolver(signUpSchema),
+    defaultValues: { fullName: '', email: '', password: '' }
+  });
+
+  const handleSignIn = async (data: SignInFormData) => {
+    try {
+      const { error } = await signIn(data.email, data.password);
+      
+      if (error) {
+        let errorMessage = error.message;
+        if (error.message.includes('Invalid login credentials')) {
+          errorMessage = 'Invalid email or password. Please try again.';
+        } else if (error.message.includes('Email not confirmed')) {
+          errorMessage = 'Please verify your email before signing in.';
+        }
+        
+        toast({ 
+          title: 'Sign In Failed', 
+          description: errorMessage, 
+          variant: 'destructive' 
+        });
+        return;
+      }
+
+      toast({ title: 'Success', description: 'Signed in successfully!' });
+
+      // Check if user is admin (only if not from modal)
+      if (!onSuccess) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: roles } = await supabase
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', user.id)
+            .eq('role', 'admin')
+            .maybeSingle();
+          
+          if (roles) {
+            navigate('/admin');
+            return;
+          }
+        }
+        navigate('/');
+      } else {
+        onSuccess();
+      }
+
+      signInForm.reset();
+    } catch (error: any) {
+      toast({ 
+        title: 'Error', 
+        description: 'An unexpected error occurred. Please try again.', 
+        variant: 'destructive' 
+      });
+    }
+  };
+
+  const handleSignUp = async (data: SignUpFormData) => {
+    try {
+      const { error } = await signUp(data.email, data.password, data.fullName);
+      
+      if (error) {
+        let errorMessage = error.message;
+        if (error.message.includes('already registered')) {
+          errorMessage = 'This email is already registered. Please sign in instead.';
+        }
+        
+        toast({ 
+          title: 'Sign Up Failed', 
+          description: errorMessage, 
+          variant: 'destructive' 
+        });
+        return;
+      }
+
+      // Send welcome email
+      await sendEmail(data.email, 'WELCOME_CUSTOMER', { customer_name: data.fullName });
+
+      // Check if user was logged in immediately (email confirmation disabled)
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        toast({ 
+          title: 'Success', 
+          description: 'Account created successfully!' 
+        });
+        signUpForm.reset();
+        onSuccess ? onSuccess() : navigate('/');
+      } else {
+        toast({ 
+          title: 'Success', 
+          description: 'Account created! Please check your email to verify your account.' 
+        });
+        signUpForm.reset();
+        setActiveTab('signin');
+      }
+    } catch (error: any) {
+      toast({ 
+        title: 'Error', 
+        description: 'An unexpected error occurred. Please try again.', 
+        variant: 'destructive' 
+      });
+    }
+  };
+
+  return (
+    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'signin' | 'signup')}>
+      <TabsList className="grid w-full grid-cols-2">
+        <TabsTrigger value="signin">Sign In</TabsTrigger>
+        <TabsTrigger value="signup">Sign Up</TabsTrigger>
+      </TabsList>
+      
+      <TabsContent value="signin" className="mt-4">
+        <Form {...signInForm}>
+          <form onSubmit={signInForm.handleSubmit(handleSignIn)} className="space-y-4">
+            <FormField
+              control={signInForm.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="email" 
+                      placeholder="you@example.com" 
+                      autoComplete="email"
+                      {...field} 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={signInForm.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Password</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="password" 
+                      placeholder="••••••••" 
+                      autoComplete="current-password"
+                      {...field} 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={signInForm.formState.isSubmitting}
+            >
+              {signInForm.formState.isSubmitting ? 'Signing in...' : 'Sign In'}
+            </Button>
+          </form>
+        </Form>
+      </TabsContent>
+
+      <TabsContent value="signup" className="mt-4">
+        <Form {...signUpForm}>
+          <form onSubmit={signUpForm.handleSubmit(handleSignUp)} className="space-y-4">
+            <FormField
+              control={signUpForm.control}
+              name="fullName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Full Name</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="John Doe" 
+                      autoComplete="name"
+                      {...field} 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={signUpForm.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="email" 
+                      placeholder="you@example.com" 
+                      autoComplete="email"
+                      {...field} 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={signUpForm.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Password</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="password" 
+                      placeholder="••••••••" 
+                      autoComplete="new-password"
+                      {...field} 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={signUpForm.formState.isSubmitting}
+            >
+              {signUpForm.formState.isSubmitting ? 'Creating account...' : 'Sign Up'}
+            </Button>
+          </form>
+        </Form>
+      </TabsContent>
+    </Tabs>
+  );
+};
+
+// --------------------------------------------------------
+// Original Auth page for the /auth route
+// --------------------------------------------------------
 
 export default function Auth() {
   const navigate = useNavigate();
-  const { user, signIn, signUp } = useAuth();
-  const [loading, setLoading] = useState(false);
+  const { user } = useAuth();
   const { logoUrl } = useBranding();
 
   useEffect(() => {
     if (user) navigate('/');
   }, [user, navigate]);
-
-  const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setLoading(true);
-    const formData = new FormData(e.currentTarget);
-    const email = formData.get('email') as string;
-    const password = formData.get('password') as string;
-
-    const { error } = await signIn(email, password);
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-      setLoading(false);
-      return;
-    }
-
-    // Check if user is admin and redirect accordingly
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data: roles } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id)
-        .eq('role', 'admin')
-        .maybeSingle();
-      
-      if (roles) {
-        navigate('/admin');
-      } else {
-        navigate('/');
-      }
-    }
-    setLoading(false);
-  };
-
-  const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setLoading(true);
-    const formData = new FormData(e.currentTarget);
-    const email = formData.get('email') as string;
-    const password = formData.get('password') as string;
-    const fullName = formData.get('fullName') as string;
-
-    const { error } = await signUp(email, password, fullName);
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
-      await sendEmail(email, 'WELCOME_CUSTOMER', { customer_name: fullName });
-      toast({ title: 'Success', description: 'Account created! Please check your email.' });
-    }
-    setLoading(false);
-  };
 
   return (
     <div className="min-h-screen bg-gradient-primary flex items-center justify-center p-4">
@@ -86,46 +319,7 @@ export default function Auth() {
           <CardDescription className="text-center">Sign in to your account or create a new one</CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="signin">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="signin">Sign In</TabsTrigger>
-              <TabsTrigger value="signup">Sign Up</TabsTrigger>
-            </TabsList>
-            <TabsContent value="signin">
-              <form onSubmit={handleSignIn} className="space-y-4">
-                <div>
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" name="email" type="email" required />
-                </div>
-                <div>
-                  <Label htmlFor="password">Password</Label>
-                  <Input id="password" name="password" type="password" required />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? 'Signing in...' : 'Sign In'}
-                </Button>
-              </form>
-            </TabsContent>
-            <TabsContent value="signup">
-              <form onSubmit={handleSignUp} className="space-y-4">
-                <div>
-                  <Label htmlFor="fullName">Full Name</Label>
-                  <Input id="fullName" name="fullName" required />
-                </div>
-                <div>
-                  <Label htmlFor="signup-email">Email</Label>
-                  <Input id="signup-email" name="email" type="email" required />
-                </div>
-                <div>
-                  <Label htmlFor="signup-password">Password</Label>
-                  <Input id="signup-password" name="password" type="password" required />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? 'Creating account...' : 'Sign Up'}
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
+          <AuthFormContent navigate={navigate} />
         </CardContent>
       </Card>
     </div>

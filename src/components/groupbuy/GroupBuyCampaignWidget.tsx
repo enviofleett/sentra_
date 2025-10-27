@@ -18,10 +18,12 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
   const [loading, setLoading] = useState(true);
   const [committing, setCommitting] = useState(false);
   const [timeLeft, setTimeLeft] = useState("");
+  const [userCommitment, setUserCommitment] = useState<any>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchCampaign();
+    checkUserCommitment();
   }, [campaignId]);
 
   useEffect(() => {
@@ -53,7 +55,7 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
     try {
       const { data, error } = await supabase
         .from('group_buy_campaigns')
-        .select('*, products!group_buy_campaigns_product_id_fkey(name, price, image_url)')
+        .select('*, products(name, price, image_url)')
         .eq('id', campaignId)
         .single();
 
@@ -65,6 +67,21 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
     } finally {
       setLoading(false);
     }
+  };
+
+  const checkUserCommitment = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    const { data } = await supabase
+      .from('group_buy_commitments')
+      .select('*')
+      .eq('campaign_id', campaignId)
+      .eq('user_id', session.user.id)
+      .in('status', ['committed_unpaid', 'committed_paid'])
+      .maybeSingle();
+
+    setUserCommitment(data);
   };
 
   const handleCommit = async () => {
@@ -88,15 +105,24 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
 
       if (error) {
         console.error('❌ Function error:', error);
+        
+        // Check if it's a duplicate commitment error
+        if (error.message?.includes('already have a commitment')) {
+          toast.error('You have already joined this group buy. Check your profile page.');
+          navigate('/profile/groupbuys');
+          return;
+        }
+        
         throw error;
       }
 
-      if (data.paymentUrl) {
+      if (data?.paymentUrl) {
         console.log('💳 Redirecting to payment:', data.paymentUrl);
         window.location.href = data.paymentUrl;
       } else {
         toast.success('Successfully joined the group buy! You will be notified when the goal is reached.');
         fetchCampaign();
+        checkUserCommitment();
       }
     } catch (error: any) {
       console.error('💥 Commit error:', error);
@@ -105,7 +131,17 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
         context: error.context,
         details: error.details
       });
-      toast.error(error.message || 'Failed to join group buy');
+      
+      // Provide user-friendly error messages
+      if (error.message?.includes('already have a commitment')) {
+        toast.error('You have already joined this group buy.');
+      } else if (error.message?.includes('Campaign has expired')) {
+        toast.error('This group buy campaign has expired.');
+      } else if (error.message?.includes('Campaign is not active')) {
+        toast.error('This group buy is no longer active.');
+      } else {
+        toast.error('Unable to join group buy. Please try again later.');
+      }
     } finally {
       setCommitting(false);
     }
@@ -210,14 +246,25 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
           <span className="font-medium">{timeLeft}</span>
         </div>
 
-        <Button 
-          onClick={handleCommit} 
-          className="w-full" 
-          size="lg"
-          disabled={committing || timeLeft === "Expired"}
-        >
-          {committing ? 'Processing...' : 'Commit to Buy'}
-        </Button>
+        {userCommitment ? (
+          <Button 
+            onClick={() => navigate('/profile/groupbuys')} 
+            className="w-full" 
+            size="lg"
+            variant="secondary"
+          >
+            View Your Commitment
+          </Button>
+        ) : (
+          <Button 
+            onClick={handleCommit} 
+            className="w-full" 
+            size="lg"
+            disabled={committing || timeLeft === "Expired"}
+          >
+            {committing ? 'Processing...' : 'Commit to Buy'}
+          </Button>
+        )}
 
         <p className="text-xs text-center text-muted-foreground">
           Join others in this group buy to unlock the special price!

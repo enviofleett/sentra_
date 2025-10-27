@@ -57,15 +57,36 @@ serve(async (req) => {
     
     const { campaignId, quantity }: CommitmentRequest = requestBody;
 
-    // Fetch campaign details
+    // Fetch campaign details with better error handling
+    console.log('🔍 Fetching campaign:', campaignId);
+
     const { data: campaign, error: campaignError } = await supabase
       .from('group_buy_campaigns')
-      .select('*, products!group_buy_campaigns_product_id_fkey(name, price)')
+      .select(`
+        *,
+        products (
+          name,
+          price
+        )
+      `)
       .eq('id', campaignId)
       .single();
 
-    if (campaignError || !campaign) {
-      console.error('Campaign not found:', campaignError);
+    console.log('📊 Campaign query result:', { campaign, error: campaignError });
+
+    if (campaignError) {
+      console.error('❌ Campaign query error:', campaignError);
+      return new Response(JSON.stringify({ 
+        error: 'Failed to fetch campaign details',
+        details: campaignError.message 
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!campaign) {
+      console.error('❌ Campaign not found');
       return new Response(JSON.stringify({ error: 'Campaign not found' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -88,7 +109,9 @@ serve(async (req) => {
     }
 
     // Check if user already has a commitment
-    const { data: existingCommitment } = await supabase
+    console.log('🔍 Checking for existing commitment...');
+
+    const { data: existingCommitment, error: commitmentCheckError } = await supabase
       .from('group_buy_commitments')
       .select('*')
       .eq('campaign_id', campaignId)
@@ -96,8 +119,13 @@ serve(async (req) => {
       .in('status', ['committed_unpaid', 'committed_paid'])
       .maybeSingle();
 
+    console.log('📋 Existing commitment check:', { existingCommitment, error: commitmentCheckError });
+
     if (existingCommitment) {
-      return new Response(JSON.stringify({ error: 'You already have a commitment for this campaign' }), {
+      console.log('⚠️ User already has a commitment');
+      return new Response(JSON.stringify({ 
+        error: 'You already have a commitment for this campaign. Please check your Group Buys page.' 
+      }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

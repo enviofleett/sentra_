@@ -6,13 +6,36 @@ import { Footer } from '@/components/layout/Footer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
-import { Package, User as UserIcon, ShoppingBag } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { Package, User as UserIcon, ShoppingBag, MapPin, Shield, Edit, Save, X } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
 import GroupBuysProfile from './profile/GroupBuysProfile';
+import AddressesProfile from './profile/AddressesProfile';
+import OrderDetail from './profile/OrderDetail';
+import SecurityProfile from './profile/SecurityProfile';
+
+const profileSchema = z.object({
+  full_name: z.string().max(100, 'Name must be less than 100 characters').optional(),
+  phone: z.string().regex(/^[\d\s\-\+\(\)]*$/, 'Invalid phone number').max(20).optional(),
+});
+
+type ProfileFormData = z.infer<typeof profileSchema>;
 
 function ProfileInfo() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [profile, setProfile] = useState<any>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const { register, handleSubmit, formState: { errors }, reset } = useForm<ProfileFormData>({
+    resolver: zodResolver(profileSchema),
+  });
 
   useEffect(() => {
     loadProfile();
@@ -25,30 +48,119 @@ function ProfileInfo() {
       .select('*')
       .eq('id', user.id)
       .single();
-    if (data) setProfile(data);
+    if (data) {
+      setProfile(data);
+      reset({
+        full_name: data.full_name || '',
+        phone: data.phone || '',
+      });
+    }
+  };
+
+  const onSubmit = async (data: ProfileFormData) => {
+    if (!user) return;
+    setLoading(true);
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        full_name: data.full_name,
+        phone: data.phone,
+      })
+      .eq('id', user.id);
+
+    setLoading(false);
+
+    if (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update profile',
+        variant: 'destructive',
+      });
+    } else {
+      setProfile({ ...profile, ...data });
+      setIsEditing(false);
+      toast({
+        title: 'Success',
+        description: 'Profile updated successfully',
+      });
+    }
   };
 
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-6">
-      <h2 className="text-xl md:text-2xl font-bold">My Profile</h2>
-      <div className="space-y-4">
-        <div>
-          <label className="text-sm font-medium text-muted-foreground">Email</label>
-          <p className="text-lg">{user?.email}</p>
-        </div>
-        {profile?.full_name && (
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">Full Name</label>
-            <p className="text-lg">{profile.full_name}</p>
-          </div>
-        )}
-        {profile?.phone && (
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">Phone</label>
-            <p className="text-lg">{profile.phone}</p>
-          </div>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl md:text-2xl font-bold">My Profile</h2>
+        {!isEditing && (
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setIsEditing(true)}
+          >
+            <Edit className="h-4 w-4 mr-2" />
+            Edit Profile
+          </Button>
         )}
       </div>
+
+      {isEditing ? (
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div>
+            <Label>Email</Label>
+            <Input value={user?.email} disabled />
+            <p className="text-xs text-muted-foreground mt-1">Email cannot be changed</p>
+          </div>
+
+          <div>
+            <Label htmlFor="full_name">Full Name</Label>
+            <Input {...register('full_name')} placeholder="Enter your full name" />
+            {errors.full_name && (
+              <p className="text-sm text-destructive mt-1">{errors.full_name.message}</p>
+            )}
+          </div>
+
+          <div>
+            <Label htmlFor="phone">Phone</Label>
+            <Input {...register('phone')} placeholder="Enter your phone number" />
+            {errors.phone && (
+              <p className="text-sm text-destructive mt-1">{errors.phone.message}</p>
+            )}
+          </div>
+
+          <div className="flex gap-2">
+            <Button type="submit" disabled={loading}>
+              <Save className="h-4 w-4 mr-2" />
+              Save Changes
+            </Button>
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => {
+                setIsEditing(false);
+                reset();
+              }}
+            >
+              <X className="h-4 w-4 mr-2" />
+              Cancel
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">Email</label>
+            <p className="text-lg">{user?.email}</p>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">Full Name</label>
+            <p className="text-lg">{profile?.full_name || 'Not set'}</p>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">Phone</label>
+            <p className="text-lg">{profile?.phone || 'Not set'}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -101,37 +213,39 @@ function Orders() {
       ) : (
         <div className="space-y-4">
           {orders.map((order) => (
-            <Card key={order.id}>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-lg">Order #{order.id.slice(0, 8)}</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      {new Date(order.created_at).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      })}
-                    </p>
+            <Link to={`/profile/orders/${order.id}`} key={order.id}>
+              <Card className="cursor-pointer hover:shadow-lg transition-shadow">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-lg">Order #{order.id.slice(0, 8)}</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        {new Date(order.created_at).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </p>
+                    </div>
+                    <Badge className={getStatusColor(order.status)}>
+                      {order.status}
+                    </Badge>
                   </div>
-                  <Badge className={getStatusColor(order.status)}>
-                    {order.status}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Items</span>
-                    <span>{Array.isArray(order.items) ? order.items.length : 0}</span>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Items</span>
+                      <span>{Array.isArray(order.items) ? order.items.length : 0}</span>
+                    </div>
+                    <div className="flex justify-between font-bold">
+                      <span>Total</span>
+                      <span className="text-secondary">₦{order.total_amount.toLocaleString()}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between font-bold">
-                    <span>Total</span>
-                    <span className="text-secondary">₦{order.total_amount.toLocaleString()}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </Link>
           ))}
         </div>
       )}
@@ -171,11 +285,24 @@ export default function Profile() {
                   Orders
                 </Button>
               </Link>
+              <Link to="/profile/addresses" className="flex-shrink-0">
+                <Button variant="ghost" className="w-full justify-start whitespace-nowrap">
+                  <MapPin className="h-4 w-4 mr-2" />
+                  <span className="hidden sm:inline">Addresses</span>
+                  <span className="sm:hidden">Address</span>
+                </Button>
+              </Link>
               <Link to="/profile/groupbuys" className="flex-shrink-0">
                 <Button variant="ghost" className="w-full justify-start whitespace-nowrap">
                   <ShoppingBag className="h-4 w-4 mr-2" />
                   <span className="hidden sm:inline">Group Buys</span>
                   <span className="sm:hidden">Groups</span>
+                </Button>
+              </Link>
+              <Link to="/profile/security" className="flex-shrink-0">
+                <Button variant="ghost" className="w-full justify-start whitespace-nowrap">
+                  <Shield className="h-4 w-4 mr-2" />
+                  Security
                 </Button>
               </Link>
               <Button 
@@ -193,7 +320,10 @@ export default function Profile() {
               <Routes>
                 <Route index element={<ProfileInfo />} />
                 <Route path="orders" element={<Orders />} />
+                <Route path="orders/:orderId" element={<OrderDetail />} />
+                <Route path="addresses" element={<AddressesProfile />} />
                 <Route path="groupbuys" element={<GroupBuysProfile />} />
+                <Route path="security" element={<SecurityProfile />} />
               </Routes>
             </Card>
           </div>

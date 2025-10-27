@@ -12,29 +12,50 @@ interface CommitmentRequest {
 }
 
 serve(async (req) => {
+  console.log('🚀 commit-to-group-buy function invoked');
+  console.log('📥 Request method:', req.method);
+  console.log('📥 Request headers:', Object.fromEntries(req.headers.entries()));
+
   if (req.method === 'OPTIONS') {
+    console.log('✅ CORS preflight request handled');
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    console.log('🔐 Authenticating user...');
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const authHeader = req.headers.get('Authorization')!;
+    const authHeader = req.headers.get('Authorization');
+    console.log('🔑 Auth header present:', !!authHeader);
+
+    if (!authHeader) {
+      console.error('❌ No authorization header');
+      return new Response(JSON.stringify({ error: 'No authorization header' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
-      console.error('Auth error:', authError);
+      console.error('❌ Auth error:', authError);
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const { campaignId, quantity }: CommitmentRequest = await req.json();
+    console.log('✅ User authenticated:', user.id);
+
+    const requestBody = await req.json();
+    console.log('📦 Request body:', requestBody);
+    
+    const { campaignId, quantity }: CommitmentRequest = requestBody;
 
     // Fetch campaign details
     const { data: campaign, error: campaignError } = await supabase
@@ -197,7 +218,8 @@ serve(async (req) => {
     });
 
   } catch (error: any) {
-    console.error('Error in commit-to-group-buy:', error);
+    console.error('💥 Error in commit-to-group-buy:', error);
+    console.error('Stack trace:', error.stack);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

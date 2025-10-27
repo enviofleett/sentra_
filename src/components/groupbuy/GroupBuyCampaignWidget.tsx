@@ -75,22 +75,36 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
       return;
     }
 
+    console.log('🎯 Attempting to commit to campaign:', campaignId);
+    console.log('👤 User session:', session.user.id);
+
     setCommitting(true);
     try {
       const { data, error } = await supabase.functions.invoke('commit-to-group-buy', {
         body: { campaignId, quantity: 1 }
       });
 
-      if (error) throw error;
+      console.log('📡 Function response:', { data, error });
+
+      if (error) {
+        console.error('❌ Function error:', error);
+        throw error;
+      }
 
       if (data.paymentUrl) {
+        console.log('💳 Redirecting to payment:', data.paymentUrl);
         window.location.href = data.paymentUrl;
       } else {
         toast.success('Successfully joined the group buy! You will be notified when the goal is reached.');
         fetchCampaign();
       }
     } catch (error: any) {
-      console.error('Error committing:', error);
+      console.error('💥 Commit error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        context: error.context,
+        details: error.details
+      });
       toast.error(error.message || 'Failed to join group buy');
     } finally {
       setCommitting(false);
@@ -101,15 +115,37 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
     const shareUrl = window.location.href;
     const shareText = `Join me in this group buy for ${campaign.products.name} at ₦${campaign.discount_price}!`;
 
+    // Check if Web Share API is available
     if (navigator.share) {
       try {
-        await navigator.share({ title: campaign.products.name, text: shareText, url: shareUrl });
-      } catch (error) {
-        console.error('Error sharing:', error);
+        await navigator.share({ 
+          title: campaign.products.name, 
+          text: shareText, 
+          url: shareUrl 
+        });
+        toast.success('Shared successfully!');
+      } catch (error: any) {
+        // User cancelled or permission denied - fallback to clipboard
+        if (error.name !== 'AbortError') {
+          console.error('Error sharing:', error);
+          // Fallback to clipboard
+          try {
+            await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
+            toast.success('Link copied to clipboard!');
+          } catch (clipboardError) {
+            toast.error('Unable to share. Please copy the URL manually.');
+          }
+        }
       }
     } else {
-      await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
-      toast.success('Link copied to clipboard!');
+      // No Web Share API - use clipboard
+      try {
+        await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
+        toast.success('Link copied to clipboard!');
+      } catch (error) {
+        console.error('Clipboard error:', error);
+        toast.error('Unable to copy link. Please copy the URL manually.');
+      }
     }
   };
 

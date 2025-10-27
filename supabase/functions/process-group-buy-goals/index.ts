@@ -19,21 +19,28 @@ serve(async (req) => {
 
     console.log('🔄 Processing group buy goals...');
 
-    // Find campaigns that are active and either expired or reached goal
+    // Find campaigns that are active
     const { data: campaigns, error: campaignsError } = await supabase
       .from('group_buy_campaigns')
       .select('*, products!group_buy_campaigns_product_id_fkey(name), vendors(rep_full_name)')
-      .eq('status', 'active')
-      .or(`expiry_at.lte.${new Date().toISOString()},current_quantity.gte.goal_quantity`);
+      .eq('status', 'active');
 
     if (campaignsError) {
       console.error('Error fetching campaigns:', campaignsError);
       throw campaignsError;
     }
 
-    console.log(`📊 Found ${campaigns?.length || 0} campaigns to process`);
+    // Filter campaigns that need processing (expired or goal reached)
+    const now = new Date();
+    const campaignsToProcess = campaigns?.filter(campaign => {
+      const isExpired = new Date(campaign.expiry_at) <= now;
+      const goalReached = campaign.current_quantity >= campaign.goal_quantity;
+      return isExpired || goalReached;
+    }) || [];
 
-    for (const campaign of campaigns || []) {
+    console.log(`📊 Found ${campaignsToProcess.length} campaigns to process`);
+
+    for (const campaign of campaignsToProcess) {
       const goalMet = campaign.current_quantity >= campaign.goal_quantity;
       
       if (goalMet) {
@@ -144,7 +151,7 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({ 
       success: true,
-      processedCampaigns: campaigns?.length || 0
+      processedCampaigns: campaignsToProcess.length
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

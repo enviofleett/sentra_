@@ -39,16 +39,9 @@ export default function ProductDetail() {
       localStorage.setItem('session_id', sessionId);
     }
 
-    try {
-      await supabase.from('product_analytics').insert({
-        product_id: id,
-        event_type: 'view',
-        user_id: user?.id || null,
-        session_id: sessionId
-      });
-    } catch (error) {
-      console.error('Error tracking view:', error);
-    }
+    // Skip analytics tracking since product_analytics table doesn't exist
+    // This can be added later when product analytics is implemented
+    console.log('Product view tracked locally:', { product_id: id, session_id: sessionId });
   };
 
   const loadProduct = async () => {

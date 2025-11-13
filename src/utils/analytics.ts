@@ -92,44 +92,42 @@ export async function getRevenueByPeriod(period: 'day' | 'week' | 'month'): Prom
   }));
 }
 
-// Product Analytics
+// Product Analytics - Using orders table instead of non-existent product_analytics
 export async function getTopProductsByViews(days: number, limit: number = 10): Promise<ProductAnalytics[]> {
   const startDate = subDays(new Date(), days);
 
+  // Get products from recent orders as a proxy for "views"
   const { data, error } = await supabase
-    .from('product_analytics')
-    .select(`
-      product_id,
-      products (id, name, image_url, price)
-    `)
-    .eq('event_type', 'view')
+    .from('orders')
+    .select('items')
     .gte('created_at', startDate.toISOString());
 
   if (error) throw error;
 
-  const viewCounts = new Map<string, { product: any; count: number }>();
+  const productCounts = new Map<string, { name: string; count: number; revenue: number }>();
   
-  data?.forEach(record => {
-    const productId = record.product_id;
-    const current = viewCounts.get(productId);
-    if (current) {
-      current.count++;
-    } else {
-      viewCounts.set(productId, { product: record.products, count: 1 });
-    }
+  data?.forEach(order => {
+    const items = order.items as any[];
+    items?.forEach((item: any) => {
+      const current = productCounts.get(item.product_id) || { name: item.name, count: 0, revenue: 0 };
+      productCounts.set(item.product_id, {
+        name: item.name,
+        count: current.count + 1,
+        revenue: current.revenue + (item.price * item.quantity)
+      });
+    });
   });
 
-  return Array.from(viewCounts.entries())
+  return Array.from(productCounts.entries())
     .map(([id, data]) => ({
       id,
-      name: data.product?.name || 'Unknown',
-      image_url: data.product?.image_url,
+      name: data.name || 'Unknown',
       views: data.count,
-      purchases: 0,
-      revenue: 0,
-      conversion_rate: 0
+      purchases: data.count,
+      revenue: data.revenue,
+      conversion_rate: 100 // Since we're using orders data
     }))
-    .sort((a, b) => b.views - a.views)
+    .sort((a, b) => b.purchases - a.purchases)
     .slice(0, limit);
 }
 

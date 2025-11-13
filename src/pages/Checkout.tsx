@@ -129,6 +129,34 @@ export default function Checkout() {
     setProcessing(true);
 
     try {
+      // --- BEGIN STOCK CHECK ---
+      const productIds = items.map(item => item.product_id);
+      const { data: productsInStock, error: stockError } = await supabase
+        .from('products')
+        .select('id, name, stock_quantity')
+        .in('id', productIds);
+
+      if (stockError) throw new Error("Could not verify stock. Please try again.");
+
+      const outOfStockItems: string[] = [];
+      for (const item of items) {
+        const dbProduct = productsInStock.find(p => p.id === item.product_id);
+        if (!dbProduct || dbProduct.stock_quantity < item.quantity) {
+          outOfStockItems.push(item.product?.name || 'An item');
+        }
+      }
+
+      if (outOfStockItems.length > 0) {
+        toast({
+          title: 'Stock Error',
+          description: `One or more items are out of stock: ${outOfStockItems.join(', ')}`,
+          variant: 'destructive'
+        });
+        setProcessing(false);
+        return;
+      }
+      // --- END STOCK CHECK ---
+
       // Create order
       const orderData = {
         user_id: user!.id,
@@ -187,6 +215,7 @@ export default function Checkout() {
         metadata: {
           order_id: order.id,
           customer_name: data.fullName,
+          type: 'standard_order' // Add type for webhook
         },
         onSuccess: async (transaction: any) => {
           console.log('Payment successful:', transaction.reference);

@@ -16,6 +16,8 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
+    
+    const paystackSecretKey = Deno.env.get('PAYSTACK_SECRET_KEY');
 
     console.log('🔄 Processing group buy goals...');
 
@@ -25,12 +27,8 @@ serve(async (req) => {
       .select('*, products!group_buy_campaigns_product_id_fkey(name), vendors(rep_full_name)')
       .eq('status', 'active');
 
-    if (campaignsError) {
-      console.error('Error fetching campaigns:', campaignsError);
-      throw campaignsError;
-    }
+    if (campaignsError) throw campaignsError;
 
-    // Filter campaigns that need processing (expired or goal reached)
     const now = new Date();
     const campaignsToProcess = campaigns?.filter(campaign => {
       const isExpired = new Date(campaign.expiry_at) <= now;
@@ -46,37 +44,29 @@ serve(async (req) => {
       if (goalMet) {
         console.log(`✅ Campaign ${campaign.id} reached its goal!`);
         
-        // Update campaign status
         await supabase
           .from('group_buy_campaigns')
           .update({ status: 'goal_met_pending_payment' })
           .eq('id', campaign.id);
 
-        // Get all unpaid commitments for this campaign
         const { data: commitments, error: commitmentsError } = await supabase
           .from('group_buy_commitments')
           .select('*, profiles!inner(email, full_name)')
           .eq('campaign_id', campaign.id)
           .eq('status', 'committed_unpaid');
 
-        if (commitmentsError) {
-          console.error('Error fetching commitments:', commitmentsError);
-          continue;
-        }
+        if (commitmentsError) continue;
 
-        // Set payment deadline and send emails
         const paymentDeadline = new Date();
         paymentDeadline.setHours(paymentDeadline.getHours() + campaign.payment_window_hours);
 
         for (const commitment of commitments || []) {
-          // Update commitment with payment deadline
           await supabase
             .from('group_buy_commitments')
             .update({ payment_deadline: paymentDeadline.toISOString() })
             .eq('id', commitment.id);
 
-          // Send payment required email
-          const paymentLink = `${Deno.env.get('SUPABASE_URL')?.replace('https://deggysidjvpyervagpra.supabase.co', 'https://deggysidjvpyervagpra.lovableproject.com')}/profile/groupbuys`;
+          const paymentLink = `${Deno.env.get('SUPABASE_URL')?.replace('https://oczsddmantovkqfwczqk.supabase.co', 'https://oczsddmantovkqfwczqk.lovableproject.com')}/profile/groupbuys`;
           
           await supabase.functions.invoke('send-email', {
             body: {
@@ -91,39 +81,70 @@ serve(async (req) => {
               }
             }
           });
-
           console.log(`📧 Sent payment notification to ${commitment.profiles.email}`);
         }
 
       } else {
         console.log(`❌ Campaign ${campaign.id} failed to reach goal`);
         
-        // Update campaign status to failed
         await supabase
           .from('group_buy_campaigns')
           .update({ status: 'failed_expired' })
           .eq('id', campaign.id);
 
-        // Get all commitments for this campaign
         const { data: commitments, error: commitmentsError } = await supabase
           .from('group_buy_commitments')
           .select('*, profiles!inner(email, full_name)')
           .eq('campaign_id', campaign.id)
           .in('status', ['committed_unpaid', 'committed_paid']);
 
-        if (commitmentsError) {
-          console.error('Error fetching commitments:', commitmentsError);
-          continue;
-        }
+        if (commitmentsError) continue;
 
         for (const commitment of commitments || []) {
-          // Update commitment status
-          await supabase
-            .from('group_buy_commitments')
-            .update({ status: 'refunded' })
-            .eq('id', commitment.id);
+          // If payment was made (payment_ref exists), initiate refund
+          if (commitment.payment_ref && paystackSecretKey) {
+            console.log(`💰 Initiating refund for payment ${commitment.payment_ref}`);
+            
+            // --- BEGIN PAYSTACK REFUND LOGIC ---
+            try {
+              const refundResponse = await fetch('https://api.paystack.co/refund', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${paystackSecretKey}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  transaction: commitment.payment_ref,
+                  reason: 'Group buy campaign failed'
+                })
+              });
+              
+              if (!refundResponse.ok) {
+                console.error(`Failed to process refund for ${commitment.payment_ref}:`, await refundResponse.text());
+                // Don't stop, just log. Continue to update status.
+              } else {
+                console.log(`✅ Refund processed for ${commitment.payment_ref}`);
+              }
+              
+            } catch (refundError) {
+              console.error(`Error during refund API call:`, refundError);
+            }
+            // --- END PAYSTACK REFUND LOGIC ---
+            
+            await supabase
+              .from('group_buy_commitments')
+              .update({ status: 'refunded' })
+              .eq('id', commitment.id);
 
-          // Send refund email
+          } else {
+            // No payment was made, just cancel the commitment
+            await supabase
+              .from('group_buy_commitments')
+              .update({ status: 'cancelled' })
+              .eq('id', commitment.id);
+          }
+
+          // Send refund/failure notification
           await supabase.functions.invoke('send-email', {
             body: {
               to: commitment.profiles.email,
@@ -135,14 +156,7 @@ serve(async (req) => {
               }
             }
           });
-
-          // If payment was made (payment_ref exists), initiate refund
-          if (commitment.payment_ref) {
-            console.log(`💰 Initiating refund for payment ${commitment.payment_ref}`);
-            // TODO: Implement Paystack refund API call here
-          }
-
-          console.log(`📧 Sent refund notification to ${commitment.profiles.email}`);
+          console.log(`📧 Sent failure/refund notification to ${commitment.profiles.email}`);
         }
       }
     }

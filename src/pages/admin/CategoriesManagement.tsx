@@ -83,8 +83,24 @@ export function CategoriesManagement() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
+    const name = formData.get('name') as string;
+    
+    // Auto-generate the slug
+    const slug = name
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, '-') // Replace spaces with -
+      .replace(/[^a-z0-9-]/g, '') // Remove invalid characters
+      .replace(/-+/g, '-'); // Replace multiple - with single -
+
+    if (!slug) {
+      toast.error('Category name must not be empty');
+      return;
+    }
+
     const categoryData = {
-      name: formData.get('name') as string,
+      name: name,
+      slug: slug,
       description: formData.get('description') as string || null,
       image_url: formData.get('image_url') as string || null,
     };
@@ -96,7 +112,7 @@ export function CategoriesManagement() {
         .eq('id', editingCategory.id);
 
       if (error) {
-        toast.error('Failed to update category');
+        toast.error(`Failed to update category: ${error.message}`);
         console.error(error);
       } else {
         toast.success('Category updated successfully');
@@ -109,7 +125,7 @@ export function CategoriesManagement() {
         .insert([categoryData]);
 
       if (error) {
-        toast.error('Failed to create category');
+        toast.error(`Failed to create category: ${error.message}`);
         console.error(error);
       } else {
         toast.success('Category created successfully');

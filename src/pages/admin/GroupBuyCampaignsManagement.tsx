@@ -28,7 +28,7 @@ export default function GroupBuyCampaignsManagement() {
     payment_mode: 'pay_on_success' | 'pay_to_book';
     payment_window_hours: number;
     expiry_at: string;
-    status: 'pending' | 'active';
+    status: 'draft' | 'active';
   }>({
     product_id: '',
     goal_quantity: 10,
@@ -36,7 +36,7 @@ export default function GroupBuyCampaignsManagement() {
     payment_mode: 'pay_on_success',
     payment_window_hours: 6,
     expiry_at: '',
-    status: 'pending'
+    status: 'draft'
   });
 
   useEffect(() => {
@@ -80,8 +80,6 @@ export default function GroupBuyCampaignsManagement() {
     e.preventDefault();
     
     try {
-      const selectedProduct = products.find(p => p.id === formData.product_id);
-      
       if (selectedCampaign) {
         const { error } = await supabase
           .from('group_buy_campaigns')
@@ -93,19 +91,11 @@ export default function GroupBuyCampaignsManagement() {
       } else {
         const { data, error } = await supabase
           .from('group_buy_campaigns')
-          .insert([{
-            ...formData,
-            vendor_id: selectedProduct.vendor_id
-          }])
+          .insert([formData])
           .select()
           .single();
 
         if (error) throw error;
-
-        await supabase
-          .from('products')
-          .update({ active_group_buy_id: data.id })
-          .eq('id', formData.product_id);
 
         toast.success('Campaign created successfully');
       }
@@ -127,15 +117,10 @@ export default function GroupBuyCampaignsManagement() {
     try {
       const { error } = await supabase
         .from('group_buy_campaigns')
-        .update({ status: 'failed_cancelled' })
+        .update({ status: 'cancelled' })
         .eq('id', selectedCampaign.id);
 
       if (error) throw error;
-
-      await supabase
-        .from('products')
-        .update({ active_group_buy_id: null })
-        .eq('active_group_buy_id', selectedCampaign.id);
 
       toast.success('Campaign cancelled');
       setCancelDialogOpen(false);
@@ -173,7 +158,7 @@ export default function GroupBuyCampaignsManagement() {
       payment_mode: 'pay_on_success',
       payment_window_hours: 6,
       expiry_at: '',
-      status: 'pending'
+      status: 'draft'
     });
   };
 

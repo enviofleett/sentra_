@@ -281,7 +281,7 @@ function UserRoleManager() {
       .from('user_roles')
       .insert([{
         user_id: user.id,
-        role: newRole as 'admin' | 'product_manager' | 'order_processor'
+        role: newRole as 'admin' | 'product_manager' | 'moderator' | 'user'
       }])
       .select()
       .single();
@@ -303,7 +303,7 @@ function UserRoleManager() {
       .from('user_roles')
       .delete()
       .eq('user_id', user.id)
-      .eq('role', roleToRemove as 'admin' | 'product_manager' | 'order_processor');
+      .eq('role', roleToRemove as 'admin' | 'product_manager' | 'moderator' | 'user');
     
     if (error) {
       toast({ title: 'Error removing role', description: error.message, variant: 'destructive' });

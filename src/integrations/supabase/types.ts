@@ -14,6 +14,387 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_config: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          key: string
+          updated_at: string | null
+          value: Json
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          key: string
+          updated_at?: string | null
+          value: Json
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          key?: string
+          updated_at?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
+      cart_items: {
+        Row: {
+          created_at: string | null
+          id: string
+          product_id: string
+          quantity: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          product_id: string
+          quantity?: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          product_id?: string
+          quantity?: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cart_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      categories: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          image_url: string | null
+          is_active: boolean | null
+          name: string
+          parent_id: string | null
+          slug: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          name: string
+          parent_id?: string | null
+          slug: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          name?: string
+          parent_id?: string | null
+          slug?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_templates: {
+        Row: {
+          created_at: string | null
+          html_content: string
+          id: string
+          name: string
+          subject: string
+          template_id: string
+          text_content: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          html_content: string
+          id?: string
+          name: string
+          subject: string
+          template_id: string
+          text_content?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          html_content?: string
+          id?: string
+          name?: string
+          subject?: string
+          template_id?: string
+          text_content?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      group_buy_campaigns: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          current_quantity: number | null
+          discount_price: number
+          expiry_at: string
+          goal_quantity: number
+          id: string
+          payment_deadline: string | null
+          payment_mode: Database["public"]["Enums"]["payment_mode"] | null
+          product_id: string
+          status: Database["public"]["Enums"]["campaign_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          current_quantity?: number | null
+          discount_price: number
+          expiry_at: string
+          goal_quantity: number
+          id?: string
+          payment_deadline?: string | null
+          payment_mode?: Database["public"]["Enums"]["payment_mode"] | null
+          product_id: string
+          status?: Database["public"]["Enums"]["campaign_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          current_quantity?: number | null
+          discount_price?: number
+          expiry_at?: string
+          goal_quantity?: number
+          id?: string
+          payment_deadline?: string | null
+          payment_mode?: Database["public"]["Enums"]["payment_mode"] | null
+          product_id?: string
+          status?: Database["public"]["Enums"]["campaign_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_buy_campaigns_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_buy_commitments: {
+        Row: {
+          campaign_id: string
+          committed_price: number
+          created_at: string | null
+          id: string
+          payment_deadline: string | null
+          payment_reference: string | null
+          quantity: number
+          status: Database["public"]["Enums"]["commitment_status"] | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          campaign_id: string
+          committed_price: number
+          created_at?: string | null
+          id?: string
+          payment_deadline?: string | null
+          payment_reference?: string | null
+          quantity: number
+          status?: Database["public"]["Enums"]["commitment_status"] | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          campaign_id?: string
+          committed_price?: number
+          created_at?: string | null
+          id?: string
+          payment_deadline?: string | null
+          payment_reference?: string | null
+          quantity?: number
+          status?: Database["public"]["Enums"]["commitment_status"] | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_buy_commitments_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "group_buy_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          billing_address: Json | null
+          created_at: string | null
+          customer_email: string
+          id: string
+          items: Json
+          notes: string | null
+          payment_reference: string | null
+          payment_status: Database["public"]["Enums"]["payment_status"] | null
+          shipping_address: Json | null
+          shipping_cost: number | null
+          status: Database["public"]["Enums"]["order_status"] | null
+          subtotal: number
+          tax: number | null
+          total_amount: number
+          tracking_number: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          billing_address?: Json | null
+          created_at?: string | null
+          customer_email: string
+          id?: string
+          items?: Json
+          notes?: string | null
+          payment_reference?: string | null
+          payment_status?: Database["public"]["Enums"]["payment_status"] | null
+          shipping_address?: Json | null
+          shipping_cost?: number | null
+          status?: Database["public"]["Enums"]["order_status"] | null
+          subtotal: number
+          tax?: number | null
+          total_amount: number
+          tracking_number?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          billing_address?: Json | null
+          created_at?: string | null
+          customer_email?: string
+          id?: string
+          items?: Json
+          notes?: string | null
+          payment_reference?: string | null
+          payment_status?: Database["public"]["Enums"]["payment_status"] | null
+          shipping_address?: Json | null
+          shipping_cost?: number | null
+          status?: Database["public"]["Enums"]["order_status"] | null
+          subtotal?: number
+          tax?: number | null
+          total_amount?: number
+          tracking_number?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      products: {
+        Row: {
+          brand: string | null
+          category_id: string | null
+          created_at: string | null
+          description: string | null
+          id: string
+          image_url: string | null
+          images: Json | null
+          is_active: boolean | null
+          metadata: Json | null
+          name: string
+          price: number
+          scent_profile_id: string | null
+          size: string | null
+          sku: string | null
+          stock_quantity: number | null
+          updated_at: string | null
+          vendor_id: string | null
+        }
+        Insert: {
+          brand?: string | null
+          category_id?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          images?: Json | null
+          is_active?: boolean | null
+          metadata?: Json | null
+          name: string
+          price: number
+          scent_profile_id?: string | null
+          size?: string | null
+          sku?: string | null
+          stock_quantity?: number | null
+          updated_at?: string | null
+          vendor_id?: string | null
+        }
+        Update: {
+          brand?: string | null
+          category_id?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          images?: Json | null
+          is_active?: boolean | null
+          metadata?: Json | null
+          name?: string
+          price?: number
+          scent_profile_id?: string | null
+          size?: string | null
+          sku?: string | null
+          stock_quantity?: number | null
+          updated_at?: string | null
+          vendor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_scent_profile_id_fkey"
+            columns: ["scent_profile_id"]
+            isOneToOne: false
+            referencedRelation: "scent_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -41,6 +422,33 @@ export type Database = {
         }
         Relationships: []
       }
+      scent_profiles: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+          notes: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          notes?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          notes?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -62,6 +470,42 @@ export type Database = {
         }
         Relationships: []
       }
+      vendors: {
+        Row: {
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          logo_url: string | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          logo_url?: string | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          logo_url?: string | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -78,6 +522,27 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
+      campaign_status:
+        | "draft"
+        | "active"
+        | "goal_reached"
+        | "expired"
+        | "completed"
+        | "cancelled"
+      commitment_status:
+        | "committed_unpaid"
+        | "committed_paid"
+        | "payment_failed"
+        | "cancelled"
+        | "completed"
+      order_status:
+        | "pending"
+        | "processing"
+        | "shipped"
+        | "delivered"
+        | "cancelled"
+      payment_mode: "pay_to_book" | "pay_on_success"
+      payment_status: "pending" | "paid" | "failed" | "refunded"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -206,6 +671,30 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "moderator", "user"],
+      campaign_status: [
+        "draft",
+        "active",
+        "goal_reached",
+        "expired",
+        "completed",
+        "cancelled",
+      ],
+      commitment_status: [
+        "committed_unpaid",
+        "committed_paid",
+        "payment_failed",
+        "cancelled",
+        "completed",
+      ],
+      order_status: [
+        "pending",
+        "processing",
+        "shipped",
+        "delivered",
+        "cancelled",
+      ],
+      payment_mode: ["pay_to_book", "pay_on_success"],
+      payment_status: ["pending", "paid", "failed", "refunded"],
     },
   },
 } as const

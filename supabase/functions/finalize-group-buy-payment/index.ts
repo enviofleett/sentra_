@@ -93,7 +93,7 @@ serve(async (req) => {
           user_id: user.id,
           type: 'group_buy_final_payment'
         },
-        callback_url: `${Deno.env.get('SUPABASE_URL')?.replace('https://deggysidjvpyervagpra.supabase.co', 'https://deggysidjvpyervagpra.lovableproject.com')}/profile/groupbuys`
+        callback_url: `${Deno.env.get('APP_BASE_URL')}/profile/groupbuys`
       }),
     });
 

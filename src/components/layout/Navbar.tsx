@@ -54,7 +54,7 @@ export const Navbar = () => {
           <img 
             src={sentraLogo} 
             alt="Sentra - Luxury Perfumes Logo" 
-            className="h-12 w-auto object-contain"
+            className="h-10 w-auto object-contain"
             loading="eager"
           />
         </Link>

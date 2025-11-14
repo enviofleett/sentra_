@@ -47,7 +47,7 @@ export default function ProductDetail() {
   const loadProduct = async () => {
     const { data, error } = await supabase
       .from('products')
-      .select('*, active_group_buy_id')
+      .select('*')
       .eq('id', id)
       .eq('is_active', true)
       .single();

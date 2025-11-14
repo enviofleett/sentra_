@@ -3,8 +3,8 @@ import { ShoppingCart, User, Search, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCart } from '@/contexts/CartContext';
-import { useBranding } from '@/hooks/useBranding';
 import { Badge } from '@/components/ui/badge';
+import sentraLogo from '@/assets/sentra-logo.png';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,7 +20,6 @@ export const Navbar = () => {
   const { user, signOut } = useAuth();
   const { totalItems } = useCart();
   const [isAdmin, setIsAdmin] = useState(false);
-  const { logoUrl } = useBranding();
 
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -51,19 +50,13 @@ export const Navbar = () => {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <nav className="container mx-auto flex h-16 items-center justify-between px-4">
         {/* Logo */}
-        <Link to="/" className="flex items-center space-x-2" aria-label="Home">
-          {logoUrl ? (
-            <img 
-              src={logoUrl} 
-              alt="Sentra - Luxury Perfumes Logo" 
-              className="h-[78px] max-w-[351px] object-contain"
-              loading="eager"
-            />
-          ) : (
-            <h1 className="text-2xl font-bold gradient-gold bg-clip-text text-transparent">
-              Sentra
-            </h1>
-          )}
+        <Link to="/" className="flex items-center space-x-2" aria-label="Sentra - Luxury Perfumes Home">
+          <img 
+            src={sentraLogo} 
+            alt="Sentra - Luxury Perfumes Logo" 
+            className="h-12 w-auto object-contain"
+            loading="eager"
+          />
         </Link>
 
         {/* Desktop Navigation */}

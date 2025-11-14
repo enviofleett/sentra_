@@ -47,44 +47,45 @@ export const Navbar = () => {
   ];
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <nav className="container mx-auto flex h-16 items-center justify-between px-4">
+    <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-sm">
+      <nav className="container mx-auto flex h-20 items-center justify-between px-6 lg:px-8">
         {/* Logo */}
-        <Link to="/" className="flex items-center space-x-2" aria-label="Sentra - Luxury Perfumes Home">
+        <Link to="/" className="flex items-center py-4 transition-opacity hover:opacity-80" aria-label="Sentra - Luxury Perfumes Home">
           <img 
             src={sentraLogo} 
             alt="Sentra - Luxury Perfumes Logo" 
-            className="h-10 w-auto object-contain"
+            className="h-12 w-auto object-contain"
             loading="eager"
           />
         </Link>
 
         {/* Desktop Navigation */}
-        <div className="hidden md:flex items-center space-x-6">
+        <div className="hidden md:flex items-center space-x-8">
           {navigation.map((item) => (
             <Link
               key={item.name}
               to={item.href}
-              className="text-sm font-medium text-foreground/80 hover:text-foreground transition-smooth"
+              className="text-sm font-medium text-foreground/70 hover:text-foreground transition-colors relative group"
             >
               {item.name}
+              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary transition-all group-hover:w-full"></span>
             </Link>
           ))}
         </div>
 
         {/* Actions */}
-        <div className="flex items-center space-x-4">
-          <Button variant="ghost" size="icon" className="hidden md:flex">
+        <div className="flex items-center space-x-2">
+          <Button variant="ghost" size="icon" className="hidden md:flex hover:bg-accent/50">
             <Search className="h-5 w-5" />
           </Button>
 
           <Link to="/cart">
-            <Button variant="ghost" size="icon" className="relative">
+            <Button variant="ghost" size="icon" className="relative hover:bg-accent/50">
               <ShoppingCart className="h-5 w-5" />
               {totalItems > 0 && (
                 <Badge 
                   variant="secondary" 
-                  className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
+                  className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs font-semibold"
                 >
                   {totalItems}
                 </Badge>
@@ -95,7 +96,7 @@ export const Navbar = () => {
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon">
+                <Button variant="ghost" size="icon" className="hover:bg-accent/50">
                   <User className="h-5 w-5" />
                 </Button>
               </DropdownMenuTrigger>
@@ -118,7 +119,7 @@ export const Navbar = () => {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <Button asChild variant="outline" size="sm" className="hidden md:flex">
+            <Button asChild variant="default" size="sm" className="hidden md:flex font-medium">
               <Link to="/auth">Sign In</Link>
             </Button>
           )}
@@ -130,13 +131,13 @@ export const Navbar = () => {
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right">
-              <div className="flex flex-col space-y-4 mt-8">
+            <SheetContent side="right" className="w-80">
+              <div className="flex flex-col space-y-6 mt-8">
                 {navigation.map((item) => (
                   <Link
                     key={item.name}
                     to={item.href}
-                    className="text-lg font-medium text-foreground/80 hover:text-foreground transition-smooth"
+                    className="text-lg font-medium text-foreground/80 hover:text-foreground transition-colors"
                   >
                     {item.name}
                   </Link>

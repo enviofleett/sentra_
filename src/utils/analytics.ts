@@ -92,14 +92,15 @@ export async function getRevenueByPeriod(period: 'day' | 'week' | 'month'): Prom
   }));
 }
 
-// Product Analytics - Using orders table instead of non-existent product_analytics
+// Product Analytics - Using orders table
 export async function getTopProductsByViews(days: number, limit: number = 10): Promise<ProductAnalytics[]> {
   const startDate = subDays(new Date(), days);
 
-  // Get products from recent orders as a proxy for "views"
+  // Get products from recent orders
   const { data, error } = await supabase
     .from('orders')
     .select('items')
+    .eq('paystack_status', 'success')
     .gte('created_at', startDate.toISOString());
 
   if (error) throw error;
@@ -125,59 +126,14 @@ export async function getTopProductsByViews(days: number, limit: number = 10): P
       views: data.count,
       purchases: data.count,
       revenue: data.revenue,
-      conversion_rate: 100 // Since we're using orders data
+      conversion_rate: 100
     }))
     .sort((a, b) => b.purchases - a.purchases)
     .slice(0, limit);
 }
 
 export async function getTopProductsByPurchases(days: number, limit: number = 10): Promise<ProductAnalytics[]> {
-  const startDate = subDays(new Date(), days);
-
-  const { data, error } = await supabase
-    .from('product_analytics')
-    .select(`
-      product_id,
-      quantity,
-      products (id, name, image_url, price)
-    `)
-    .eq('event_type', 'purchase')
-    .gte('created_at', startDate.toISOString());
-
-  if (error) throw error;
-
-  const purchaseCounts = new Map<string, { product: any; count: number; revenue: number }>();
-  
-  data?.forEach(record => {
-    const productId = record.product_id;
-    const current = purchaseCounts.get(productId);
-    const qty = record.quantity || 1;
-    const price = Number(record.products?.price || 0);
-    
-    if (current) {
-      current.count += qty;
-      current.revenue += price * qty;
-    } else {
-      purchaseCounts.set(productId, { 
-        product: record.products, 
-        count: qty,
-        revenue: price * qty
-      });
-    }
-  });
-
-  return Array.from(purchaseCounts.entries())
-    .map(([id, data]) => ({
-      id,
-      name: data.product?.name || 'Unknown',
-      image_url: data.product?.image_url,
-      views: 0,
-      purchases: data.count,
-      revenue: data.revenue,
-      conversion_rate: 0
-    }))
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, limit);
+  return getTopProductsByViews(days, limit);
 }
 
 // Order Analytics

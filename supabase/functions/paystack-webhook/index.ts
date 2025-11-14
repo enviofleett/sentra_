@@ -65,27 +65,26 @@ serve(async (req: Request) => {
 
       if (paymentType === 'standard_order') {
         // --- STANDARD ORDER LOGIC ---
-        const orderId = reference;
         const { data: order, error: fetchError } = await supabase
           .from("orders")
           .select("id, total_amount, paystack_status")
-          .eq("id", orderId)
+          .eq("payment_reference", reference)
           .single();
 
         if (fetchError || !order) {
-          console.error("Order not found:", orderId);
+          console.error("Order not found for reference:", reference);
           return new Response(JSON.stringify({ error: "Order not found" }), { status: 404 });
         }
 
         const expectedAmount = order.total_amount * 100;
         if (amount !== expectedAmount) {
-          console.error(`Amount mismatch for order ${orderId}: expected ${expectedAmount}, got ${amount}`);
-          await supabase.from("orders").update({ paystack_status: "amount_mismatch", paystack_reference: reference }).eq("id", orderId);
+          console.error(`Amount mismatch for order ${order.id}: expected ${expectedAmount}, got ${amount}`);
+          await supabase.from("orders").update({ paystack_status: "amount_mismatch" }).eq("payment_reference", reference);
           return new Response(JSON.stringify({ error: "Amount mismatch" }), { status: 400 });
         }
 
         if (order.paystack_status === 'success') {
-          console.log(`Order ${orderId} already processed`);
+          console.log(`Order ${order.id} already processed`);
           return new Response(JSON.stringify({ message: "Already processed" }), { status: 200 });
         }
 
@@ -93,13 +92,12 @@ serve(async (req: Request) => {
           .from("orders")
           .update({
             status: "processing",
-            paystack_reference: reference,
             paystack_status: "success",
             updated_at: new Date().toISOString(),
           })
-          .eq("id", orderId);
+          .eq("payment_reference", reference);
         
-        console.log(`Order ${orderId} updated successfully`);
+        console.log(`Order ${order.id} updated successfully`);
 
       } else if (paymentType === 'group_buy_commitment' || paymentType === 'group_buy_final_payment') {
         // --- GROUP BUY LOGIC (NEW) ---

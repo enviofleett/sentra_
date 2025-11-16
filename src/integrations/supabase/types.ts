@@ -164,6 +164,7 @@ export type Database = {
           id: string
           payment_deadline: string | null
           payment_mode: Database["public"]["Enums"]["payment_mode"] | null
+          payment_window_hours: number | null
           product_id: string
           status: Database["public"]["Enums"]["campaign_status"] | null
           updated_at: string | null
@@ -178,6 +179,7 @@ export type Database = {
           id?: string
           payment_deadline?: string | null
           payment_mode?: Database["public"]["Enums"]["payment_mode"] | null
+          payment_window_hours?: number | null
           product_id: string
           status?: Database["public"]["Enums"]["campaign_status"] | null
           updated_at?: string | null
@@ -192,6 +194,7 @@ export type Database = {
           id?: string
           payment_deadline?: string | null
           payment_mode?: Database["public"]["Enums"]["payment_mode"] | null
+          payment_window_hours?: number | null
           product_id?: string
           status?: Database["public"]["Enums"]["campaign_status"] | null
           updated_at?: string | null
@@ -212,7 +215,9 @@ export type Database = {
           committed_price: number
           created_at: string | null
           id: string
+          order_id: string | null
           payment_deadline: string | null
+          payment_ref: string | null
           payment_reference: string | null
           quantity: number
           status: Database["public"]["Enums"]["commitment_status"] | null
@@ -224,7 +229,9 @@ export type Database = {
           committed_price: number
           created_at?: string | null
           id?: string
+          order_id?: string | null
           payment_deadline?: string | null
+          payment_ref?: string | null
           payment_reference?: string | null
           quantity: number
           status?: Database["public"]["Enums"]["commitment_status"] | null
@@ -236,7 +243,9 @@ export type Database = {
           committed_price?: number
           created_at?: string | null
           id?: string
+          order_id?: string | null
           payment_deadline?: string | null
+          payment_ref?: string | null
           payment_reference?: string | null
           quantity?: number
           status?: Database["public"]["Enums"]["commitment_status"] | null
@@ -263,6 +272,7 @@ export type Database = {
           notes: string | null
           payment_reference: string | null
           payment_status: Database["public"]["Enums"]["payment_status"] | null
+          paystack_status: string | null
           shipping_address: Json | null
           shipping_cost: number | null
           status: Database["public"]["Enums"]["order_status"] | null
@@ -282,6 +292,7 @@ export type Database = {
           notes?: string | null
           payment_reference?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"] | null
+          paystack_status?: string | null
           shipping_address?: Json | null
           shipping_cost?: number | null
           status?: Database["public"]["Enums"]["order_status"] | null
@@ -301,6 +312,7 @@ export type Database = {
           notes?: string | null
           payment_reference?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"] | null
+          paystack_status?: string | null
           shipping_address?: Json | null
           shipping_cost?: number | null
           status?: Database["public"]["Enums"]["order_status"] | null
@@ -310,6 +322,36 @@ export type Database = {
           tracking_number?: string | null
           updated_at?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      product_analytics: {
+        Row: {
+          created_at: string | null
+          event_type: string
+          id: string
+          product_id: string
+          quantity: number | null
+          session_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          event_type: string
+          id?: string
+          product_id: string
+          quantity?: number | null
+          session_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          event_type?: string
+          id?: string
+          product_id?: string
+          quantity?: number | null
+          session_id?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -323,10 +365,12 @@ export type Database = {
           image_url: string | null
           images: Json | null
           is_active: boolean | null
+          is_featured: boolean
           metadata: Json | null
           name: string
+          original_price: number | null
           price: number
-          scent_profile_id: string | null
+          scent_profile: string | null
           size: string | null
           sku: string | null
           stock_quantity: number | null
@@ -342,10 +386,12 @@ export type Database = {
           image_url?: string | null
           images?: Json | null
           is_active?: boolean | null
+          is_featured?: boolean
           metadata?: Json | null
           name: string
+          original_price?: number | null
           price: number
-          scent_profile_id?: string | null
+          scent_profile?: string | null
           size?: string | null
           sku?: string | null
           stock_quantity?: number | null
@@ -361,10 +407,12 @@ export type Database = {
           image_url?: string | null
           images?: Json | null
           is_active?: boolean | null
+          is_featured?: boolean
           metadata?: Json | null
           name?: string
+          original_price?: number | null
           price?: number
-          scent_profile_id?: string | null
+          scent_profile?: string | null
           size?: string | null
           sku?: string | null
           stock_quantity?: number | null
@@ -380,13 +428,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "products_scent_profile_id_fkey"
-            columns: ["scent_profile_id"]
-            isOneToOne: false
-            referencedRelation: "scent_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "products_vendor_id_fkey"
             columns: ["vendor_id"]
             isOneToOne: false
@@ -398,6 +439,8 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string
+          default_billing_address: Json | null
+          default_shipping_address: Json | null
           email: string
           full_name: string | null
           id: string
@@ -406,6 +449,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          default_billing_address?: Json | null
+          default_shipping_address?: Json | null
           email: string
           full_name?: string | null
           id: string
@@ -414,6 +459,8 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          default_billing_address?: Json | null
+          default_shipping_address?: Json | null
           email?: string
           full_name?: string | null
           id?: string
@@ -426,7 +473,9 @@ export type Database = {
         Row: {
           created_at: string | null
           description: string | null
+          display_order: number
           id: string
+          is_active: boolean
           name: string
           notes: Json | null
           updated_at: string | null
@@ -434,7 +483,9 @@ export type Database = {
         Insert: {
           created_at?: string | null
           description?: string | null
+          display_order?: number
           id?: string
+          is_active?: boolean
           name: string
           notes?: Json | null
           updated_at?: string | null
@@ -442,7 +493,9 @@ export type Database = {
         Update: {
           created_at?: string | null
           description?: string | null
+          display_order?: number
           id?: string
+          is_active?: boolean
           name?: string
           notes?: Json | null
           updated_at?: string | null
@@ -472,36 +525,33 @@ export type Database = {
       }
       vendors: {
         Row: {
-          contact_email: string | null
-          contact_phone: string | null
+          bank_info: Json | null
           created_at: string | null
-          description: string | null
+          email: string
           id: string
-          is_active: boolean | null
-          logo_url: string | null
-          name: string
+          phone: string | null
+          rep_full_name: string
+          store_location: string | null
           updated_at: string | null
         }
         Insert: {
-          contact_email?: string | null
-          contact_phone?: string | null
+          bank_info?: Json | null
           created_at?: string | null
-          description?: string | null
+          email: string
           id?: string
-          is_active?: boolean | null
-          logo_url?: string | null
-          name: string
+          phone?: string | null
+          rep_full_name: string
+          store_location?: string | null
           updated_at?: string | null
         }
         Update: {
-          contact_email?: string | null
-          contact_phone?: string | null
+          bank_info?: Json | null
           created_at?: string | null
-          description?: string | null
+          email?: string
           id?: string
-          is_active?: boolean | null
-          logo_url?: string | null
-          name?: string
+          phone?: string | null
+          rep_full_name?: string
+          store_location?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -519,9 +569,16 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      is_product_manager: { Args: never; Returns: boolean }
     }
     Enums: {
-      app_role: "admin" | "moderator" | "user"
+      app_role:
+        | "admin"
+        | "moderator"
+        | "user"
+        | "product_manager"
+        | "order_processor"
+        | "vendor"
       campaign_status:
         | "draft"
         | "active"
@@ -529,12 +586,18 @@ export type Database = {
         | "expired"
         | "completed"
         | "cancelled"
+        | "goal_met_pending_payment"
+        | "goal_met_paid_finalized"
+        | "failed_expired"
       commitment_status:
         | "committed_unpaid"
         | "committed_paid"
         | "payment_failed"
         | "cancelled"
         | "completed"
+        | "payment_window_expired"
+        | "refunded"
+        | "paid_finalized"
       order_status:
         | "pending"
         | "processing"
@@ -670,7 +733,14 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "moderator", "user"],
+      app_role: [
+        "admin",
+        "moderator",
+        "user",
+        "product_manager",
+        "order_processor",
+        "vendor",
+      ],
       campaign_status: [
         "draft",
         "active",
@@ -678,6 +748,9 @@ export const Constants = {
         "expired",
         "completed",
         "cancelled",
+        "goal_met_pending_payment",
+        "goal_met_paid_finalized",
+        "failed_expired",
       ],
       commitment_status: [
         "committed_unpaid",
@@ -685,6 +758,9 @@ export const Constants = {
         "payment_failed",
         "cancelled",
         "completed",
+        "payment_window_expired",
+        "refunded",
+        "paid_finalized",
       ],
       order_status: [
         "pending",

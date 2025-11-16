@@ -194,7 +194,7 @@ export default function Products() {
                 <p className="text-muted-foreground text-lg">No products found</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
                 {products.map((product) => {
                   // Get first image from images array or fallback to image_url
                   const displayImage = product.images && Array.isArray(product.images) && product.images.length > 0
@@ -202,44 +202,46 @@ export default function Products() {
                     : product.image_url;
 
                   return (
-                    <Card key={product.id} className="group overflow-hidden shadow-elegant hover:shadow-gold transition-smooth">
-                      <Link to={`/products/${product.id}`}>
-                        <div className="aspect-square bg-accent overflow-hidden">
+                    <Card key={product.id} className="group overflow-hidden border-0 bg-card hover:shadow-gold transition-all duration-500 hover:-translate-y-1">
+                      <Link to={`/products/${product.id}`} className="block">
+                        <div className="aspect-square bg-muted/30 overflow-hidden relative">
                           {displayImage ? (
                             <img
                               src={displayImage}
                               alt={product.name}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-smooth"
+                              className="w-full h-full object-cover group-hover:scale-110 transition-all duration-700 ease-out"
                             />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-gradient-primary">
+                            <div className="w-full h-full flex items-center justify-center gradient-primary">
                               <Sparkles className="h-16 w-16 text-primary-foreground/30" />
                             </div>
                           )}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                         </div>
-                        <CardContent className="p-4 space-y-3">
-                          <h3 className="font-semibold text-base line-clamp-2 min-h-[3rem]">{product.name}</h3>
+                        <CardContent className="p-5 space-y-3">
+                          <h3 className="font-display text-lg font-semibold line-clamp-2 min-h-[3.5rem] group-hover:text-secondary transition-colors duration-300">
+                            {product.name}
+                          </h3>
                           {product.scent_profile && (
-                            <p className="text-sm text-muted-foreground capitalize">
+                            <p className="text-sm text-muted-foreground capitalize tracking-wide">
                               {product.scent_profile}
                             </p>
                           )}
-                          <div className="space-y-2">
+                          <div className="space-y-3 pt-2">
                             <div className="flex items-baseline gap-2">
-                              <span className="text-2xl font-bold">
+                              <span className="text-2xl font-bold text-foreground">
                                 ₦{product.price.toLocaleString()}
                               </span>
                               {product.original_price && product.original_price > product.price && (
-                                <span className="text-base text-muted-foreground line-through">
+                                <span className="text-sm text-muted-foreground line-through">
                                   ₦{product.original_price.toLocaleString()}
                                 </span>
                               )}
                             </div>
                             <Button 
-                              className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold"
-                              size="sm"
+                              className="w-full bg-primary hover:bg-secondary hover:text-secondary-foreground transition-all duration-300 font-medium"
                             >
-                              Buy
+                              View Details
                             </Button>
                           </div>
                         </CardContent>

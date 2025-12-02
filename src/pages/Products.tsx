@@ -204,19 +204,20 @@ export default function Products() {
                   return (
                     <Card key={product.id} className="group overflow-hidden border-0 bg-card hover:shadow-gold transition-all duration-500 hover:-translate-y-1">
                       <Link to={`/products/${product.id}`} className="block">
-                        <div className="aspect-square bg-muted/30 overflow-hidden relative">
+                        <div className="aspect-square bg-muted/50 overflow-hidden relative flex items-center justify-center">
                           {displayImage ? (
                             <img
                               src={displayImage}
                               alt={product.name}
-                              className="w-full h-full object-cover group-hover:scale-110 transition-all duration-700 ease-out"
+                              className="w-full h-full object-contain p-2 group-hover:scale-105 transition-all duration-700 ease-out"
+                              loading="lazy"
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center gradient-primary">
                               <Sparkles className="h-16 w-16 text-primary-foreground/30" />
                             </div>
                           )}
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
                         </div>
                         <CardContent className="p-5 space-y-3">
                           <h3 className="font-display text-lg font-semibold line-clamp-2 min-h-[3.5rem] group-hover:text-secondary transition-colors duration-300">

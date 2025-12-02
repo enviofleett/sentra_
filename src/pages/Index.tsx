@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { ArrowRight, Filter } from 'lucide-react';
-import heroPerfumeBottle from '@/assets/hero-perfume-bottle.jpg';
+import heroPerfumeNew from '@/assets/hero-perfume-new.jpg';
 
 export default function Index() {
   const [vendors, setVendors] = useState<any[]>([]);
@@ -71,13 +71,15 @@ export default function Index() {
 
             {/* Right Column - Image */}
             <div className="relative order-2 lg:order-2">
-              <div className="relative bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 rounded-[2.5rem] p-8 md:p-12 lg:p-16 shadow-2xl">
+              <div className="relative rounded-2xl md:rounded-3xl overflow-hidden shadow-2xl">
                 <img 
-                  src={heroPerfumeBottle} 
+                  src={heroPerfumeNew} 
                   alt="Luxury Signature Perfume - Premium Fragrance Collection" 
-                  className="w-full h-auto object-contain"
+                  className="w-full h-[300px] sm:h-[400px] md:h-[500px] lg:h-[600px] object-cover"
                   loading="eager"
+                  fetchPriority="high"
                 />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
               </div>
             </div>
           </div>

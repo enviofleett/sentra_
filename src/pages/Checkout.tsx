@@ -197,6 +197,20 @@ export default function Checkout() {
 
       if (orderError) throw orderError;
 
+      // Generate unique payment reference
+      const paymentReference = `order_${order.id}_${Date.now()}`;
+
+      // Update order with payment reference BEFORE initiating payment
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update({ payment_reference: paymentReference })
+        .eq('id', order.id);
+
+      if (updateError) {
+        console.error('Failed to save payment reference:', updateError);
+        throw new Error('Failed to initialize payment. Please try again.');
+      }
+
       // Get Paystack public key from environment
       const paystackPublicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
       
@@ -211,14 +225,24 @@ export default function Checkout() {
         key: paystackPublicKey,
         email: data.email,
         amount: subtotal * 100,
-        ref: order.id,
+        ref: paymentReference, // Use the saved payment reference
         metadata: {
           order_id: order.id,
           customer_name: data.fullName,
-          type: 'standard_order' // Add type for webhook
+          type: 'standard_order'
         },
         onSuccess: async (transaction: any) => {
           console.log('Payment successful:', transaction.reference);
+          
+          // Update order status as backup (in case webhook is delayed)
+          await supabase
+            .from('orders')
+            .update({ 
+              status: 'processing',
+              paystack_status: 'success',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', order.id);
           
           toast({
             title: 'Payment successful!',

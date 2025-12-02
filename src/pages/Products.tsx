@@ -15,28 +15,28 @@ export default function Products() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
-  const [scentProfiles, setScentProfiles] = useState<any[]>([]);
+  const [vendors, setVendors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [selectedScents, setSelectedScents] = useState<string[]>([]);
+  const [selectedVendors, setSelectedVendors] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState('newest');
   const [minPrice, setMinPrice] = useState(0);
   const [maxPrice, setMaxPrice] = useState(1000000);
 
   useEffect(() => {
     loadData();
-  }, [selectedCategories, selectedScents, sortBy]);
+  }, [selectedCategories, selectedVendors, sortBy]);
 
   const loadData = async () => {
     setLoading(true);
     
-    const [categoriesData, scentProfilesData] = await Promise.all([
+    const [categoriesData, vendorsData] = await Promise.all([
       supabase.from('categories').select('*').order('name'),
-      supabase.from('scent_profiles').select('*').eq('is_active', true).order('display_order')
+      supabase.from('vendors').select('*').order('rep_full_name')
     ]);
 
     if (categoriesData.data) setCategories(categoriesData.data);
-    if (scentProfilesData.data) setScentProfiles(scentProfilesData.data);
+    if (vendorsData.data) setVendors(vendorsData.data);
 
     let query = supabase
       .from('products')
@@ -49,8 +49,8 @@ export default function Products() {
       query = query.in('category_id', selectedCategories);
     }
 
-    if (selectedScents.length > 0) {
-      query = query.in('scent_profile', selectedScents as any);
+    if (selectedVendors.length > 0) {
+      query = query.in('vendor_id', selectedVendors);
     }
 
     // Sorting
@@ -81,11 +81,11 @@ export default function Products() {
     );
   };
 
-  const toggleScent = (scent: string) => {
-    setSelectedScents(prev =>
-      prev.includes(scent)
-        ? prev.filter(s => s !== scent)
-        : [...prev, scent]
+  const toggleVendor = (vendorId: string) => {
+    setSelectedVendors(prev =>
+      prev.includes(vendorId)
+        ? prev.filter(id => id !== vendorId)
+        : [...prev, vendorId]
     );
   };
 
@@ -110,17 +110,17 @@ export default function Products() {
       </div>
 
       <div>
-        <h3 className="font-semibold mb-4">Scent Profile</h3>
+        <h3 className="font-semibold mb-4">Vendors</h3>
         <div className="space-y-2">
-          {scentProfiles.map((profile) => (
-            <div key={profile.id} className="flex items-center space-x-2">
+          {vendors.map((vendor) => (
+            <div key={vendor.id} className="flex items-center space-x-2">
               <Checkbox
-                id={profile.id}
-                checked={selectedScents.includes(profile.name)}
-                onCheckedChange={() => toggleScent(profile.name)}
+                id={`vendor-${vendor.id}`}
+                checked={selectedVendors.includes(vendor.id)}
+                onCheckedChange={() => toggleVendor(vendor.id)}
               />
-              <Label htmlFor={profile.id} className="cursor-pointer capitalize">
-                {profile.name}
+              <Label htmlFor={`vendor-${vendor.id}`} className="cursor-pointer">
+                {vendor.rep_full_name}
               </Label>
             </div>
           ))}

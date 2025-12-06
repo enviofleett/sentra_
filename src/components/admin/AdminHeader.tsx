@@ -9,7 +9,8 @@ import {
   Menu,
   X,
   Users,
-  Sparkles
+  Sparkles,
+  Tag
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -22,6 +23,7 @@ const navigation = [
   { name: 'Categories', href: '/admin/categories', icon: FolderTree },
   { name: 'Vendors', href: '/admin/vendors', icon: Store },
   { name: 'Group Buys', href: '/admin/groupbuys', icon: Sparkles },
+  { name: 'Discounts', href: '/admin/discounts', icon: Tag },
   { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'Settings', href: '/admin/settings', icon: Settings },
 ];

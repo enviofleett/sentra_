@@ -7,8 +7,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
-import { Sparkles, SlidersHorizontal } from 'lucide-react';
+import { Sparkles, SlidersHorizontal, Search } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 
 export default function Products() {
@@ -22,10 +23,26 @@ export default function Products() {
   const [sortBy, setSortBy] = useState('newest');
   const [minPrice, setMinPrice] = useState(0);
   const [maxPrice, setMaxPrice] = useState(1000000);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Sync URL search param with local state on mount
+  useEffect(() => {
+    const urlQuery = searchParams.get('q') || '';
+    setSearchQuery(urlQuery);
+  }, []);
 
   useEffect(() => {
     loadData();
-  }, [selectedCategories, selectedVendors, sortBy]);
+    
+    // Update URL param for persistence
+    const newSearchParams = new URLSearchParams(searchParams.toString());
+    if (searchQuery) {
+      newSearchParams.set('q', searchQuery);
+    } else {
+      newSearchParams.delete('q');
+    }
+    setSearchParams(newSearchParams, { replace: true });
+  }, [selectedCategories, selectedVendors, sortBy, searchQuery]);
 
   const loadData = async () => {
     setLoading(true);
@@ -40,7 +57,7 @@ export default function Products() {
 
     let query = supabase
       .from('products')
-      .select('*')
+      .select('*, vendors(rep_full_name)')
       .eq('is_active', true)
       .gte('price', minPrice)
       .lte('price', maxPrice);
@@ -69,7 +86,20 @@ export default function Products() {
     }
 
     const { data } = await query;
-    if (data) setProducts(data);
+    let filteredData = data || [];
+
+    // Client-side search filtering
+    if (searchQuery) {
+      const lowerCaseQuery = searchQuery.toLowerCase();
+      filteredData = filteredData.filter(p => 
+        p.name.toLowerCase().includes(lowerCaseQuery) ||
+        p.description?.toLowerCase().includes(lowerCaseQuery) ||
+        p.scent_profile?.toLowerCase().includes(lowerCaseQuery) ||
+        p.vendors?.rep_full_name?.toLowerCase().includes(lowerCaseQuery)
+      );
+    }
+
+    setProducts(filteredData);
     setLoading(false);
   };
 
@@ -89,8 +119,26 @@ export default function Products() {
     );
   };
 
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+  };
+
   const FilterSidebar = () => (
     <div className="space-y-6">
+      <div>
+        <h3 className="font-semibold mb-4">Search</h3>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input 
+            type="text" 
+            placeholder="Search products..." 
+            value={searchQuery}
+            onChange={handleSearchChange}
+            className="pl-9"
+          />
+        </div>
+      </div>
+
       <div>
         <h3 className="font-semibold mb-4">Categories</h3>
         <div className="space-y-2">
@@ -154,6 +202,20 @@ export default function Products() {
           <p className="text-sm md:text-base text-muted-foreground">Discover luxury perfumes crafted to perfection</p>
         </div>
 
+        {/* Mobile Search Bar */}
+        <div className="lg:hidden w-full mb-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input 
+              type="text" 
+              placeholder="Search products..." 
+              value={searchQuery}
+              onChange={handleSearchChange}
+              className="w-full pl-9"
+            />
+          </div>
+        </div>
+
         <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
           {/* Desktop Filters */}
           <aside className="hidden lg:block w-64 flex-shrink-0">
@@ -192,11 +254,15 @@ export default function Products() {
             ) : products.length === 0 ? (
               <div className="text-center py-20">
                 <p className="text-muted-foreground text-lg">No products found</p>
+                {searchQuery && (
+                  <Button variant="link" onClick={() => setSearchQuery('')} className="mt-2">
+                    Clear search
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
                 {products.map((product) => {
-                  // Get first image from images array or fallback to image_url
                   const displayImage = product.images && Array.isArray(product.images) && product.images.length > 0
                     ? product.images[0]
                     : product.image_url;

@@ -164,11 +164,20 @@ serve(async (req) => {
       });
     }
 
-    // Update campaign current_quantity
-    await supabase
+    // CRITICAL FIX: Update campaign current_quantity with rollback on failure
+    const { error: updateCampaignError } = await supabase
       .from('group_buy_campaigns')
       .update({ current_quantity: campaign.current_quantity + quantity })
       .eq('id', campaignId);
+
+    if (updateCampaignError) {
+      console.error('Error updating campaign quantity, rolling back commitment:', updateCampaignError);
+      await supabase.from('group_buy_commitments').delete().eq('id', commitment.id);
+      return new Response(JSON.stringify({ error: 'Failed to update campaign progress. Commitment cancelled.' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Fetch user profile for email
     const { data: profile } = await supabase

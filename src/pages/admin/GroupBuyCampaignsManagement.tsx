@@ -78,6 +78,8 @@ export default function GroupBuyCampaignsManagement() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    let campaignIdToUpdate = selectedCampaign?.id;
+
     try {
       if (selectedCampaign) {
         const { error } = await supabase
@@ -87,16 +89,32 @@ export default function GroupBuyCampaignsManagement() {
 
         if (error) throw error;
         toast.success('Campaign updated successfully');
+        campaignIdToUpdate = selectedCampaign.id;
       } else {
         const { data, error } = await supabase
           .from('group_buy_campaigns')
           .insert([formData])
-          .select()
+          .select('id')
           .single();
 
         if (error) throw error;
-
+        campaignIdToUpdate = data.id;
         toast.success('Campaign created successfully');
+      }
+      
+      // Update product's active_group_buy_id to control widget visibility
+      if (campaignIdToUpdate && formData.product_id) {
+        const newActiveId = formData.status === 'active' ? campaignIdToUpdate : null;
+        
+        const { error: productUpdateError } = await supabase
+          .from('products')
+          .update({ active_group_buy_id: newActiveId })
+          .eq('id', formData.product_id);
+
+        if (productUpdateError) {
+          console.error('Failed to link/unlink product active_group_buy_id:', productUpdateError);
+          toast.error('Campaign saved, but failed to link to product.');
+        }
       }
 
       setDialogOpen(false);
@@ -120,6 +138,14 @@ export default function GroupBuyCampaignsManagement() {
         .eq('id', selectedCampaign.id);
 
       if (error) throw error;
+      
+      // Unlink product on cancel
+      if (selectedCampaign.product_id) {
+        await supabase
+          .from('products')
+          .update({ active_group_buy_id: null })
+          .eq('id', selectedCampaign.product_id);
+      }
 
       toast.success('Campaign cancelled');
       setCancelDialogOpen(false);
@@ -163,12 +189,14 @@ export default function GroupBuyCampaignsManagement() {
 
   const getStatusColor = (status: string): "default" | "destructive" | "secondary" => {
     const colors: Record<string, "default" | "destructive" | "secondary"> = {
+      draft: 'secondary',
       pending: 'secondary',
       active: 'default',
       goal_met_pending_payment: 'default',
-      goal_met_finalized: 'default',
+      goal_met_paid_finalized: 'default',
+      paid_finalized: 'default',
       failed_expired: 'destructive',
-      failed_cancelled: 'destructive'
+      cancelled: 'destructive'
     };
     return colors[status] || 'secondary';
   };

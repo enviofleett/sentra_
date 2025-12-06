@@ -139,11 +139,12 @@ serve(async (req: Request) => {
           return new Response(JSON.stringify({ error: "Amount mismatch" }), { status: 400 });
         }
 
-        if (commitment.status === 'committed_paid') {
+        if (commitment.status === 'committed_paid' || commitment.status === 'paid_finalized') {
           console.log(`[Paystack Webhook] Commitment ${commitmentId} already processed, skipping`);
           return new Response(JSON.stringify({ message: "Already processed" }), { status: 200 });
         }
 
+        // 1. UPDATE COMMITMENT STATUS to intermediate state
         const { error: updateError } = await supabase
           .from("group_buy_commitments")
           .update({
@@ -158,7 +159,91 @@ serve(async (req: Request) => {
           return new Response(JSON.stringify({ error: "Failed to update commitment" }), { status: 500 });
         }
         
-        console.log(`[Paystack Webhook] Group buy commitment ${commitmentId} updated successfully to 'committed_paid'`);
+        console.log(`[Paystack Webhook] Commitment ${commitmentId} updated to 'committed_paid'`);
+
+        // 2. CRITICAL: CREATE THE FINAL ORDER RECORD
+        const { data: commitmentData, error: fetchCommitmentDataError } = await supabase
+          .from('group_buy_commitments')
+          .select(`
+            campaign_id, quantity, committed_price, user_id,
+            group_buy_campaigns(
+              products(id, name, price, vendor_id, image_url)
+            )
+          `)
+          .eq('id', commitmentId)
+          .single();
+
+        if (fetchCommitmentDataError || !commitmentData) {
+          console.error('❌ Failed to refetch commitment data for order creation:', fetchCommitmentDataError);
+          return new Response(JSON.stringify({ error: "Refetch failed, manual fix needed" }), { status: 200 }); 
+        }
+        
+        // Fetch profile separately
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('email, full_name, default_shipping_address, default_billing_address')
+          .eq('id', commitmentData.user_id)
+          .single();
+        
+        const campaign = commitmentData.group_buy_campaigns as any;
+        const product = campaign?.products;
+        const totalAmountInNaira = Number(commitmentData.committed_price) * commitmentData.quantity;
+
+        const orderData = {
+          user_id: commitmentData.user_id,
+          customer_email: profile?.email || '',
+          status: 'processing',
+          payment_status: 'paid',
+          paystack_status: 'success',
+          payment_reference: reference,
+          items: [{
+            product_id: product?.id,
+            name: product?.name,
+            price: Number(commitmentData.committed_price),
+            quantity: commitmentData.quantity,
+            vendor_id: product?.vendor_id,
+            image_url: product?.image_url,
+          }],
+          subtotal: totalAmountInNaira,
+          tax: 0,
+          shipping_cost: 0,
+          total_amount: totalAmountInNaira,
+          shipping_address: profile?.default_shipping_address || {},
+          billing_address: profile?.default_billing_address || {},
+        };
+
+        const { data: newOrder, error: orderCreationError } = await supabase
+          .from('orders')
+          .insert([orderData])
+          .select('id')
+          .single();
+
+        if (orderCreationError) {
+          console.error('❌ Failed to create final order:', orderCreationError);
+        } else {
+          // 3. Update commitment to final state and link order_id
+          await supabase
+            .from('group_buy_commitments')
+            .update({ status: 'paid_finalized', order_id: newOrder.id })
+            .eq('id', commitmentId);
+
+          // 4. Send email notification
+          await supabase.functions.invoke('send-email', {
+            body: {
+              to: profile?.email,
+              templateId: 'GROUPBUY_SUCCESS_PAID_FINALIZED',
+              data: {
+                customer_name: profile?.full_name || 'Customer',
+                product_name: product?.name,
+                order_id: newOrder.id.slice(0, 8),
+              }
+            }
+          });
+          
+          console.log(`✅ Final Order ${newOrder.id} created and commitment finalized.`);
+        }
+
+        return new Response(JSON.stringify({ message: "Webhook processed successfully" }), { status: 200 });
       }
 
       return new Response(JSON.stringify({ message: "Webhook processed successfully" }), { status: 200 });
@@ -168,7 +253,6 @@ serve(async (req: Request) => {
       const { reference, metadata } = webhookData.data;
       console.log(`[Paystack Webhook] Failed payment - Reference: ${reference}, Type: ${metadata?.type || 'unknown'}`);
       
-      // Update order status for failed payments
       if (metadata?.type === 'standard_order') {
         await supabase
           .from("orders")

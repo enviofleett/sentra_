@@ -120,6 +120,48 @@ export type Database = {
           },
         ]
       }
+      discount_thresholds: {
+        Row: {
+          created_at: string
+          discount_type: Database["public"]["Enums"]["discount_type"]
+          discount_value: number
+          id: string
+          is_active: boolean
+          name: string
+          target_id: string | null
+          target_type: Database["public"]["Enums"]["target_type"]
+          threshold: number
+          type: Database["public"]["Enums"]["threshold_type"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          discount_type: Database["public"]["Enums"]["discount_type"]
+          discount_value: number
+          id?: string
+          is_active?: boolean
+          name: string
+          target_id?: string | null
+          target_type: Database["public"]["Enums"]["target_type"]
+          threshold: number
+          type: Database["public"]["Enums"]["threshold_type"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          discount_type?: Database["public"]["Enums"]["discount_type"]
+          discount_value?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          target_id?: string | null
+          target_type?: Database["public"]["Enums"]["target_type"]
+          threshold?: number
+          type?: Database["public"]["Enums"]["threshold_type"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       email_templates: {
         Row: {
           created_at: string | null
@@ -357,6 +399,7 @@ export type Database = {
       }
       products: {
         Row: {
+          active_group_buy_id: string | null
           brand: string | null
           category_id: string | null
           created_at: string | null
@@ -378,6 +421,7 @@ export type Database = {
           vendor_id: string | null
         }
         Insert: {
+          active_group_buy_id?: string | null
           brand?: string | null
           category_id?: string | null
           created_at?: string | null
@@ -399,6 +443,7 @@ export type Database = {
           vendor_id?: string | null
         }
         Update: {
+          active_group_buy_id?: string | null
           brand?: string | null
           category_id?: string | null
           created_at?: string | null
@@ -420,6 +465,13 @@ export type Database = {
           vendor_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "products_active_group_buy_id_fkey"
+            columns: ["active_group_buy_id"]
+            isOneToOne: false
+            referencedRelation: "group_buy_campaigns"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "products_category_id_fkey"
             columns: ["category_id"]
@@ -598,6 +650,7 @@ export type Database = {
         | "payment_window_expired"
         | "refunded"
         | "paid_finalized"
+      discount_type: "percentage" | "fixed"
       order_status:
         | "pending"
         | "processing"
@@ -606,6 +659,8 @@ export type Database = {
         | "cancelled"
       payment_mode: "pay_to_book" | "pay_on_success"
       payment_status: "pending" | "paid" | "failed" | "refunded"
+      target_type: "global" | "product" | "category"
+      threshold_type: "quantity" | "value"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -762,6 +817,7 @@ export const Constants = {
         "refunded",
         "paid_finalized",
       ],
+      discount_type: ["percentage", "fixed"],
       order_status: [
         "pending",
         "processing",
@@ -771,6 +827,8 @@ export const Constants = {
       ],
       payment_mode: ["pay_to_book", "pay_on_success"],
       payment_status: ["pending", "paid", "failed", "refunded"],
+      target_type: ["global", "product", "category"],
+      threshold_type: ["quantity", "value"],
     },
   },
 } as const

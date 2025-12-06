@@ -66,7 +66,7 @@ serve(async (req) => {
             .update({ payment_deadline: paymentDeadline.toISOString() })
             .eq('id', commitment.id);
 
-          const paymentLink = `${Deno.env.get('SUPABASE_URL')?.replace('https://oczsddmantovkqfwczqk.supabase.co', 'https://oczsddmantovkqfwczqk.lovableproject.com')}/profile/groupbuys`;
+          const paymentLink = `${Deno.env.get('APP_BASE_URL')}/profile/groupbuys`;
           
           await supabase.functions.invoke('send-email', {
             body: {

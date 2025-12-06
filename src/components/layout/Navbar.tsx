@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, User, Search, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,6 +13,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Command, CommandInput, CommandList, CommandEmpty, CommandItem } from '@/components/ui/command';
 import { supabase } from '@/integrations/supabase/client';
 import { useState, useEffect } from 'react';
 
@@ -20,6 +22,9 @@ export const Navbar = () => {
   const { user, signOut } = useAuth();
   const { totalItems } = useCart();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const navigate = useNavigate();
 
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -39,6 +44,15 @@ export const Navbar = () => {
 
     checkAdminStatus();
   }, [user]);
+
+  const handleSearchSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (searchQuery.trim()) {
+      setIsSearchOpen(false);
+      navigate(`/products?q=${encodeURIComponent(searchQuery.trim())}`);
+      setSearchQuery('');
+    }
+  };
 
   const navigation = [
     { name: 'Shop', href: '/products' },
@@ -77,7 +91,12 @@ export const Navbar = () => {
 
         {/* Actions */}
         <div className="flex items-center space-x-2">
-          <Button variant="ghost" size="icon" className="hidden md:flex hover:bg-accent/50">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="hidden md:flex hover:bg-accent/50"
+            onClick={() => setIsSearchOpen(true)}
+          >
             <Search className="h-5 w-5" />
           </Button>
 
@@ -154,6 +173,39 @@ export const Navbar = () => {
           </Sheet>
         </div>
       </nav>
+
+      {/* Global Search Modal */}
+      <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
+        <DialogContent className="overflow-hidden p-0 max-w-lg">
+          <Command>
+            <form onSubmit={handleSearchSubmit}>
+              <div className="flex items-center border-b px-3">
+                <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                <CommandInput
+                  value={searchQuery}
+                  onValueChange={setSearchQuery}
+                  placeholder="Search fragrances, categories, vendors..."
+                  autoFocus
+                  className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                />
+                <Button type="submit" variant="ghost" size="sm">Go</Button>
+              </div>
+            </form>
+            <CommandList className="max-h-[300px] overflow-y-auto overflow-x-hidden">
+              <CommandEmpty>Type to search products...</CommandEmpty>
+              {searchQuery && (
+                <CommandItem 
+                  onSelect={() => handleSearchSubmit()}
+                  className="cursor-pointer"
+                >
+                  <Search className="mr-2 h-4 w-4" />
+                  Search for "{searchQuery}" in all products
+                </CommandItem>
+              )}
+            </CommandList>
+          </Command>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 };

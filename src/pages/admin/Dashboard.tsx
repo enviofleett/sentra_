@@ -12,6 +12,7 @@ import SettingsManagement from './SettingsManagement';
 import GroupBuyCampaignsManagement from './GroupBuyCampaignsManagement';
 import { UsersManagement } from './UsersManagement';
 import { UserDetailPage } from './UserDetailPage';
+import DiscountThresholdsManagement from './DiscountThresholdsManagement';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -71,6 +72,7 @@ export default function AdminDashboard() {
           <Route path="/orders" element={<OrdersManagement />} />
           <Route path="/vendors" element={<VendorsManagement />} />
           <Route path="/groupbuys" element={<GroupBuyCampaignsManagement />} />
+          <Route path="/discounts" element={<DiscountThresholdsManagement />} />
           <Route path="/users" element={<UsersManagement />} />
           <Route path="/users/:id" element={<UserDetailPage />} />
           <Route path="/settings" element={<SettingsManagement />} />

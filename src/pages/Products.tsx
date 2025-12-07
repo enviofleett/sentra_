@@ -4,13 +4,23 @@ import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
-import { Sparkles, SlidersHorizontal, Search } from 'lucide-react';
+import { Sparkles, SlidersHorizontal, Search, Users } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+
+interface GroupBuyCampaign {
+  id: string;
+  status: string;
+  discount_price: number;
+  current_quantity: number;
+  goal_quantity: number;
+  expiry_at: string;
+}
 
 export default function Products() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -57,7 +67,7 @@ export default function Products() {
 
     let query = supabase
       .from('products')
-      .select('*, vendors(rep_full_name)')
+      .select('*, vendors(rep_full_name), group_buy_campaigns!products_active_group_buy_id_fkey(id, status, discount_price, current_quantity, goal_quantity, expiry_at)')
       .eq('is_active', true)
       .gte('price', minPrice)
       .lte('price', maxPrice);
@@ -101,6 +111,13 @@ export default function Products() {
 
     setProducts(filteredData);
     setLoading(false);
+  };
+
+  const isGroupBuyActive = (campaign: GroupBuyCampaign | null): boolean => {
+    if (!campaign) return false;
+    const now = new Date();
+    const expiry = new Date(campaign.expiry_at);
+    return expiry > now && ['active', 'goal_reached', 'goal_met_pending_payment'].includes(campaign.status);
   };
 
   const toggleCategory = (categoryId: string) => {
@@ -266,6 +283,9 @@ export default function Products() {
                   const displayImage = product.images && Array.isArray(product.images) && product.images.length > 0
                     ? product.images[0]
                     : product.image_url;
+                  
+                  const campaign = product.group_buy_campaigns as GroupBuyCampaign | null;
+                  const hasActiveGroupBuy = isGroupBuyActive(campaign);
 
                   return (
                     <Card key={product.id} className="group overflow-hidden border-0 bg-card hover:shadow-gold transition-all duration-500 hover:-translate-y-1">
@@ -284,6 +304,14 @@ export default function Products() {
                             </div>
                           )}
                           <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                          
+                          {/* Group Buy Badge */}
+                          {hasActiveGroupBuy && campaign && (
+                            <Badge className="absolute top-3 left-3 bg-primary text-primary-foreground shadow-lg">
+                              <Users className="w-3 h-3 mr-1" />
+                              Group Buy
+                            </Badge>
+                          )}
                         </div>
                         <CardContent className="p-5 space-y-3">
                           <h3 className="font-display text-lg font-semibold line-clamp-2 min-h-[3.5rem] group-hover:text-secondary transition-colors duration-300">
@@ -295,20 +323,36 @@ export default function Products() {
                             </p>
                           )}
                           <div className="space-y-3 pt-2">
-                            <div className="flex items-baseline gap-2">
-                              <span className="text-2xl font-bold text-foreground">
-                                ₦{product.price.toLocaleString()}
-                              </span>
-                              {product.original_price && product.original_price > product.price && (
-                                <span className="text-sm text-muted-foreground line-through">
-                                  ₦{product.original_price.toLocaleString()}
-                                </span>
+                            <div className="flex items-baseline gap-2 flex-wrap">
+                              {hasActiveGroupBuy && campaign ? (
+                                <>
+                                  <span className="text-2xl font-bold text-primary">
+                                    ₦{campaign.discount_price?.toLocaleString()}
+                                  </span>
+                                  <span className="text-sm text-muted-foreground line-through">
+                                    ₦{product.price?.toLocaleString()}
+                                  </span>
+                                  <Badge variant="secondary" className="text-xs">
+                                    {campaign.current_quantity}/{campaign.goal_quantity} joined
+                                  </Badge>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="text-2xl font-bold text-foreground">
+                                    ₦{product.price?.toLocaleString()}
+                                  </span>
+                                  {product.original_price && product.original_price > product.price && (
+                                    <span className="text-sm text-muted-foreground line-through">
+                                      ₦{product.original_price?.toLocaleString()}
+                                    </span>
+                                  )}
+                                </>
                               )}
                             </div>
                             <Button 
                               className="w-full bg-primary hover:bg-secondary hover:text-secondary-foreground transition-all duration-300 font-medium"
                             >
-                              View Details
+                              {hasActiveGroupBuy ? 'Join Group Buy' : 'View Details'}
                             </Button>
                           </div>
                         </CardContent>

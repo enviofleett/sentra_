@@ -78,6 +78,33 @@ export default function GroupBuyCampaignsManagement() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validation
+    if (!formData.product_id) {
+      toast.error('Please select a product');
+      return;
+    }
+    
+    if (formData.discount_price <= 0) {
+      toast.error('Discount price must be greater than 0');
+      return;
+    }
+    
+    if (formData.goal_quantity <= 0) {
+      toast.error('Goal quantity must be greater than 0');
+      return;
+    }
+    
+    if (!formData.expiry_at) {
+      toast.error('Please set an expiry date');
+      return;
+    }
+    
+    const expiryDate = new Date(formData.expiry_at);
+    if (expiryDate <= new Date()) {
+      toast.error('Expiry date must be in the future');
+      return;
+    }
+    
     let campaignIdToUpdate = selectedCampaign?.id;
 
     try {
@@ -244,26 +271,29 @@ export default function GroupBuyCampaignsManagement() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Goal Quantity</Label>
+                  <Label>Goal Quantity *</Label>
                   <Input
                     type="number"
                     min="1"
                     value={formData.goal_quantity}
-                    onChange={(e) => setFormData({...formData, goal_quantity: parseInt(e.target.value)})}
+                    onChange={(e) => setFormData({...formData, goal_quantity: parseInt(e.target.value) || 1})}
                     required
                   />
+                  <p className="text-xs text-muted-foreground">Minimum number of participants needed</p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Discount Price (₦)</Label>
+                  <Label>Discount Price (₦) *</Label>
                   <Input
                     type="number"
-                    min="0"
+                    min="1"
                     step="0.01"
-                    value={formData.discount_price}
-                    onChange={(e) => setFormData({...formData, discount_price: parseFloat(e.target.value)})}
+                    value={formData.discount_price || ''}
+                    onChange={(e) => setFormData({...formData, discount_price: parseFloat(e.target.value) || 0})}
+                    placeholder="Enter discount price"
                     required
                   />
+                  <p className="text-xs text-muted-foreground">The special group buy price (must be greater than 0)</p>
                 </div>
               </div>
 

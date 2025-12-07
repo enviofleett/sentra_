@@ -196,13 +196,32 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
 
   if (!campaign) return null;
 
-  const progress = Math.min((campaign.current_quantity / campaign.goal_quantity) * 100, 100);
+  // Validate campaign data
+  const hasValidData = campaign.discount_price > 0 && campaign.goal_quantity > 0;
+
+  const progress = campaign.goal_quantity > 0 
+    ? Math.min((campaign.current_quantity / campaign.goal_quantity) * 100, 100) 
+    : 0;
   const savingsPercent = campaign.products?.price 
     ? Math.round(((campaign.products.price - campaign.discount_price) / campaign.products.price) * 100)
     : 0;
 
   const status = campaign.status as CampaignStatus;
   const isInactive = isExpired || ['expired', 'failed_expired', 'cancelled', 'completed', 'goal_met_paid_finalized'].includes(status);
+
+  // If campaign has invalid data, show warning instead
+  if (!hasValidData) {
+    return (
+      <Card className="p-6 bg-muted/50 border-2 border-muted">
+        <div className="text-center space-y-2">
+          <AlertTriangle className="w-8 h-8 mx-auto text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            This group buy campaign is not properly configured.
+          </p>
+        </div>
+      </Card>
+    );
+  }
 
   const getStatusBadge = () => {
     if (status === 'goal_met_pending_payment' || status === 'goal_reached') {

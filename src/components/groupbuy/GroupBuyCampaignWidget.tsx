@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Share2, Users, Clock, Tag } from "lucide-react";
+import { Share2, Users, Clock, Tag, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
@@ -13,11 +13,14 @@ interface GroupBuyCampaignWidgetProps {
   productId: string;
 }
 
+type CampaignStatus = 'draft' | 'active' | 'goal_reached' | 'expired' | 'completed' | 'cancelled' | 'goal_met_pending_payment' | 'goal_met_paid_finalized' | 'failed_expired';
+
 export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampaignWidgetProps) => {
   const [campaign, setCampaign] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [committing, setCommitting] = useState(false);
   const [timeLeft, setTimeLeft] = useState("");
+  const [isExpired, setIsExpired] = useState(false);
   const [userCommitment, setUserCommitment] = useState<any>(null);
   const navigate = useNavigate();
 
@@ -36,14 +39,22 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
 
       if (distance < 0) {
         setTimeLeft("Expired");
+        setIsExpired(true);
         return;
       }
 
+      setIsExpired(false);
       const days = Math.floor(distance / (1000 * 60 * 60 * 24));
       const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
       const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
 
-      setTimeLeft(`${days}d ${hours}h ${minutes}m`);
+      if (days > 0) {
+        setTimeLeft(`${days}d ${hours}h ${minutes}m`);
+      } else if (hours > 0) {
+        setTimeLeft(`${hours}h ${minutes}m`);
+      } else {
+        setTimeLeft(`${minutes}m`);
+      }
     };
 
     updateTimer();
@@ -60,6 +71,16 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
         .single();
 
       if (error) throw error;
+      
+      // Check if campaign is actually active and not expired
+      const now = new Date();
+      const expiry = new Date(data.expiry_at);
+      const status = data.status as CampaignStatus;
+      
+      if (expiry < now || !['active', 'goal_reached', 'goal_met_pending_payment'].includes(status)) {
+        setIsExpired(true);
+      }
+      
       setCampaign(data);
     } catch (error: any) {
       console.error('Error fetching campaign:', error);
@@ -78,7 +99,7 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
       .select('*')
       .eq('campaign_id', campaignId)
       .eq('user_id', session.user.id)
-      .in('status', ['committed_unpaid', 'committed_paid'])
+      .in('status', ['committed_unpaid', 'committed_paid', 'paid_finalized'])
       .maybeSingle();
 
     setUserCommitment(data);
@@ -92,8 +113,10 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
       return;
     }
 
-    console.log('🎯 Attempting to commit to campaign:', campaignId);
-    console.log('👤 User session:', session.user.id);
+    if (isExpired) {
+      toast.error('This group buy has expired');
+      return;
+    }
 
     setCommitting(true);
     try {
@@ -101,23 +124,16 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
         body: { campaignId, quantity: 1 }
       });
 
-      console.log('📡 Function response:', { data, error });
-
       if (error) {
-        console.error('❌ Function error:', error);
-        
-        // Check if it's a duplicate commitment error
         if (error.message?.includes('already have a commitment')) {
           toast.error('You have already joined this group buy. Check your profile page.');
           navigate('/profile/groupbuys');
           return;
         }
-        
         throw error;
       }
 
       if (data?.paymentUrl) {
-        console.log('💳 Redirecting to payment:', data.paymentUrl);
         window.location.href = data.paymentUrl;
       } else {
         toast.success('Successfully joined the group buy! You will be notified when the goal is reached.');
@@ -125,18 +141,13 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
         checkUserCommitment();
       }
     } catch (error: any) {
-      console.error('💥 Commit error:', error);
-      console.error('Error details:', {
-        message: error.message,
-        context: error.context,
-        details: error.details
-      });
+      console.error('Commit error:', error);
       
-      // Provide user-friendly error messages
       if (error.message?.includes('already have a commitment')) {
         toast.error('You have already joined this group buy.');
       } else if (error.message?.includes('Campaign has expired')) {
         toast.error('This group buy campaign has expired.');
+        setIsExpired(true);
       } else if (error.message?.includes('Campaign is not active')) {
         toast.error('This group buy is no longer active.');
       } else {
@@ -149,22 +160,18 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
 
   const handleShare = async () => {
     const shareUrl = window.location.href;
-    const shareText = `Join me in this group buy for ${campaign.products.name} at ₦${campaign.discount_price}!`;
+    const shareText = `Join me in this group buy for ${campaign.products?.name} at ₦${campaign.discount_price?.toLocaleString()}!`;
 
-    // Check if Web Share API is available
     if (navigator.share) {
       try {
         await navigator.share({ 
-          title: campaign.products.name, 
+          title: campaign.products?.name, 
           text: shareText, 
           url: shareUrl 
         });
         toast.success('Shared successfully!');
       } catch (error: any) {
-        // User cancelled or permission denied - fallback to clipboard
         if (error.name !== 'AbortError') {
-          console.error('Error sharing:', error);
-          // Fallback to clipboard
           try {
             await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
             toast.success('Link copied to clipboard!');
@@ -174,12 +181,10 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
         }
       }
     } else {
-      // No Web Share API - use clipboard
       try {
         await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
         toast.success('Link copied to clipboard!');
       } catch (error) {
-        console.error('Clipboard error:', error);
         toast.error('Unable to copy link. Please copy the URL manually.');
       }
     }
@@ -191,40 +196,73 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
 
   if (!campaign) return null;
 
-  const progress = (campaign.current_quantity / campaign.goal_quantity) * 100;
+  const progress = Math.min((campaign.current_quantity / campaign.goal_quantity) * 100, 100);
   const savingsPercent = campaign.products?.price 
     ? Math.round(((campaign.products.price - campaign.discount_price) / campaign.products.price) * 100)
     : 0;
 
+  const status = campaign.status as CampaignStatus;
+  const isInactive = isExpired || ['expired', 'failed_expired', 'cancelled', 'completed', 'goal_met_paid_finalized'].includes(status);
+
+  const getStatusBadge = () => {
+    if (status === 'goal_met_pending_payment' || status === 'goal_reached') {
+      return (
+        <Badge variant="default" className="text-sm bg-green-600">
+          <Tag className="w-3 h-3 mr-1" />
+          Goal Reached!
+        </Badge>
+      );
+    }
+    if (isInactive) {
+      return (
+        <Badge variant="secondary" className="text-sm">
+          <AlertTriangle className="w-3 h-3 mr-1" />
+          Campaign Ended
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="default" className="text-sm">
+        <Tag className="w-3 h-3 mr-1" />
+        Group Buy Active
+      </Badge>
+    );
+  };
+
   return (
-    <Card className="p-6 bg-gradient-to-br from-primary/5 to-secondary/5 border-primary/20">
+    <Card className={`p-6 border-2 ${isInactive ? 'bg-muted/50 border-muted' : 'bg-gradient-to-br from-primary/5 to-secondary/5 border-primary/20'}`}>
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <Badge variant="default" className="text-sm">
-            <Tag className="w-3 h-3 mr-1" />
-            Group Buy Active
-          </Badge>
-          <Button variant="ghost" size="sm" onClick={handleShare}>
-            <Share2 className="w-4 h-4 mr-2" />
-            Share
-          </Button>
+          {getStatusBadge()}
+          {!isInactive && (
+            <Button variant="ghost" size="sm" onClick={handleShare}>
+              <Share2 className="w-4 h-4 mr-2" />
+              Share
+            </Button>
+          )}
         </div>
 
         <div className="space-y-2">
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold text-primary">₦{campaign.discount_price}</span>
+            <span className={`text-3xl font-bold ${isInactive ? 'text-muted-foreground' : 'text-primary'}`}>
+              ₦{campaign.discount_price?.toLocaleString()}
+            </span>
             {campaign.products?.price && (
-              <span className="text-lg text-muted-foreground line-through">₦{campaign.products.price}</span>
+              <span className="text-lg text-muted-foreground line-through">
+                ₦{campaign.products.price?.toLocaleString()}
+              </span>
             )}
             {savingsPercent > 0 && (
               <Badge variant="secondary" className="ml-2">Save {savingsPercent}%</Badge>
             )}
           </div>
-          <p className="text-sm text-muted-foreground">
-            {campaign.payment_mode === 'pay_on_success' 
-              ? 'Pay only when the goal is reached' 
-              : 'Pay now to secure your spot'}
-          </p>
+          {!isInactive && (
+            <p className="text-sm text-muted-foreground">
+              {campaign.payment_mode === 'pay_on_success' 
+                ? 'Pay only when the goal is reached' 
+                : 'Pay now to secure your spot'}
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -238,15 +276,25 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
           <Progress value={progress} className="h-2" />
         </div>
 
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <Clock className="w-4 h-4" />
-            Time left
-          </span>
-          <span className="font-medium">{timeLeft}</span>
-        </div>
+        {!isInactive && (
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Clock className="w-4 h-4" />
+              Time left
+            </span>
+            <span className={`font-medium ${timeLeft === 'Expired' ? 'text-destructive' : ''}`}>
+              {timeLeft}
+            </span>
+          </div>
+        )}
 
-        {userCommitment ? (
+        {isInactive ? (
+          <div className="text-center py-2">
+            <p className="text-sm text-muted-foreground">
+              This group buy campaign has ended.
+            </p>
+          </div>
+        ) : userCommitment ? (
           <Button 
             onClick={() => navigate('/profile/groupbuys')} 
             className="w-full" 
@@ -260,15 +308,17 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
             onClick={handleCommit} 
             className="w-full" 
             size="lg"
-            disabled={committing || timeLeft === "Expired"}
+            disabled={committing}
           >
             {committing ? 'Processing...' : 'Commit to Buy'}
           </Button>
         )}
 
-        <p className="text-xs text-center text-muted-foreground">
-          Join others in this group buy to unlock the special price!
-        </p>
+        {!isInactive && !userCommitment && (
+          <p className="text-xs text-center text-muted-foreground">
+            Join others in this group buy to unlock the special price!
+          </p>
+        )}
       </div>
     </Card>
   );

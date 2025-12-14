@@ -210,6 +210,7 @@ export type Database = {
           product_id: string
           status: Database["public"]["Enums"]["campaign_status"] | null
           updated_at: string | null
+          version: number
         }
         Insert: {
           created_at?: string | null
@@ -225,6 +226,7 @@ export type Database = {
           product_id: string
           status?: Database["public"]["Enums"]["campaign_status"] | null
           updated_at?: string | null
+          version?: number
         }
         Update: {
           created_at?: string | null
@@ -240,6 +242,7 @@ export type Database = {
           product_id?: string
           status?: Database["public"]["Enums"]["campaign_status"] | null
           updated_at?: string | null
+          version?: number
         }
         Relationships: [
           {

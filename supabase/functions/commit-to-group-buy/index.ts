@@ -11,10 +11,12 @@ interface CommitmentRequest {
   quantity: number;
 }
 
+// UUID validation regex
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 serve(async (req) => {
   console.log('🚀 commit-to-group-buy function invoked');
   console.log('📥 Request method:', req.method);
-  console.log('📥 Request headers:', Object.fromEntries(req.headers.entries()));
 
   if (req.method === 'OPTIONS') {
     console.log('✅ CORS preflight request handled');
@@ -29,7 +31,6 @@ serve(async (req) => {
     );
 
     const authHeader = req.headers.get('Authorization');
-    console.log('🔑 Auth header present:', !!authHeader);
 
     if (!authHeader) {
       console.error('❌ No authorization header');
@@ -57,7 +58,24 @@ serve(async (req) => {
     
     const { campaignId, quantity }: CommitmentRequest = requestBody;
 
-    // Fetch campaign details with better error handling
+    // Input validation
+    if (!campaignId || !UUID_REGEX.test(campaignId)) {
+      console.error('❌ Invalid campaignId:', campaignId);
+      return new Response(JSON.stringify({ error: 'Invalid campaign ID format' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!quantity || !Number.isInteger(quantity) || quantity < 1 || quantity > 100) {
+      console.error('❌ Invalid quantity:', quantity);
+      return new Response(JSON.stringify({ error: 'Quantity must be a positive integer between 1 and 100' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Fetch campaign details with version for optimistic locking
     console.log('🔍 Fetching campaign:', campaignId);
 
     const { data: campaign, error: campaignError } = await supabase
@@ -143,7 +161,39 @@ serve(async (req) => {
       });
     }
 
-    // Create commitment
+    // OPTIMISTIC LOCKING: Update campaign current_quantity with version check
+    // This prevents race conditions by ensuring we only update if the data hasn't changed
+    const currentVersion = campaign.version || 0;
+    const expectedNewQuantity = campaign.current_quantity + quantity;
+
+    console.log('🔒 Attempting optimistic lock update. Current version:', currentVersion);
+
+    const { data: updatedCampaign, error: updateCampaignError } = await supabase
+      .from('group_buy_campaigns')
+      .update({ 
+        current_quantity: expectedNewQuantity,
+        version: currentVersion + 1,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', campaignId)
+      .eq('current_quantity', campaign.current_quantity) // Optimistic lock condition
+      .select()
+      .single();
+
+    if (updateCampaignError || !updatedCampaign) {
+      console.error('❌ Optimistic lock failed - concurrent update detected:', updateCampaignError);
+      return new Response(JSON.stringify({ 
+        error: 'Another user just updated this campaign. Please try again.',
+        retry: true
+      }), {
+        status: 409, // Conflict
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log('✅ Campaign quantity updated with optimistic lock');
+
+    // Create commitment after successful campaign update
     const { data: commitment, error: commitmentError } = await supabase
       .from('group_buy_commitments')
       .insert({
@@ -157,27 +207,24 @@ serve(async (req) => {
       .single();
 
     if (commitmentError) {
-      console.error('Error creating commitment:', commitmentError);
-      return new Response(JSON.stringify({ error: 'Failed to create commitment' }), {
+      console.error('❌ Error creating commitment, rolling back campaign update:', commitmentError);
+      // Rollback campaign quantity
+      await supabase
+        .from('group_buy_campaigns')
+        .update({ 
+          current_quantity: campaign.current_quantity,
+          version: currentVersion,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', campaignId);
+      
+      return new Response(JSON.stringify({ error: 'Failed to create commitment. Please try again.' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // CRITICAL FIX: Update campaign current_quantity with rollback on failure
-    const { error: updateCampaignError } = await supabase
-      .from('group_buy_campaigns')
-      .update({ current_quantity: campaign.current_quantity + quantity })
-      .eq('id', campaignId);
-
-    if (updateCampaignError) {
-      console.error('Error updating campaign quantity, rolling back commitment:', updateCampaignError);
-      await supabase.from('group_buy_commitments').delete().eq('id', commitment.id);
-      return new Response(JSON.stringify({ error: 'Failed to update campaign progress. Commitment cancelled.' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    console.log('✅ Commitment created:', commitment.id);
 
     // Fetch user profile for email
     const { data: profile } = await supabase
@@ -186,30 +233,40 @@ serve(async (req) => {
       .eq('id', user.id)
       .single();
 
-    // Send confirmation email
-    await supabase.functions.invoke('send-email', {
+    // Send confirmation email (fire and forget, don't block response)
+    supabase.functions.invoke('send-email', {
       body: {
         to: profile?.email || user.email,
         templateId: 'GROUPBUY_COMMITMENT_CONFIRMATION',
         data: {
           customer_name: profile?.full_name || 'Customer',
-          product_name: campaign.products.name,
+          product_name: campaign.products?.name || 'Product',
           quantity: quantity.toString(),
           discount_price: campaign.discount_price.toString(),
-          current_quantity: (campaign.current_quantity + quantity).toString(),
+          current_quantity: expectedNewQuantity.toString(),
           goal_quantity: campaign.goal_quantity.toString(),
           expiry_date: new Date(campaign.expiry_at).toLocaleString()
         }
       }
-    });
+    }).catch(err => console.error('Email send error (non-blocking):', err));
 
     // Handle pay_to_book mode
     if (campaign.payment_mode === 'pay_to_book') {
-      // Initialize Paystack payment
+      console.log('💳 Initializing Paystack payment for pay_to_book mode');
+      
+      const paystackSecretKey = Deno.env.get('PAYSTACK_SECRET_KEY');
+      if (!paystackSecretKey) {
+        console.error('❌ PAYSTACK_SECRET_KEY not configured');
+        return new Response(JSON.stringify({ error: 'Payment service not configured' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       const paystackResponse = await fetch('https://api.paystack.co/transaction/initialize', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${Deno.env.get('PAYSTACK_SECRET_KEY')}`,
+          'Authorization': `Bearer ${paystackSecretKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -228,12 +285,14 @@ serve(async (req) => {
       const paystackData = await paystackResponse.json();
 
       if (!paystackData.status) {
-        console.error('Paystack error:', paystackData);
+        console.error('❌ Paystack error:', paystackData);
         return new Response(JSON.stringify({ error: 'Payment initialization failed' }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
+
+      console.log('✅ Paystack payment initialized');
 
       return new Response(JSON.stringify({
         commitment,
@@ -246,6 +305,7 @@ serve(async (req) => {
     }
 
     // pay_on_success mode - just return success
+    console.log('✅ Commitment completed (pay_on_success mode)');
     return new Response(JSON.stringify({
       commitment,
       message: 'Commitment created successfully. You will be notified when the goal is reached.'

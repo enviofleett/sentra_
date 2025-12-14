@@ -214,10 +214,16 @@ export default function Checkout() {
       // Get Paystack public key from environment
       const paystackPublicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
       
+      // Validate Paystack configuration
       // @ts-ignore - PaystackPop is loaded from script in index.html
-      if (typeof PaystackPop === 'undefined' || !paystackPublicKey) {
-        console.error("Paystack Public Key is not set in environment variables.");
-        throw new Error('Payment service is not configured. Please contact support.');
+      if (typeof PaystackPop === 'undefined') {
+        console.error('PaystackPop script not loaded. Check index.html script tag.');
+        throw new Error('Payment service is temporarily unavailable. Please try again later.');
+      }
+      
+      if (!paystackPublicKey || paystackPublicKey === 'pk_live_YOUR_PAYSTACK_PUBLIC_KEY') {
+        console.error('Paystack public key not configured or is placeholder value.');
+        throw new Error('Payment service is not properly configured. Please contact support.');
       }
 
       // @ts-ignore

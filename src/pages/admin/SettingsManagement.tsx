@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Plus, Mail, Users, FileText, Image as ImageIcon } from 'lucide-react';
+import { Loader2, Plus, Mail, Users, FileText, Image as ImageIcon, Link } from 'lucide-react';
 import { useBranding } from '@/hooks/useBranding';
 
 // --- Sub-components for SettingsManagement ---
@@ -556,6 +556,142 @@ function BrandingManager() {
   );
 }
 
+// 5. Integration Settings Manager (Callback URLs, etc.)
+function IntegrationSettingsManager() {
+  const CALLBACK_URL_KEY = 'live_callback_url';
+  const [callbackUrl, setCallbackUrl] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    loadCallbackUrl();
+  }, []);
+
+  const loadCallbackUrl = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('app_config')
+      .select('value')
+      .eq('key', CALLBACK_URL_KEY)
+      .maybeSingle();
+
+    if (data?.value && typeof data.value === 'object' && 'url' in data.value) {
+      setCallbackUrl(data.value.url as string);
+    } else if (!error && !data) {
+      // If no entry exists, create one with empty URL
+      await supabase
+        .from('app_config')
+        .insert({
+          key: CALLBACK_URL_KEY, 
+          value: { url: '' },
+          description: 'The live callback URL for Paystack payment redirects. Used for group buy and checkout flows.'
+        });
+    }
+    setLoading(false);
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    
+    // Validate URL format if not empty
+    if (callbackUrl && !callbackUrl.startsWith('https://')) {
+      toast({ title: 'Invalid URL', description: 'Callback URL must start with https://', variant: 'destructive' });
+      setIsSaving(false);
+      return;
+    }
+
+    const newValue = { url: callbackUrl.trim() };
+
+    // Try update first, then insert if not exists
+    const { data: existing } = await supabase
+      .from('app_config')
+      .select('id')
+      .eq('key', CALLBACK_URL_KEY)
+      .maybeSingle();
+
+    let error;
+    if (existing) {
+      const result = await supabase
+        .from('app_config')
+        .update({ value: newValue, updated_at: new Date().toISOString() })
+        .eq('key', CALLBACK_URL_KEY);
+      error = result.error;
+    } else {
+      const result = await supabase
+        .from('app_config')
+        .insert({ 
+          key: CALLBACK_URL_KEY, 
+          value: newValue,
+          description: 'The live callback URL for Paystack payment redirects.'
+        });
+      error = result.error;
+    }
+      
+    if (error) {
+      toast({ title: 'Error saving', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Success', description: 'Callback URL updated successfully.' });
+    }
+    setIsSaving(false);
+  };
+
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-lg font-semibold mb-2">Paystack Callback URL</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Set the base URL for Paystack payment callbacks. This is the domain your customers will be redirected to after completing payment.
+            Leave empty to use the default APP_BASE_URL environment variable.
+          </p>
+          
+          <div className="space-y-2">
+            <Label htmlFor="callback-url">Live Callback URL</Label>
+            <Input
+              id="callback-url"
+              type="url"
+              placeholder="https://yourdomain.com"
+              value={callbackUrl}
+              onChange={(e) => setCallbackUrl(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Example: https://sentra.ng — Do not include trailing slashes or paths.
+            </p>
+          </div>
+        </div>
+
+        <Button onClick={handleSave} disabled={isSaving}>
+          {isSaving ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            'Save Changes'
+          )}
+        </Button>
+      </div>
+
+      <div className="border-t pt-6">
+        <h3 className="text-lg font-semibold mb-2">Webhook Configuration</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          The Paystack Webhook URL must be configured in your Paystack Dashboard. Copy the URL below and set it in 
+          <strong> Paystack Dashboard → Settings → API Keys & Webhooks → Live Webhook URL</strong>.
+        </p>
+        
+        <div className="p-4 bg-muted rounded-lg font-mono text-sm break-all">
+          https://oczsddmantovkqfwczqk.supabase.co/functions/v1/paystack-webhook
+        </div>
+        <p className="text-xs text-muted-foreground mt-2">
+          This URL receives payment notifications from Paystack and cannot be changed dynamically.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // --- Main Component ---
 export default function SettingsManagement() {
   return (
@@ -565,7 +701,7 @@ export default function SettingsManagement() {
       <Card>
         <Tabs defaultValue="roles" className="w-full">
           <CardHeader className="p-0">
-            <TabsList className="grid w-full grid-cols-4 h-auto rounded-none border-b bg-transparent p-0">
+            <TabsList className="grid w-full grid-cols-5 h-auto rounded-none border-b bg-transparent p-0">
               <TabsTrigger value="roles" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
                 <Users className="h-4 w-4 mr-2" /> User Roles
               </TabsTrigger>
@@ -577,6 +713,9 @@ export default function SettingsManagement() {
               </TabsTrigger>
               <TabsTrigger value="branding" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
                 <ImageIcon className="h-4 w-4 mr-2" /> Branding
+              </TabsTrigger>
+              <TabsTrigger value="integrations" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
+                <Link className="h-4 w-4 mr-2" /> Integrations
               </TabsTrigger>
             </TabsList>
           </CardHeader>
@@ -595,6 +734,10 @@ export default function SettingsManagement() {
 
           <TabsContent value="branding" className="p-6">
             <BrandingManager />
+          </TabsContent>
+
+          <TabsContent value="integrations" className="p-6">
+            <IntegrationSettingsManager />
           </TabsContent>
         </Tabs>
       </Card>

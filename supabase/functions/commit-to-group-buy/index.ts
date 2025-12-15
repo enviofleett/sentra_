@@ -263,6 +263,23 @@ serve(async (req) => {
         });
       }
 
+      // Fetch dynamic callback URL from app_config, fallback to APP_BASE_URL env var
+      const { data: configData } = await supabase
+        .from('app_config')
+        .select('value')
+        .eq('key', 'live_callback_url')
+        .maybeSingle();
+      
+      const dynamicBaseUrl = (configData?.value as any)?.url || Deno.env.get('APP_BASE_URL');
+
+      if (!dynamicBaseUrl) {
+        console.error('❌ APP_BASE_URL not configured');
+        return new Response(JSON.stringify({ error: 'Application base URL not configured' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       const paystackResponse = await fetch('https://api.paystack.co/transaction/initialize', {
         method: 'POST',
         headers: {
@@ -278,7 +295,7 @@ serve(async (req) => {
             user_id: user.id,
             type: 'group_buy_commitment'
           },
-          callback_url: `${Deno.env.get('APP_BASE_URL')}/profile/groupbuys`
+          callback_url: `${dynamicBaseUrl}/profile/groupbuys`
         }),
       });
 
@@ -292,7 +309,7 @@ serve(async (req) => {
         });
       }
 
-      console.log('✅ Paystack payment initialized');
+      console.log('✅ Paystack payment initialized with callback URL:', `${dynamicBaseUrl}/profile/groupbuys`);
 
       return new Response(JSON.stringify({
         commitment,

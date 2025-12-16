@@ -198,13 +198,30 @@ export default function ProductDetail() {
               </p>
             </div>
 
-            {/* Group Buy or Regular Purchase */}
-            {product.active_group_buy_id ? (
+            {/* Group Buy Campaign (if active) */}
+            {product.active_group_buy_id && (
               <GroupBuyCampaignWidget 
                 campaignId={product.active_group_buy_id} 
                 productId={product.id} 
               />
-            ) : (
+            )}
+
+            {/* Divider when both options available */}
+            {product.active_group_buy_id && product.stock_quantity > 0 && (
+              <div className="relative py-2">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center">
+                  <span className="bg-background px-4 text-sm text-muted-foreground">
+                    or buy now at full price
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Regular Purchase Option */}
+            {product.stock_quantity > 0 && (
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-2">Quantity</label>
@@ -238,14 +255,21 @@ export default function ProductDetail() {
 
                 <Button
                   size="lg"
+                  variant={product.active_group_buy_id ? "outline" : "default"}
                   className="w-full"
                   onClick={handleAddToCart}
-                  disabled={product.stock_quantity === 0}
                 >
                   <ShoppingCart className="h-5 w-5 mr-2" />
-                  Add to Cart
+                  Add to Cart {product.active_group_buy_id && `— ₦${product.price.toLocaleString()}`}
                 </Button>
               </div>
+            )}
+
+            {/* Out of stock message */}
+            {product.stock_quantity === 0 && !product.active_group_buy_id && (
+              <Button size="lg" className="w-full" disabled>
+                Out of Stock
+              </Button>
             )}
           </div>
         </div>

@@ -7,10 +7,11 @@ import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { Sparkles, Minus, Plus, ShoppingCart } from 'lucide-react';
+import { Sparkles, Minus, Plus, ShoppingCart, Info } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
 import { GroupBuyCampaignWidget } from '@/components/groupbuy/GroupBuyCampaignWidget';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -213,8 +214,20 @@ export default function ProductDetail() {
                   <div className="w-full border-t border-border" />
                 </div>
                 <div className="relative flex justify-center">
-                  <span className="bg-background px-4 text-sm text-muted-foreground">
+                  <span className="bg-background px-4 text-sm text-muted-foreground flex items-center gap-1">
                     or buy now at full price
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="h-4 w-4 cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <p className="font-semibold mb-1">Group Buy vs Regular Purchase</p>
+                          <p className="text-xs mb-2"><strong>Group Buy:</strong> Commit to buy at a discounted price. The purchase only proceeds if enough people join before the deadline.</p>
+                          <p className="text-xs"><strong>Regular Purchase:</strong> Buy immediately at full price with instant checkout and guaranteed delivery.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </span>
                 </div>
               </div>

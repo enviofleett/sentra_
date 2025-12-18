@@ -7,8 +7,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
-import { ArrowRight, Filter } from 'lucide-react';
+import { ArrowRight, Filter, Users } from 'lucide-react';
 import heroPerfumeNew from '@/assets/hero-perfume-new.jpg';
+import { CountdownBadge } from '@/components/groupbuy/CountdownBadge';
 
 export default function Index() {
   const [vendors, setVendors] = useState<any[]>([]);
@@ -22,7 +23,7 @@ export default function Index() {
   const loadData = async () => {
     const [vendorsData, productsData] = await Promise.all([
       supabase.from('vendors').select('id, rep_full_name').order('rep_full_name'),
-      supabase.from('products').select('*, vendors(rep_full_name)').eq('is_active', true).limit(8)
+      supabase.from('products').select('*, vendors(rep_full_name), group_buy_campaigns!products_active_group_buy_id_fkey(id, status, discount_price, current_quantity, goal_quantity, expiry_at)').eq('is_active', true).limit(8)
     ]);
 
     if (vendorsData.data) setVendors(vendorsData.data);
@@ -36,6 +37,13 @@ export default function Index() {
   const calculateDiscount = (price: number, originalPrice: number | null) => {
     if (!originalPrice || originalPrice <= price) return null;
     return Math.round(((originalPrice - price) / originalPrice) * 100);
+  };
+
+  const isGroupBuyActive = (campaign: any): boolean => {
+    if (!campaign) return false;
+    const now = new Date();
+    const expiry = new Date(campaign.expiry_at);
+    return expiry > now && ['active', 'goal_reached', 'goal_met_pending_payment'].includes(campaign.status);
   };
 
   return (
@@ -123,19 +131,32 @@ export default function Index() {
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
                 {filteredProducts.map((product) => {
                   const discount = calculateDiscount(product.price, product.original_price);
+                  const campaign = product.group_buy_campaigns;
+                  const hasActiveGroupBuy = isGroupBuyActive(campaign);
                   
                   return (
                     <Card key={product.id} className="group overflow-hidden border shadow-sm hover:shadow-lg transition-all">
                       <Link to={`/products/${product.id}`}>
                         <div className="relative aspect-square bg-gray-100 dark:bg-gray-800 overflow-hidden">
-                          {discount && (
+                          {hasActiveGroupBuy && campaign ? (
+                            <>
+                              <Badge className="absolute top-3 left-3 z-10 bg-primary text-primary-foreground shadow-lg">
+                                <Users className="w-3 h-3 mr-1" />
+                                Group Buy
+                              </Badge>
+                              <CountdownBadge 
+                                expiryAt={campaign.expiry_at} 
+                                className="absolute top-3 right-3 z-10"
+                              />
+                            </>
+                          ) : discount ? (
                             <Badge 
                               variant="destructive" 
                               className="absolute top-3 left-3 z-10 bg-red-500 hover:bg-red-600 text-white font-bold"
                             >
                               -{discount}%
                             </Badge>
-                          )}
+                          ) : null}
                           {product.image_url ? (
                             <img 
                               src={product.image_url} 

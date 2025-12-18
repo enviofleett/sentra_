@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { Sparkles, SlidersHorizontal, Search, Users } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { CountdownBadge } from '@/components/groupbuy/CountdownBadge';
 
 interface GroupBuyCampaign {
   id: string;
@@ -305,12 +306,18 @@ export default function Products() {
                           )}
                           <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
                           
-                          {/* Group Buy Badge */}
+                          {/* Group Buy Badges */}
                           {hasActiveGroupBuy && campaign && (
-                            <Badge className="absolute top-3 left-3 bg-primary text-primary-foreground shadow-lg">
-                              <Users className="w-3 h-3 mr-1" />
-                              Group Buy
-                            </Badge>
+                            <>
+                              <Badge className="absolute top-3 left-3 bg-primary text-primary-foreground shadow-lg">
+                                <Users className="w-3 h-3 mr-1" />
+                                Group Buy
+                              </Badge>
+                              <CountdownBadge 
+                                expiryAt={campaign.expiry_at} 
+                                className="absolute top-3 right-3"
+                              />
+                            </>
                           )}
                         </div>
                         <CardContent className="p-5 space-y-3">

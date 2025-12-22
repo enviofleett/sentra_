@@ -226,12 +226,16 @@ export default function Checkout() {
         throw new Error('Payment service is not properly configured. Please contact support.');
       }
 
+      // Build callback URL for Paystack redirect
+      const callbackUrl = `${window.location.origin}/checkout/success?order_id=${order.id}&type=standard_order`;
+
       // @ts-ignore
       const handler = PaystackPop.setup({
         key: paystackPublicKey,
         email: data.email,
         amount: subtotal * 100,
-        ref: paymentReference, // Use the saved payment reference
+        ref: paymentReference,
+        callback_url: callbackUrl,
         metadata: {
           order_id: order.id,
           customer_name: data.fullName,
@@ -252,7 +256,7 @@ export default function Checkout() {
           
           toast({
             title: 'Payment successful!',
-            description: 'Processing your order...'
+            description: 'Redirecting to confirmation...'
           });
 
           await sendEmail(data.email, 'ORDER_CONFIRMATION', {
@@ -261,8 +265,8 @@ export default function Checkout() {
             total_amount: subtotal.toLocaleString()
           });
 
-          await clearCart();
-          navigate('/profile/orders');
+          // Navigate to success page instead of clearing cart here
+          navigate(`/checkout/success?order_id=${order.id}&type=standard_order`);
         },
         onCancel: () => {
           console.log('Payment cancelled');

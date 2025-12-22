@@ -11,6 +11,7 @@ import Products from "./pages/Products";
 import ProductDetail from "./pages/ProductDetail";
 import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
+import CheckoutSuccess from "./pages/CheckoutSuccess";
 import Auth from "./pages/Auth";
 import Profile from "./pages/Profile";
 import AdminDashboard from "./pages/admin/Dashboard";
@@ -33,6 +34,7 @@ const App = () => (
               <Route path="/products/:id" element={<ProductDetail />} />
               <Route path="/cart" element={<Cart />} />
               <Route path="/checkout" element={<Checkout />} />
+              <Route path="/checkout/success" element={<CheckoutSuccess />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/profile/*" element={<Profile />} />
               <Route path="/admin/*" element={<AdminDashboard />} />

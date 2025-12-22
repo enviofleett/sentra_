@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Share2, Users, Clock, Tag, AlertTriangle } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Share2, Users, Clock, Tag, AlertTriangle, Minus, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
@@ -22,6 +23,7 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
   const [timeLeft, setTimeLeft] = useState("");
   const [isExpired, setIsExpired] = useState(false);
   const [userCommitment, setUserCommitment] = useState<any>(null);
+  const [quantity, setQuantity] = useState(1);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -118,10 +120,17 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
       return;
     }
 
+    // Validate quantity doesn't exceed remaining spots
+    const remainingSpots = campaign.goal_quantity - campaign.current_quantity;
+    if (quantity > remainingSpots) {
+      toast.error(`Only ${remainingSpots} spots remaining`);
+      return;
+    }
+
     setCommitting(true);
     try {
       const { data, error } = await supabase.functions.invoke('commit-to-group-buy', {
-        body: { campaignId, quantity: 1 }
+        body: { campaignId, quantity }
       });
 
       if (error) {
@@ -323,14 +332,50 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
             View Your Commitment
           </Button>
         ) : (
-          <Button 
-            onClick={handleCommit} 
-            className="w-full" 
-            size="lg"
-            disabled={committing}
-          >
-            {committing ? 'Processing...' : 'Commit to Buy'}
-          </Button>
+          <div className="space-y-3">
+            {/* Quantity Selector */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Quantity</span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                  disabled={quantity <= 1}
+                >
+                  <Minus className="h-4 w-4" />
+                </Button>
+                <span className="w-8 text-center font-semibold">{quantity}</span>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setQuantity(q => Math.min(10, campaign.goal_quantity - campaign.current_quantity, q + 1))}
+                  disabled={quantity >= Math.min(10, campaign.goal_quantity - campaign.current_quantity)}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            
+            {/* Total Price */}
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Total</span>
+              <span className="font-bold text-primary">
+                ₦{(campaign.discount_price * quantity)?.toLocaleString()}
+              </span>
+            </div>
+
+            <Button 
+              onClick={handleCommit} 
+              className="w-full" 
+              size="lg"
+              disabled={committing}
+            >
+              {committing ? 'Processing...' : 'Commit to Buy'}
+            </Button>
+          </div>
         )}
 
         {!isInactive && !userCommitment && (

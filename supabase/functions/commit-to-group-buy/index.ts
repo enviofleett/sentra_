@@ -295,7 +295,7 @@ serve(async (req) => {
             user_id: user.id,
             type: 'group_buy_commitment'
           },
-          callback_url: `${dynamicBaseUrl}/profile/groupbuys`
+          callback_url: `${dynamicBaseUrl}/checkout/success?commitment_id=${commitment.id}&type=group_buy`
         }),
       });
 

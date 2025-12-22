@@ -103,6 +103,14 @@ function EmailTemplateManager() {
   const [currentTemplate, setCurrentTemplate] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
+  const [newTemplate, setNewTemplate] = useState({
+    template_id: '',
+    name: '',
+    subject: '',
+    html_content: '',
+    text_content: ''
+  });
 
   useEffect(() => {
     loadTemplates();
@@ -163,28 +171,123 @@ function EmailTemplateManager() {
     setIsSaving(false);
   };
 
+  const handleCreateTemplate = async () => {
+    if (!newTemplate.template_id || !newTemplate.name || !newTemplate.subject || !newTemplate.html_content) {
+      toast({ title: 'Error', description: 'Please fill in all required fields', variant: 'destructive' });
+      return;
+    }
+
+    setIsSaving(true);
+    const { data, error } = await supabase
+      .from('email_templates')
+      .insert([newTemplate])
+      .select()
+      .single();
+
+    if (error) {
+      toast({ title: 'Error creating template', description: error.message, variant: 'destructive' });
+    } else {
+      await loadTemplates();
+      setSelectedTemplateId(data.id);
+      setIsCreating(false);
+      setNewTemplate({ template_id: '', name: '', subject: '', html_content: '', text_content: '' });
+      toast({ title: 'Success', description: `Template ${newTemplate.template_id} created.` });
+    }
+    setIsSaving(false);
+  };
+
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>;
 
   return (
     <div className="space-y-6">
-      <div>
-        <Label>Select Email Template</Label>
-        <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
-          <SelectTrigger>
-            <Mail className="h-4 w-4 mr-2" />
-            <SelectValue placeholder="Select an email template..." />
-          </SelectTrigger>
-          <SelectContent>
-            {templates.map((template) => (
-              <SelectItem key={template.id} value={template.id}>
-                {template.template_id} - {template.subject}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="flex items-center justify-between">
+        <div className="flex-1 mr-4">
+          <Label>Select Email Template</Label>
+          <Select value={selectedTemplateId} onValueChange={(val) => { setSelectedTemplateId(val); setIsCreating(false); }}>
+            <SelectTrigger>
+              <Mail className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Select an email template..." />
+            </SelectTrigger>
+            <SelectContent>
+              {templates.map((template) => (
+                <SelectItem key={template.id} value={template.id}>
+                  {template.template_id} - {template.subject}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Button onClick={() => setIsCreating(!isCreating)} variant={isCreating ? "secondary" : "default"}>
+          <Plus className="h-4 w-4 mr-2" />
+          {isCreating ? 'Cancel' : 'New Template'}
+        </Button>
       </div>
 
-      {currentTemplate && (
+      {isCreating ? (
+        <Card className="p-4 space-y-4 border-dashed border-2">
+          <h3 className="font-semibold text-lg">Create New Email Template</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Template ID *</Label>
+              <Input 
+                value={newTemplate.template_id}
+                onChange={(e) => setNewTemplate({...newTemplate, template_id: e.target.value.toUpperCase().replace(/\s/g, '_')})}
+                placeholder="e.g., ORDER_CONFIRMATION"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Used in code to reference this template</p>
+            </div>
+            <div>
+              <Label>Name *</Label>
+              <Input 
+                value={newTemplate.name}
+                onChange={(e) => setNewTemplate({...newTemplate, name: e.target.value})}
+                placeholder="e.g., Order Confirmation Email"
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label>Subject *</Label>
+            <Input 
+              value={newTemplate.subject}
+              onChange={(e) => setNewTemplate({...newTemplate, subject: e.target.value})}
+              placeholder="e.g., Your order has been confirmed!"
+            />
+            <p className="text-xs text-muted-foreground mt-1">Use {"{{variable}}"} for dynamic content</p>
+          </div>
+
+          <div>
+            <Label>HTML Content *</Label>
+            <Textarea
+              value={newTemplate.html_content}
+              onChange={(e) => setNewTemplate({...newTemplate, html_content: e.target.value})}
+              rows={10}
+              placeholder="Enter HTML email template content..."
+            />
+          </div>
+          
+          <div>
+            <Label>Plain Text Content (Optional)</Label>
+            <Textarea
+              value={newTemplate.text_content}
+              onChange={(e) => setNewTemplate({...newTemplate, text_content: e.target.value})}
+              rows={5}
+              placeholder="Plain text version for email clients that don't support HTML"
+            />
+          </div>
+
+          <Button onClick={handleCreateTemplate} disabled={isSaving}>
+            {isSaving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              'Create Template'
+            )}
+          </Button>
+        </Card>
+      ) : currentTemplate && (
         <div className="space-y-4">
           <div>
             <Label>Template ID (read-only)</Label>

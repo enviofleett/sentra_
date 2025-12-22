@@ -82,7 +82,7 @@ serve(async (req) => {
       .from('group_buy_campaigns')
       .select(`
         *,
-        products (
+        products!group_buy_campaigns_product_id_fkey (
           name,
           price
         )

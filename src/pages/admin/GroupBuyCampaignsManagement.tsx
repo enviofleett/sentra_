@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Plus, Edit, XCircle } from "lucide-react";
+import { Plus, Edit, XCircle, CheckCircle, Loader2 } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Slider } from "@/components/ui/slider";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -20,6 +20,8 @@ export default function GroupBuyCampaignsManagement() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [forceSucceedDialogOpen, setForceSucceedDialogOpen] = useState(false);
+  const [processingForceSucceed, setProcessingForceSucceed] = useState(false);
   const [selectedCampaign, setSelectedCampaign] = useState<any>(null);
   const [formData, setFormData] = useState<{
     product_id: string;
@@ -181,6 +183,43 @@ export default function GroupBuyCampaignsManagement() {
     } catch (error: any) {
       toast.error('Failed to cancel campaign');
       console.error(error);
+    }
+  };
+
+  const handleForceSucceed = async () => {
+    if (!selectedCampaign) return;
+
+    setProcessingForceSucceed(true);
+    try {
+      // First update the campaign to goal_reached status
+      const { error: updateError } = await supabase
+        .from('group_buy_campaigns')
+        .update({ 
+          status: 'goal_reached',
+          current_quantity: selectedCampaign.goal_quantity // Force it to goal
+        })
+        .eq('id', selectedCampaign.id);
+
+      if (updateError) throw updateError;
+
+      // Trigger the process-group-buy-goals function
+      const { error: invokeError } = await supabase.functions.invoke('process-group-buy-goals');
+
+      if (invokeError) {
+        console.error('Error invoking process-group-buy-goals:', invokeError);
+        toast.warning('Campaign marked as successful. Fulfillment will process shortly.');
+      } else {
+        toast.success('Campaign force-succeeded and fulfillment started!');
+      }
+
+      setForceSucceedDialogOpen(false);
+      setSelectedCampaign(null);
+      fetchCampaigns();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to force succeed campaign');
+      console.error(error);
+    } finally {
+      setProcessingForceSucceed(false);
     }
   };
 
@@ -378,6 +417,18 @@ export default function GroupBuyCampaignsManagement() {
                         <Edit className="h-4 w-4" />
                       </Button>
                       <Button 
+                        variant="default" 
+                        size="sm"
+                        className="bg-green-600 hover:bg-green-700"
+                        onClick={() => {
+                          setSelectedCampaign(campaign);
+                          setForceSucceedDialogOpen(true);
+                        }}
+                        title="Force Succeed"
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                      </Button>
+                      <Button 
                         variant="outline" 
                         size="sm" 
                         onClick={() => {
@@ -436,6 +487,37 @@ export default function GroupBuyCampaignsManagement() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleCancelCampaign}>Confirm Cancellation</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={forceSucceedDialogOpen} onOpenChange={setForceSucceedDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Force Succeed Campaign</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will mark the campaign as goal-reached and trigger the fulfillment process. 
+              All paid commitments will have orders created, and unpaid commitments will receive payment notifications.
+              <br /><br />
+              <strong>Current progress:</strong> {selectedCampaign?.current_quantity || 0} / {selectedCampaign?.goal_quantity || 0}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={processingForceSucceed}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleForceSucceed}
+              disabled={processingForceSucceed}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {processingForceSucceed ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                'Force Succeed'
+              )}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

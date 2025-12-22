@@ -76,6 +76,16 @@ serve(async (req) => {
 
     const campaign = commitment.group_buy_campaigns;
     const totalAmount = Number(commitment.committed_price) * commitment.quantity;
+    
+    // Get APP_BASE_URL for callback
+    const appBaseUrl = Deno.env.get('APP_BASE_URL');
+    if (!appBaseUrl) {
+      console.error('APP_BASE_URL not configured');
+      return new Response(JSON.stringify({ error: 'Application base URL not configured' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Initialize Paystack payment
     const paystackResponse = await fetch('https://api.paystack.co/transaction/initialize', {
@@ -93,7 +103,7 @@ serve(async (req) => {
           user_id: user.id,
           type: 'group_buy_final_payment'
         },
-        callback_url: `${Deno.env.get('APP_BASE_URL')}/profile/groupbuys`
+        callback_url: `${appBaseUrl}/checkout/success?commitment_id=${commitmentId}&type=group_buy`
       }),
     });
 

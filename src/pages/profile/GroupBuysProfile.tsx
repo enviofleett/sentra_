@@ -71,8 +71,8 @@ export default function GroupBuysProfile() {
   };
 
   const pendingPayments = commitments.filter(c => c.status === 'committed_unpaid' && c.payment_deadline);
-  const paidCommitments = commitments.filter(c => c.status === 'committed_paid');
-  const expiredCommitments = commitments.filter(c => ['payment_window_expired', 'refunded'].includes(c.status));
+  const paidCommitments = commitments.filter(c => ['committed_paid', 'paid_finalized', 'completed'].includes(c.status));
+  const expiredCommitments = commitments.filter(c => ['payment_window_expired', 'refunded', 'cancelled', 'payment_failed'].includes(c.status));
 
   if (loading) return <div>Loading...</div>;
 

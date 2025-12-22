@@ -38,7 +38,7 @@ serve(async (req) => {
     // Fetch commitment details
     const { data: commitment, error: commitmentError } = await supabase
       .from('group_buy_commitments')
-      .select('*, group_buy_campaigns!inner(*, products(name, price))')
+      .select('*, group_buy_campaigns!inner(*, products!group_buy_campaigns_product_id_fkey(name, price))')
       .eq('id', commitmentId)
       .eq('user_id', user.id)
       .single();

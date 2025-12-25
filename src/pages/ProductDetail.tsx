@@ -134,11 +134,13 @@ export default function ProductDetail() {
                     className="aspect-[3/4] bg-accent rounded-lg overflow-hidden shadow-elegant image-zoom"
                     layoutId={`product-image-${product.id}`}
                   >
-                    <img
-                      src={productImages[currentImageIndex]}
-                      alt={product.name}
-                      className="w-full h-full object-cover"
-                    />
+                    <div className="w-full h-full p-6 flex items-center justify-center bg-accent">
+                      <img
+                        src={productImages[currentImageIndex]}
+                        alt={product.name}
+                        className="max-w-full max-h-full object-contain drop-shadow-xl"
+                      />
+                    </div>
                   </motion.div>
                   
                   {/* Thumbnail Gallery */}
@@ -184,11 +186,19 @@ export default function ProductDetail() {
                 <h1 className="text-3xl sm:text-4xl lg:text-5xl font-serif leading-tight">
                   {product.name}
                 </h1>
-                {product.scent_profile && (
-                  <p className="text-sm text-muted-foreground capitalize tracking-wide">
-                    {product.scent_profile} Fragrance
-                  </p>
-                )}
+                <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                  {product.scent_profile && (
+                    <span className="capitalize tracking-wide">
+                      {product.scent_profile}
+                    </span>
+                  )}
+                  {product.scent_profile && product.size && (
+                    <span className="text-border">•</span>
+                  )}
+                  {product.size && (
+                    <span className="tracking-wide">{product.size}</span>
+                  )}
+                </div>
               </div>
             </FadeUp>
 
@@ -208,10 +218,20 @@ export default function ProductDetail() {
             {product.description && (
               <FadeUp delay={0.2}>
                 <div className="py-6 border-t border-border/50">
-                  <div 
-                    className="text-muted-foreground leading-relaxed prose prose-sm max-w-none"
-                    dangerouslySetInnerHTML={{ __html: product.description }}
-                  />
+                  <div className="text-muted-foreground leading-relaxed space-y-4">
+                    {product.description.includes('<') ? (
+                      <div 
+                        className="prose prose-sm max-w-none prose-p:mb-4 prose-p:leading-relaxed"
+                        dangerouslySetInnerHTML={{ __html: product.description }}
+                      />
+                    ) : (
+                      product.description.split(/\n\n|\n/).filter(Boolean).map((paragraph, index) => (
+                        <p key={index} className="leading-relaxed">
+                          {paragraph.trim()}
+                        </p>
+                      ))
+                    )}
+                  </div>
                 </div>
               </FadeUp>
             )}

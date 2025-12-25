@@ -141,7 +141,7 @@ export default function Index() {
                   <StaggerItem key={product.id}>
                     <Link to={`/products/${product.id}`} className="group block">
                       <Card className="overflow-hidden border-0 bg-transparent hover-lift">
-                        <div className="relative aspect-[3/4] bg-accent overflow-hidden rounded-lg image-zoom">
+                        <div className="relative aspect-[3/4] bg-accent overflow-hidden rounded-lg">
                           {hasActiveGroupBuy && campaign && (
                             <>
                               <Badge className="absolute top-3 left-3 z-10 bg-secondary/90 text-secondary-foreground shadow-lg backdrop-blur-sm">
@@ -155,12 +155,14 @@ export default function Index() {
                             </>
                           )}
                           {product.image_url ? (
-                            <img 
-                              src={product.image_url} 
-                              alt={product.name}
-                              className="w-full h-full object-cover"
-                              loading="lazy"
-                            />
+                            <div className="w-full h-full p-4 flex items-center justify-center group-hover:scale-105 transition-transform duration-500">
+                              <img 
+                                src={product.image_url} 
+                                alt={product.name}
+                                className="max-w-full max-h-full object-contain drop-shadow-lg"
+                                loading="lazy"
+                              />
+                            </div>
                           ) : (
                             <div className="w-full h-full flex items-center justify-center bg-muted/30">
                               <Sparkles className="h-12 w-12 text-muted-foreground/30" />

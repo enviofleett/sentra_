@@ -27,6 +27,8 @@ interface Product {
   is_featured: boolean;
   is_active: boolean;
   scent_profile: string | null;
+  brand: string | null;
+  size: string | null;
 }
 interface Category {
   id: string;
@@ -64,7 +66,9 @@ export function ProductsManagement() {
     images: [],
     is_featured: false,
     is_active: true,
-    scent_profile: null
+    scent_profile: null,
+    brand: null,
+    size: null
   };
   useEffect(() => {
     fetchProducts();
@@ -219,7 +223,9 @@ export function ProductsManagement() {
       images: finalImages,
       is_featured: formData.get('is_featured') === 'true',
       is_active: formData.get('is_active') === 'true',
-      scent_profile: (scentValue && validScents.includes(scentValue) ? scentValue : null) as any
+      scent_profile: (scentValue && validScents.includes(scentValue) ? scentValue : null) as any,
+      brand: formData.get('brand') as string || null,
+      size: formData.get('size') as string || null
     };
     if (editingProduct) {
       const {
@@ -325,13 +331,19 @@ export function ProductsManagement() {
               <DialogTitle>{editingProduct ? 'Edit Product' : 'Add Product'}</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label htmlFor="name">Product Name</Label>
-                <Input id="name" name="name" defaultValue={editingProduct?.name} required />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="name">Product Name</Label>
+                  <Input id="name" name="name" defaultValue={editingProduct?.name} required />
+                </div>
+                <div>
+                  <Label htmlFor="brand">Brand</Label>
+                  <Input id="brand" name="brand" defaultValue={editingProduct?.brand || ''} placeholder="e.g., Tom Ford" />
+                </div>
               </div>
               <div>
-                <Label htmlFor="description">Description</Label>
-                <RichTextEditor content={description} onChange={setDescription} placeholder="Enter product description..." />
+                <Label htmlFor="size">Bottle Size</Label>
+                <Input id="size" name="size" defaultValue={editingProduct?.size || ''} placeholder="e.g., 100ml" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -342,6 +354,10 @@ export function ProductsManagement() {
                   <Label htmlFor="original_price">Original Price (₦)</Label>
                   <Input id="original_price" name="original_price" type="number" step="0.01" defaultValue={editingProduct?.original_price || ''} />
                 </div>
+              </div>
+              <div>
+                <Label htmlFor="description">Description</Label>
+                <RichTextEditor content={description} onChange={setDescription} placeholder="Enter product description..." />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

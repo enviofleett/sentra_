@@ -30,7 +30,7 @@ async function verifySignature(paystackSecretKey: string, rawBody: string, signa
 }
 
 serve(async (req: Request) => {
-  console.log(`[Paystack Webhook] Received ${req.method} request`);
+  console.log(`[Paystack Webhook] Received ${req.method} request at ${new Date().toISOString()}`);
 
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -39,58 +39,69 @@ serve(async (req: Request) => {
   try {
     const paystackSecretKey = Deno.env.get("PAYSTACK_SECRET_KEY");
     if (!paystackSecretKey) {
-      console.error("[Paystack Webhook] PAYSTACK_SECRET_KEY not configured");
+      console.error("[Paystack Webhook] CRITICAL: PAYSTACK_SECRET_KEY not configured");
       return new Response(JSON.stringify({ error: "Server configuration error" }), { status: 500 });
     }
 
     const rawBody = await req.text();
     const signature = req.headers.get("x-paystack-signature");
 
-    console.log(`[Paystack Webhook] Signature present: ${!!signature}`);
+    console.log(`[Paystack Webhook] Signature verification - Present: ${!!signature}`);
 
     if (!signature || !await verifySignature(paystackSecretKey, rawBody, signature)) {
-      console.error("[Paystack Webhook] Invalid webhook signature");
+      console.error("[Paystack Webhook] SECURITY: Invalid webhook signature rejected");
       return new Response(JSON.stringify({ error: "Invalid signature" }), { status: 401 });
     }
 
+    console.log("[Paystack Webhook] Signature verification: PASSED");
+
     const webhookData = JSON.parse(rawBody);
-    console.log(`[Paystack Webhook] Event: ${webhookData.event}, Reference: ${webhookData.data?.reference}`);
+    const { event, data } = webhookData;
+    const { reference, amount, metadata } = data;
+
+    console.log(`[Paystack Webhook] Event: ${event}`);
+    console.log(`[Paystack Webhook] Reference: ${reference}`);
+    console.log(`[Paystack Webhook] Amount (kobo): ${amount}`);
+    console.log(`[Paystack Webhook] Metadata:`, JSON.stringify(metadata));
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    if (webhookData.event === "charge.success") {
-      const { reference, amount, metadata } = webhookData.data;
+    if (event === "charge.success") {
       const paymentType = metadata?.type || 'standard_order';
-
-      console.log(`[Paystack Webhook] Processing successful payment - Type: ${paymentType}, Amount: ${amount}, Reference: ${reference}`);
+      console.log(`[Paystack Webhook] Processing SUCCESS - Type: ${paymentType}`);
 
       if (paymentType === 'standard_order') {
         // --- STANDARD ORDER LOGIC ---
+        const orderId = metadata?.order_id;
+        console.log(`[Paystack Webhook] Standard Order - Looking up by reference: ${reference}`);
+
         const { data: order, error: fetchError } = await supabase
           .from("orders")
-          .select("id, total_amount, paystack_status")
+          .select("id, total_amount, paystack_status, user_id")
           .eq("payment_reference", reference)
           .single();
 
         if (fetchError || !order) {
-          console.error(`[Paystack Webhook] Order not found for reference: ${reference}`, fetchError);
+          console.error(`[Paystack Webhook] ERROR: Order not found for reference: ${reference}`, fetchError);
           return new Response(JSON.stringify({ error: "Order not found" }), { status: 404 });
         }
 
-        console.log(`[Paystack Webhook] Found order: ${order.id}, Expected amount: ${order.total_amount * 100}, Received: ${amount}`);
+        console.log(`[Paystack Webhook] Found order: ${order.id}`);
+        console.log(`[Paystack Webhook] Amount check - Expected: ${order.total_amount * 100} kobo, Received: ${amount} kobo`);
 
-        const expectedAmount = order.total_amount * 100;
+        const expectedAmount = Math.round(order.total_amount * 100);
         if (amount !== expectedAmount) {
-          console.error(`[Paystack Webhook] Amount mismatch for order ${order.id}: expected ${expectedAmount}, got ${amount}`);
+          console.error(`[Paystack Webhook] SECURITY: Amount mismatch for order ${order.id} - Expected ${expectedAmount}, Got ${amount}`);
           await supabase.from("orders").update({ paystack_status: "amount_mismatch" }).eq("payment_reference", reference);
           return new Response(JSON.stringify({ error: "Amount mismatch" }), { status: 400 });
         }
+        console.log(`[Paystack Webhook] Amount verification: PASSED`);
 
         if (order.paystack_status === 'success') {
-          console.log(`[Paystack Webhook] Order ${order.id} already processed, skipping`);
+          console.log(`[Paystack Webhook] Order ${order.id} already processed (idempotency check), skipping`);
           return new Response(JSON.stringify({ message: "Already processed" }), { status: 200 });
         }
 
@@ -98,103 +109,247 @@ serve(async (req: Request) => {
           .from("orders")
           .update({
             status: "processing",
+            payment_status: "paid",
             paystack_status: "success",
             updated_at: new Date().toISOString(),
           })
           .eq("payment_reference", reference);
 
         if (updateError) {
-          console.error(`[Paystack Webhook] Failed to update order ${order.id}:`, updateError);
+          console.error(`[Paystack Webhook] ERROR: Failed to update order ${order.id}:`, updateError);
           return new Response(JSON.stringify({ error: "Failed to update order" }), { status: 500 });
         }
         
-        console.log(`[Paystack Webhook] Order ${order.id} updated successfully to 'processing'`);
+        console.log(`[Paystack Webhook] SUCCESS: Order ${order.id} updated to 'processing'`);
+        return new Response(JSON.stringify({ message: "Order processed successfully" }), { status: 200 });
 
-      } else if (paymentType === 'group_buy_commitment' || paymentType === 'group_buy_final_payment') {
-        // --- GROUP BUY LOGIC (Pay-to-Book) ---
-        // CRITICAL FIX: Only update commitment status to 'committed_paid'
-        // Order creation is deferred to process-group-buy-goals when campaign goal is met
+      } else if (paymentType === 'group_buy_commitment') {
+        // --- GROUP BUY PAY-TO-BOOK LOGIC ---
+        // Only update status, order created when campaign goal is met by process-group-buy-goals
         const commitmentId = metadata?.commitment_id;
         if (!commitmentId) {
-          console.error("[Paystack Webhook] Group buy payment received without commitment_id in metadata");
+          console.error("[Paystack Webhook] ERROR: group_buy_commitment payment missing commitment_id");
           return new Response(JSON.stringify({ error: "Missing commitment ID" }), { status: 400 });
         }
 
-        console.log(`[Paystack Webhook] Processing group buy payment for commitment: ${commitmentId}`);
+        console.log(`[Paystack Webhook] Group Buy Commitment - ID: ${commitmentId}`);
 
         const { data: commitment, error: fetchError } = await supabase
           .from("group_buy_commitments")
-          .select("id, committed_price, quantity, status")
+          .select("id, committed_price, quantity, status, campaign_id")
           .eq("id", commitmentId)
           .single();
         
         if (fetchError || !commitment) {
-          console.error(`[Paystack Webhook] Group buy commitment not found: ${commitmentId}`, fetchError);
+          console.error(`[Paystack Webhook] ERROR: Commitment not found: ${commitmentId}`, fetchError);
           return new Response(JSON.stringify({ error: "Commitment not found" }), { status: 404 });
         }
 
-        const expectedAmount = (commitment.committed_price * commitment.quantity) * 100;
-        console.log(`[Paystack Webhook] Commitment ${commitmentId} - Expected: ${expectedAmount}, Received: ${amount}`);
+        const expectedAmount = Math.round(commitment.committed_price * commitment.quantity * 100);
+        console.log(`[Paystack Webhook] Amount check - Expected: ${expectedAmount} kobo, Received: ${amount} kobo`);
 
         if (amount !== expectedAmount) {
-          console.error(`[Paystack Webhook] Amount mismatch for commitment ${commitmentId}: expected ${expectedAmount}, got ${amount}`);
+          console.error(`[Paystack Webhook] SECURITY: Amount mismatch for commitment ${commitmentId}`);
           return new Response(JSON.stringify({ error: "Amount mismatch" }), { status: 400 });
         }
+        console.log(`[Paystack Webhook] Amount verification: PASSED`);
 
         if (commitment.status === 'committed_paid' || commitment.status === 'paid_finalized') {
-          console.log(`[Paystack Webhook] Commitment ${commitmentId} already processed, skipping`);
+          console.log(`[Paystack Webhook] Commitment ${commitmentId} already processed (idempotency), skipping`);
           return new Response(JSON.stringify({ message: "Already processed" }), { status: 200 });
         }
 
-        // ONLY update commitment status - do NOT create order yet
-        // Order will be created by process-group-buy-goals when campaign succeeds
         const { error: updateError } = await supabase
           .from("group_buy_commitments")
           .update({
             status: "committed_paid",
             payment_ref: reference,
+            payment_reference: reference,
             updated_at: new Date().toISOString(),
           })
           .eq("id", commitmentId);
 
         if (updateError) {
-          console.error(`[Paystack Webhook] Failed to update commitment ${commitmentId}:`, updateError);
+          console.error(`[Paystack Webhook] ERROR: Failed to update commitment ${commitmentId}:`, updateError);
           return new Response(JSON.stringify({ error: "Failed to update commitment" }), { status: 500 });
         }
         
-        console.log(`[Paystack Webhook] Commitment ${commitmentId} updated to 'committed_paid'. Order will be created when campaign goal is met.`);
+        console.log(`[Paystack Webhook] SUCCESS: Commitment ${commitmentId} updated to 'committed_paid'`);
+        console.log(`[Paystack Webhook] Note: Order will be created when campaign goal is met`);
+        return new Response(JSON.stringify({ message: "Commitment processed successfully" }), { status: 200 });
 
-        return new Response(JSON.stringify({ message: "Webhook processed successfully" }), { status: 200 });
+      } else if (paymentType === 'group_buy_final_payment') {
+        // --- GROUP BUY FINAL PAYMENT (pay_on_success mode) ---
+        // Campaign goal is already met, CREATE ORDER IMMEDIATELY
+        const commitmentId = metadata?.commitment_id;
+        if (!commitmentId) {
+          console.error("[Paystack Webhook] ERROR: group_buy_final_payment missing commitment_id");
+          return new Response(JSON.stringify({ error: "Missing commitment ID" }), { status: 400 });
+        }
+
+        console.log(`[Paystack Webhook] Group Buy Final Payment - Commitment ID: ${commitmentId}`);
+
+        // Fetch commitment with campaign and product details using explicit FK hint
+        const { data: commitment, error: fetchError } = await supabase
+          .from("group_buy_commitments")
+          .select(`
+            id, committed_price, quantity, status, user_id, campaign_id,
+            profiles:user_id(email, full_name, default_shipping_address, default_billing_address)
+          `)
+          .eq("id", commitmentId)
+          .single();
+        
+        if (fetchError || !commitment) {
+          console.error(`[Paystack Webhook] ERROR: Commitment not found: ${commitmentId}`, fetchError);
+          return new Response(JSON.stringify({ error: "Commitment not found" }), { status: 404 });
+        }
+
+        // Fetch campaign and product separately to avoid ambiguity
+        const { data: campaign, error: campaignError } = await supabase
+          .from("group_buy_campaigns")
+          .select(`*, products!group_buy_campaigns_product_id_fkey(id, name, price, vendor_id, image_url)`)
+          .eq("id", commitment.campaign_id)
+          .single();
+
+        if (campaignError || !campaign) {
+          console.error(`[Paystack Webhook] ERROR: Campaign not found for commitment: ${commitmentId}`, campaignError);
+          return new Response(JSON.stringify({ error: "Campaign not found" }), { status: 404 });
+        }
+
+        const expectedAmount = Math.round(commitment.committed_price * commitment.quantity * 100);
+        console.log(`[Paystack Webhook] Amount check - Expected: ${expectedAmount} kobo, Received: ${amount} kobo`);
+
+        if (amount !== expectedAmount) {
+          console.error(`[Paystack Webhook] SECURITY: Amount mismatch for final payment ${commitmentId}`);
+          return new Response(JSON.stringify({ error: "Amount mismatch" }), { status: 400 });
+        }
+        console.log(`[Paystack Webhook] Amount verification: PASSED`);
+
+        if (commitment.status === 'paid_finalized' || commitment.status === 'completed') {
+          console.log(`[Paystack Webhook] Final payment ${commitmentId} already processed, skipping`);
+          return new Response(JSON.stringify({ message: "Already processed" }), { status: 200 });
+        }
+
+        // CREATE ORDER for final payment
+        const profile = commitment.profiles as any;
+        const product = campaign.products as any;
+        const totalAmount = Number(commitment.committed_price) * commitment.quantity;
+
+        console.log(`[Paystack Webhook] Creating order for user ${commitment.user_id}, product: ${product?.name}`);
+
+        const orderData = {
+          user_id: commitment.user_id,
+          customer_email: profile?.email || '',
+          status: 'processing' as const,
+          payment_status: 'paid' as const,
+          paystack_status: 'success',
+          payment_reference: reference,
+          items: [{
+            product_id: product?.id,
+            name: product?.name,
+            price: Number(commitment.committed_price),
+            quantity: commitment.quantity,
+            vendor_id: product?.vendor_id,
+            image_url: product?.image_url,
+            commitment_id: commitmentId,
+          }],
+          subtotal: totalAmount,
+          tax: 0,
+          shipping_cost: 0,
+          total_amount: totalAmount,
+          shipping_address: profile?.default_shipping_address || {},
+          billing_address: profile?.default_billing_address || {},
+        };
+
+        const { data: newOrder, error: orderError } = await supabase
+          .from("orders")
+          .insert([orderData])
+          .select("id")
+          .single();
+
+        if (orderError) {
+          console.error(`[Paystack Webhook] ERROR: Failed to create order:`, orderError);
+          return new Response(JSON.stringify({ error: "Failed to create order" }), { status: 500 });
+        }
+
+        console.log(`[Paystack Webhook] Order created: ${newOrder.id}`);
+
+        // Update commitment to finalized with order linkage
+        const { error: updateError } = await supabase
+          .from("group_buy_commitments")
+          .update({
+            status: "paid_finalized",
+            payment_ref: reference,
+            payment_reference: reference,
+            order_id: newOrder.id,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", commitmentId);
+
+        if (updateError) {
+          console.error(`[Paystack Webhook] ERROR: Failed to update commitment ${commitmentId}:`, updateError);
+          // Order was created, log but don't fail
+        }
+        
+        console.log(`[Paystack Webhook] SUCCESS: Final payment processed - Order ${newOrder.id} created, Commitment ${commitmentId} finalized`);
+
+        // Send confirmation email (fire and forget)
+        supabase.functions.invoke('send-email', {
+          body: {
+            to: profile?.email,
+            templateId: 'GROUPBUY_SUCCESS_PAID_FINALIZED',
+            data: {
+              customer_name: profile?.full_name || 'Customer',
+              product_name: product?.name,
+              order_id: newOrder.id.slice(0, 8),
+            }
+          }
+        }).catch(err => console.error('[Paystack Webhook] Email error (non-blocking):', err));
+
+        return new Response(JSON.stringify({ 
+          message: "Final payment processed successfully",
+          order_id: newOrder.id 
+        }), { status: 200 });
       }
 
-      return new Response(JSON.stringify({ message: "Webhook processed successfully" }), { status: 200 });
+      return new Response(JSON.stringify({ message: "Webhook processed" }), { status: 200 });
     }
 
-    if (webhookData.event === "charge.failed") {
-      const { reference, metadata } = webhookData.data;
-      console.log(`[Paystack Webhook] Failed payment - Reference: ${reference}, Type: ${metadata?.type || 'unknown'}`);
+    if (event === "charge.failed") {
+      console.log(`[Paystack Webhook] Processing FAILED payment - Reference: ${reference}`);
       
       if (metadata?.type === 'standard_order') {
+        console.log(`[Paystack Webhook] Updating standard order to failed`);
         await supabase
           .from("orders")
-          .update({ paystack_status: "failed" })
+          .update({ 
+            paystack_status: "failed",
+            payment_status: "failed",
+            updated_at: new Date().toISOString()
+          })
           .eq("payment_reference", reference);
       }
       
-      // For group buy commitments, update status to payment_failed
-      if (metadata?.type === 'group_buy_commitment' && metadata?.commitment_id) {
+      if ((metadata?.type === 'group_buy_commitment' || metadata?.type === 'group_buy_final_payment') && metadata?.commitment_id) {
+        console.log(`[Paystack Webhook] Updating commitment ${metadata.commitment_id} to payment_failed`);
         await supabase
           .from("group_buy_commitments")
-          .update({ status: "payment_failed" })
+          .update({ 
+            status: "payment_failed",
+            updated_at: new Date().toISOString()
+          })
           .eq("id", metadata.commitment_id);
       }
+
+      return new Response(JSON.stringify({ message: "Failed payment recorded" }), { status: 200 });
     }
 
-    console.log(`[Paystack Webhook] Event ${webhookData.event} received and acknowledged`);
+    console.log(`[Paystack Webhook] Event ${event} acknowledged (no action required)`);
     return new Response(JSON.stringify({ message: "Event received" }), { status: 200 });
 
   } catch (error: any) {
-    console.error("[Paystack Webhook] Processing error:", error.message, error.stack);
+    console.error("[Paystack Webhook] CRITICAL ERROR:", error.message);
+    console.error("[Paystack Webhook] Stack:", error.stack);
     return new Response(JSON.stringify({ error: error.message }), { status: 500 });
   }
 });

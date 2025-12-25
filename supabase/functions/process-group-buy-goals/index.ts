@@ -7,6 +7,8 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log('[Process-Group-Buy-Goals] Function invoked at', new Date().toISOString());
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -18,16 +20,20 @@ serve(async (req) => {
     );
     
     const paystackSecretKey = Deno.env.get('PAYSTACK_SECRET_KEY');
+    const appBaseUrl = Deno.env.get('APP_BASE_URL');
 
-    console.log('🔄 Processing group buy goals...');
+    console.log('[Process-Group-Buy-Goals] APP_BASE_URL:', appBaseUrl ? 'configured' : 'MISSING');
 
-    // Find campaigns that are active
+    // Fetch active campaigns with explicit FK hint
     const { data: campaigns, error: campaignsError } = await supabase
       .from('group_buy_campaigns')
-      .select('*, products!group_buy_campaigns_product_id_fkey(id, name, price, vendor_id, image_url), vendors(rep_full_name)')
+      .select('*, products!group_buy_campaigns_product_id_fkey(id, name, price, vendor_id, image_url)')
       .eq('status', 'active');
 
-    if (campaignsError) throw campaignsError;
+    if (campaignsError) {
+      console.error('[Process-Group-Buy-Goals] Campaign fetch error:', campaignsError);
+      throw campaignsError;
+    }
 
     const now = new Date();
     const campaignsToProcess = campaigns?.filter(campaign => {
@@ -36,21 +42,30 @@ serve(async (req) => {
       return isExpired || goalReached;
     }) || [];
 
-    console.log(`📊 Found ${campaignsToProcess.length} campaigns to process`);
+    console.log(`[Process-Group-Buy-Goals] Found ${campaignsToProcess.length} campaigns to process`);
 
     for (const campaign of campaignsToProcess) {
       const goalMet = campaign.current_quantity >= campaign.goal_quantity;
       
+      console.log(`[Process-Group-Buy-Goals] Processing campaign ${campaign.id} - Goal Met: ${goalMet}`);
+
       if (goalMet) {
-        console.log(`✅ Campaign ${campaign.id} reached its goal!`);
+        // === GOAL REACHED ===
+        console.log(`[Process-Group-Buy-Goals] Campaign ${campaign.id} reached goal!`);
         
         // Update campaign status
         await supabase
           .from('group_buy_campaigns')
-          .update({ status: 'goal_met_pending_payment' })
+          .update({ status: 'goal_met_pending_payment', updated_at: new Date().toISOString() })
           .eq('id', campaign.id);
 
-        // Fetch ALL relevant commitments: both unpaid (pay_on_success) and paid (pay_to_book)
+        // Clear the active_group_buy_id on product (campaign is no longer active)
+        await supabase
+          .from('products')
+          .update({ active_group_buy_id: null, updated_at: new Date().toISOString() })
+          .eq('active_group_buy_id', campaign.id);
+
+        // Fetch all commitments
         const { data: commitments, error: commitmentsError } = await supabase
           .from('group_buy_commitments')
           .select('*, profiles:user_id(email, full_name, default_shipping_address, default_billing_address)')
@@ -58,7 +73,7 @@ serve(async (req) => {
           .in('status', ['committed_unpaid', 'committed_paid']);
 
         if (commitmentsError) {
-          console.error(`❌ Error fetching commitments for campaign ${campaign.id}:`, commitmentsError);
+          console.error(`[Process-Group-Buy-Goals] Commitments fetch error:`, commitmentsError);
           continue;
         }
 
@@ -69,17 +84,17 @@ serve(async (req) => {
           const profile = commitment.profiles as any;
           
           if (commitment.status === 'committed_paid') {
-            // PAID COMMITMENTS (pay_to_book mode): Create order now
-            console.log(`💳 Creating order for paid commitment ${commitment.id}`);
+            // PAID COMMITMENTS: Create order immediately
+            console.log(`[Process-Group-Buy-Goals] Creating order for paid commitment ${commitment.id}`);
             
             const product = campaign.products as any;
-            const totalAmountInNaira = Number(commitment.committed_price) * commitment.quantity;
+            const totalAmount = Number(commitment.committed_price) * commitment.quantity;
 
             const orderData = {
               user_id: commitment.user_id,
               customer_email: profile?.email || '',
-              status: 'processing',
-              payment_status: 'paid',
+              status: 'processing' as const,
+              payment_status: 'paid' as const,
               paystack_status: 'success',
               payment_reference: commitment.payment_ref,
               items: [{
@@ -89,27 +104,28 @@ serve(async (req) => {
                 quantity: commitment.quantity,
                 vendor_id: product?.vendor_id,
                 image_url: product?.image_url,
+                commitment_id: commitment.id,
               }],
-              subtotal: totalAmountInNaira,
+              subtotal: totalAmount,
               tax: 0,
               shipping_cost: 0,
-              total_amount: totalAmountInNaira,
+              total_amount: totalAmount,
               shipping_address: profile?.default_shipping_address || {},
               billing_address: profile?.default_billing_address || {},
             };
 
-            const { data: newOrder, error: orderCreationError } = await supabase
+            const { data: newOrder, error: orderError } = await supabase
               .from('orders')
               .insert([orderData])
               .select('id')
               .single();
 
-            if (orderCreationError) {
-              console.error(`❌ Failed to create order for commitment ${commitment.id}:`, orderCreationError);
+            if (orderError) {
+              console.error(`[Process-Group-Buy-Goals] Order creation failed:`, orderError);
               continue;
             }
 
-            // Update commitment to finalized state with order_id
+            // Update commitment
             await supabase
               .from('group_buy_commitments')
               .update({ 
@@ -130,13 +146,13 @@ serve(async (req) => {
                   order_id: newOrder.id.slice(0, 8),
                 }
               }
-            });
+            }).catch(err => console.error('[Process-Group-Buy-Goals] Email error:', err));
             
-            console.log(`✅ Order ${newOrder.id} created and commitment ${commitment.id} finalized`);
+            console.log(`[Process-Group-Buy-Goals] Order ${newOrder.id} created for commitment ${commitment.id}`);
 
           } else if (commitment.status === 'committed_unpaid') {
-            // UNPAID COMMITMENTS (pay_on_success mode): Set payment deadline and notify
-            console.log(`⏳ Setting payment deadline for unpaid commitment ${commitment.id}`);
+            // UNPAID COMMITMENTS: Set deadline and notify
+            console.log(`[Process-Group-Buy-Goals] Setting deadline for unpaid commitment ${commitment.id}`);
             
             await supabase
               .from('group_buy_commitments')
@@ -146,7 +162,8 @@ serve(async (req) => {
               })
               .eq('id', commitment.id);
 
-            const paymentLink = `${Deno.env.get('APP_BASE_URL')}/profile/groupbuys`;
+            // Use APP_BASE_URL for payment link - no hardcoded URLs
+            const paymentLink = `${appBaseUrl}/profile/groupbuys`;
             
             await supabase.functions.invoke('send-email', {
               body: {
@@ -154,18 +171,19 @@ serve(async (req) => {
                 templateId: 'GROUPBUY_SUCCESS_PAYMENT_REQUIRED',
                 data: {
                   customer_name: profile?.full_name || 'Customer',
-                  product_name: campaign.products.name,
+                  product_name: campaign.products?.name,
                   discount_price: campaign.discount_price.toString(),
                   payment_deadline: paymentDeadline.toLocaleString(),
                   payment_link: paymentLink
                 }
               }
-            });
-            console.log(`📧 Sent payment notification to ${profile?.email}`);
+            }).catch(err => console.error('[Process-Group-Buy-Goals] Email error:', err));
+
+            console.log(`[Process-Group-Buy-Goals] Payment notification sent to ${profile?.email}`);
           }
         }
 
-        // Check if all commitments are now finalized (all were paid)
+        // Check if all finalized
         const { data: remainingUnpaid } = await supabase
           .from('group_buy_commitments')
           .select('id')
@@ -174,37 +192,40 @@ serve(async (req) => {
           .limit(1);
 
         if (!remainingUnpaid || remainingUnpaid.length === 0) {
-          // All commitments are finalized, update campaign status
           await supabase
             .from('group_buy_campaigns')
-            .update({ status: 'goal_met_paid_finalized' })
+            .update({ status: 'goal_met_paid_finalized', updated_at: new Date().toISOString() })
             .eq('id', campaign.id);
-          console.log(`🎉 Campaign ${campaign.id} fully finalized - all payments complete`);
+          console.log(`[Process-Group-Buy-Goals] Campaign ${campaign.id} fully finalized`);
         }
 
       } else {
-        // Campaign failed to reach goal
-        console.log(`❌ Campaign ${campaign.id} failed to reach goal`);
+        // === CAMPAIGN FAILED (expired without reaching goal) ===
+        console.log(`[Process-Group-Buy-Goals] Campaign ${campaign.id} failed - did not reach goal`);
         
         await supabase
           .from('group_buy_campaigns')
-          .update({ status: 'failed_expired' })
+          .update({ status: 'failed_expired', updated_at: new Date().toISOString() })
           .eq('id', campaign.id);
 
-        const { data: commitments, error: commitmentsError } = await supabase
+        // Clear product link
+        await supabase
+          .from('products')
+          .update({ active_group_buy_id: null, updated_at: new Date().toISOString() })
+          .eq('active_group_buy_id', campaign.id);
+
+        const { data: commitments } = await supabase
           .from('group_buy_commitments')
           .select('*, profiles:user_id(email, full_name)')
           .eq('campaign_id', campaign.id)
           .in('status', ['committed_unpaid', 'committed_paid']);
 
-        if (commitmentsError) continue;
-
         for (const commitment of commitments || []) {
           const profile = commitment.profiles as any;
           
-          // If payment was made (payment_ref exists), initiate refund
+          // Process refund if payment was made
           if (commitment.payment_ref && paystackSecretKey) {
-            console.log(`💰 Initiating refund for payment ${commitment.payment_ref}`);
+            console.log(`[Process-Group-Buy-Goals] Initiating refund for ${commitment.payment_ref}`);
             
             try {
               const refundResponse = await fetch('https://api.paystack.co/refund', {
@@ -219,47 +240,44 @@ serve(async (req) => {
                 })
               });
               
-              if (!refundResponse.ok) {
-                console.error(`Failed to process refund for ${commitment.payment_ref}:`, await refundResponse.text());
+              if (refundResponse.ok) {
+                console.log(`[Process-Group-Buy-Goals] Refund processed for ${commitment.payment_ref}`);
               } else {
-                console.log(`✅ Refund processed for ${commitment.payment_ref}`);
+                console.error(`[Process-Group-Buy-Goals] Refund failed:`, await refundResponse.text());
               }
-              
-            } catch (refundError) {
-              console.error(`Error during refund API call:`, refundError);
+            } catch (err) {
+              console.error(`[Process-Group-Buy-Goals] Refund error:`, err);
             }
             
             await supabase
               .from('group_buy_commitments')
-              .update({ status: 'refunded' })
+              .update({ status: 'refunded', updated_at: new Date().toISOString() })
               .eq('id', commitment.id);
 
           } else {
-            // No payment was made, just cancel the commitment
             await supabase
               .from('group_buy_commitments')
-              .update({ status: 'cancelled' })
+              .update({ status: 'cancelled', updated_at: new Date().toISOString() })
               .eq('id', commitment.id);
           }
 
-          // Send refund/failure notification
+          // Send failure notification
           await supabase.functions.invoke('send-email', {
             body: {
               to: profile?.email,
               templateId: 'GROUPBUY_FAILED_REFUND',
               data: {
                 customer_name: profile?.full_name || 'Customer',
-                product_name: campaign.products.name,
+                product_name: campaign.products?.name,
                 reason: 'Campaign did not reach its minimum goal quantity'
               }
             }
-          });
-          console.log(`📧 Sent failure/refund notification to ${profile?.email}`);
+          }).catch(err => console.error('[Process-Group-Buy-Goals] Email error:', err));
         }
       }
     }
 
-    console.log('✅ Group buy goals processing completed');
+    console.log('[Process-Group-Buy-Goals] Processing completed');
 
     return new Response(JSON.stringify({ 
       success: true,
@@ -270,7 +288,7 @@ serve(async (req) => {
     });
 
   } catch (error: any) {
-    console.error('❌ Error in process-group-buy-goals:', error);
+    console.error('[Process-Group-Buy-Goals] Error:', error.message);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

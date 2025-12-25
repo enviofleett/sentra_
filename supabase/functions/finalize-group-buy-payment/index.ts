@@ -11,6 +11,8 @@ interface PaymentRequest {
 }
 
 serve(async (req) => {
+  console.log('[Finalize-Group-Buy-Payment] Function invoked at', new Date().toISOString());
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -21,21 +23,26 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // Authenticate user
     const authHeader = req.headers.get('Authorization')!;
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
-      console.error('Auth error:', authError);
+      console.error('[Finalize-Group-Buy-Payment] Auth error:', authError);
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
+    console.log(`[Finalize-Group-Buy-Payment] User: ${user.id}`);
+
     const { commitmentId }: PaymentRequest = await req.json();
 
-    // Fetch commitment details
+    console.log(`[Finalize-Group-Buy-Payment] Processing commitment: ${commitmentId}`);
+
+    // Fetch commitment with explicit FK hint
     const { data: commitment, error: commitmentError } = await supabase
       .from('group_buy_commitments')
       .select('*, group_buy_campaigns!inner(*, products!group_buy_campaigns_product_id_fkey(name, price))')
@@ -44,15 +51,18 @@ serve(async (req) => {
       .single();
 
     if (commitmentError || !commitment) {
-      console.error('Commitment not found:', commitmentError);
+      console.error('[Finalize-Group-Buy-Payment] Commitment not found:', commitmentError);
       return new Response(JSON.stringify({ error: 'Commitment not found' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Validate commitment is unpaid
+    console.log(`[Finalize-Group-Buy-Payment] Commitment status: ${commitment.status}`);
+
+    // Validate commitment is payable
     if (commitment.status !== 'committed_unpaid') {
+      console.log(`[Finalize-Group-Buy-Payment] Commitment not payable - status: ${commitment.status}`);
       return new Response(JSON.stringify({ error: 'Commitment already processed' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -61,6 +71,7 @@ serve(async (req) => {
 
     // Check payment deadline
     if (commitment.payment_deadline && new Date(commitment.payment_deadline) < new Date()) {
+      console.error('[Finalize-Group-Buy-Payment] Payment deadline passed');
       return new Response(JSON.stringify({ error: 'Payment deadline has passed' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -74,29 +85,50 @@ serve(async (req) => {
       .eq('id', user.id)
       .single();
 
-    const campaign = commitment.group_buy_campaigns;
+    // SERVER-SIDE AMOUNT CALCULATION - use committed_price from DB, never from request
     const totalAmount = Number(commitment.committed_price) * commitment.quantity;
+    const amountInKobo = Math.round(totalAmount * 100);
+
+    console.log(`[Finalize-Group-Buy-Payment] Amount: ${totalAmount} (${amountInKobo} kobo)`);
+
+    // Get APP_BASE_URL from config or env
+    const { data: configData } = await supabase
+      .from('app_config')
+      .select('value')
+      .eq('key', 'live_callback_url')
+      .maybeSingle();
     
-    // Get APP_BASE_URL for callback
-    const appBaseUrl = Deno.env.get('APP_BASE_URL');
+    const appBaseUrl = (configData?.value as any)?.url || Deno.env.get('APP_BASE_URL');
+
     if (!appBaseUrl) {
-      console.error('APP_BASE_URL not configured');
+      console.error('[Finalize-Group-Buy-Payment] APP_BASE_URL not configured');
       return new Response(JSON.stringify({ error: 'Application base URL not configured' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
+    const paystackSecretKey = Deno.env.get('PAYSTACK_SECRET_KEY');
+    if (!paystackSecretKey) {
+      console.error('[Finalize-Group-Buy-Payment] PAYSTACK_SECRET_KEY not configured');
+      return new Response(JSON.stringify({ error: 'Payment service not configured' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Initialize Paystack payment
+    console.log('[Finalize-Group-Buy-Payment] Initializing Paystack transaction');
+
     const paystackResponse = await fetch('https://api.paystack.co/transaction/initialize', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${Deno.env.get('PAYSTACK_SECRET_KEY')}`,
+        'Authorization': `Bearer ${paystackSecretKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         email: profile?.email || user.email,
-        amount: Math.round(totalAmount * 100),
+        amount: amountInKobo,
         metadata: {
           commitment_id: commitmentId,
           campaign_id: commitment.campaign_id,
@@ -110,12 +142,14 @@ serve(async (req) => {
     const paystackData = await paystackResponse.json();
 
     if (!paystackData.status) {
-      console.error('Paystack error:', paystackData);
+      console.error('[Finalize-Group-Buy-Payment] Paystack error:', paystackData);
       return new Response(JSON.stringify({ error: 'Payment initialization failed' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    console.log('[Finalize-Group-Buy-Payment] Payment URL generated successfully');
 
     return new Response(JSON.stringify({
       paymentUrl: paystackData.data.authorization_url,
@@ -126,7 +160,7 @@ serve(async (req) => {
     });
 
   } catch (error: any) {
-    console.error('Error in finalize-group-buy-payment:', error);
+    console.error('[Finalize-Group-Buy-Payment] Error:', error.message);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

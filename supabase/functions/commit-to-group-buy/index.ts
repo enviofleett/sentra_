@@ -15,25 +15,22 @@ interface CommitmentRequest {
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 serve(async (req) => {
-  console.log('🚀 commit-to-group-buy function invoked');
-  console.log('📥 Request method:', req.method);
+  console.log('[Commit-to-Group-Buy] Function invoked at', new Date().toISOString());
 
   if (req.method === 'OPTIONS') {
-    console.log('✅ CORS preflight request handled');
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log('🔐 Authenticating user...');
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // Authenticate user
     const authHeader = req.headers.get('Authorization');
-
     if (!authHeader) {
-      console.error('❌ No authorization header');
+      console.error('[Commit-to-Group-Buy] No authorization header');
       return new Response(JSON.stringify({ error: 'No authorization header' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -44,23 +41,23 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
-      console.error('❌ Auth error:', authError);
+      console.error('[Commit-to-Group-Buy] Auth error:', authError);
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    console.log('✅ User authenticated:', user.id);
+    console.log(`[Commit-to-Group-Buy] User authenticated: ${user.id}`);
 
     const requestBody = await req.json();
-    console.log('📦 Request body:', requestBody);
-    
     const { campaignId, quantity }: CommitmentRequest = requestBody;
+
+    console.log(`[Commit-to-Group-Buy] Request - Campaign: ${campaignId}, Quantity: ${quantity}`);
 
     // Input validation
     if (!campaignId || !UUID_REGEX.test(campaignId)) {
-      console.error('❌ Invalid campaignId:', campaignId);
+      console.error('[Commit-to-Group-Buy] Invalid campaignId');
       return new Response(JSON.stringify({ error: 'Invalid campaign ID format' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -68,15 +65,15 @@ serve(async (req) => {
     }
 
     if (!quantity || !Number.isInteger(quantity) || quantity < 1 || quantity > 100) {
-      console.error('❌ Invalid quantity:', quantity);
+      console.error('[Commit-to-Group-Buy] Invalid quantity:', quantity);
       return new Response(JSON.stringify({ error: 'Quantity must be a positive integer between 1 and 100' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Fetch campaign details with version for optimistic locking
-    console.log('🔍 Fetching campaign:', campaignId);
+    // Fetch campaign with explicit FK hint to avoid ambiguity
+    console.log('[Commit-to-Group-Buy] Fetching campaign details');
 
     const { data: campaign, error: campaignError } = await supabase
       .from('group_buy_campaigns')
@@ -90,10 +87,8 @@ serve(async (req) => {
       .eq('id', campaignId)
       .single();
 
-    console.log('📊 Campaign query result:', { campaign, error: campaignError });
-
     if (campaignError) {
-      console.error('❌ Campaign query error:', campaignError);
+      console.error('[Commit-to-Group-Buy] Campaign query error:', campaignError);
       return new Response(JSON.stringify({ 
         error: 'Failed to fetch campaign details',
         details: campaignError.message 
@@ -104,14 +99,16 @@ serve(async (req) => {
     }
 
     if (!campaign) {
-      console.error('❌ Campaign not found');
+      console.error('[Commit-to-Group-Buy] Campaign not found');
       return new Response(JSON.stringify({ error: 'Campaign not found' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Validate campaign is active and not expired
+    console.log(`[Commit-to-Group-Buy] Campaign found - Status: ${campaign.status}, Current: ${campaign.current_quantity}/${campaign.goal_quantity}`);
+
+    // Validate campaign is active
     if (campaign.status !== 'active') {
       return new Response(JSON.stringify({ error: 'Campaign is not active' }), {
         status: 400,
@@ -119,6 +116,7 @@ serve(async (req) => {
       });
     }
 
+    // Validate not expired
     if (new Date(campaign.expiry_at) < new Date()) {
       return new Response(JSON.stringify({ error: 'Campaign has expired' }), {
         status: 400,
@@ -126,21 +124,19 @@ serve(async (req) => {
       });
     }
 
-    // Check if user already has a commitment
-    console.log('🔍 Checking for existing commitment...');
+    // Check for existing commitment
+    console.log('[Commit-to-Group-Buy] Checking for existing commitment');
 
-    const { data: existingCommitment, error: commitmentCheckError } = await supabase
+    const { data: existingCommitment } = await supabase
       .from('group_buy_commitments')
-      .select('*')
+      .select('id')
       .eq('campaign_id', campaignId)
       .eq('user_id', user.id)
       .in('status', ['committed_unpaid', 'committed_paid'])
       .maybeSingle();
 
-    console.log('📋 Existing commitment check:', { existingCommitment, error: commitmentCheckError });
-
     if (existingCommitment) {
-      console.log('⚠️ User already has a commitment');
+      console.log('[Commit-to-Group-Buy] User already has commitment');
       return new Response(JSON.stringify({ 
         error: 'You already have a commitment for this campaign. Please check your Group Buys page.' 
       }), {
@@ -149,8 +145,12 @@ serve(async (req) => {
       });
     }
 
-    // Check if quantity doesn't exceed remaining spots
+    // ATOMIC QUANTITY UPDATE with optimistic locking
+    // This single query ensures we don't oversell even under high concurrency
+    const currentVersion = campaign.version || 0;
+    const expectedNewQuantity = campaign.current_quantity + quantity;
     const remainingSpots = campaign.goal_quantity - campaign.current_quantity;
+
     if (quantity > remainingSpots) {
       return new Response(JSON.stringify({ 
         error: `Only ${remainingSpots} spots remaining`,
@@ -161,14 +161,10 @@ serve(async (req) => {
       });
     }
 
-    // OPTIMISTIC LOCKING: Update campaign current_quantity with version check
-    // This prevents race conditions by ensuring we only update if the data hasn't changed
-    const currentVersion = campaign.version || 0;
-    const expectedNewQuantity = campaign.current_quantity + quantity;
+    console.log(`[Commit-to-Group-Buy] Attempting atomic update - Version: ${currentVersion}, New Qty: ${expectedNewQuantity}`);
 
-    console.log('🔒 Attempting optimistic lock update. Current version:', currentVersion);
-
-    const { data: updatedCampaign, error: updateCampaignError } = await supabase
+    // Atomic update with version check prevents race conditions
+    const { data: updatedCampaign, error: updateError } = await supabase
       .from('group_buy_campaigns')
       .update({ 
         current_quantity: expectedNewQuantity,
@@ -176,38 +172,42 @@ serve(async (req) => {
         updated_at: new Date().toISOString()
       })
       .eq('id', campaignId)
-      .eq('current_quantity', campaign.current_quantity) // Optimistic lock condition
+      .eq('version', currentVersion) // Optimistic lock - only update if version matches
+      .lte('current_quantity', campaign.goal_quantity - quantity) // Additional safety check
       .select()
       .single();
 
-    if (updateCampaignError || !updatedCampaign) {
-      console.error('❌ Optimistic lock failed - concurrent update detected:', updateCampaignError);
+    if (updateError || !updatedCampaign) {
+      console.error('[Commit-to-Group-Buy] Optimistic lock failed - concurrent update detected');
       return new Response(JSON.stringify({ 
         error: 'Another user just updated this campaign. Please try again.',
         retry: true
       }), {
-        status: 409, // Conflict
+        status: 409,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    console.log('✅ Campaign quantity updated with optimistic lock');
+    console.log('[Commit-to-Group-Buy] Campaign quantity updated atomically');
 
-    // Create commitment after successful campaign update
+    // SERVER-SIDE PRICE: Use discount_price from database, never from request
+    const commitmentPrice = Number(campaign.discount_price);
+
+    // Create commitment
     const { data: commitment, error: commitmentError } = await supabase
       .from('group_buy_commitments')
       .insert({
         campaign_id: campaignId,
         user_id: user.id,
         quantity,
-        committed_price: campaign.discount_price,
+        committed_price: commitmentPrice, // Server-verified price
         status: 'committed_unpaid'
       })
       .select()
       .single();
 
     if (commitmentError) {
-      console.error('❌ Error creating commitment, rolling back campaign update:', commitmentError);
+      console.error('[Commit-to-Group-Buy] Commitment creation failed, rolling back');
       // Rollback campaign quantity
       await supabase
         .from('group_buy_campaigns')
@@ -224,7 +224,7 @@ serve(async (req) => {
       });
     }
 
-    console.log('✅ Commitment created:', commitment.id);
+    console.log(`[Commit-to-Group-Buy] Commitment created: ${commitment.id}`);
 
     // Fetch user profile for email
     const { data: profile } = await supabase
@@ -233,7 +233,7 @@ serve(async (req) => {
       .eq('id', user.id)
       .single();
 
-    // Send confirmation email (fire and forget, don't block response)
+    // Send confirmation email (non-blocking)
     supabase.functions.invoke('send-email', {
       body: {
         to: profile?.email || user.email,
@@ -242,43 +242,48 @@ serve(async (req) => {
           customer_name: profile?.full_name || 'Customer',
           product_name: campaign.products?.name || 'Product',
           quantity: quantity.toString(),
-          discount_price: campaign.discount_price.toString(),
+          discount_price: commitmentPrice.toString(),
           current_quantity: expectedNewQuantity.toString(),
           goal_quantity: campaign.goal_quantity.toString(),
           expiry_date: new Date(campaign.expiry_at).toLocaleString()
         }
       }
-    }).catch(err => console.error('Email send error (non-blocking):', err));
+    }).catch(err => console.error('[Commit-to-Group-Buy] Email error (non-blocking):', err));
 
-    // Handle pay_to_book mode
+    // Handle pay_to_book mode - initialize Paystack payment
     if (campaign.payment_mode === 'pay_to_book') {
-      console.log('💳 Initializing Paystack payment for pay_to_book mode');
+      console.log('[Commit-to-Group-Buy] Initializing payment for pay_to_book mode');
       
       const paystackSecretKey = Deno.env.get('PAYSTACK_SECRET_KEY');
       if (!paystackSecretKey) {
-        console.error('❌ PAYSTACK_SECRET_KEY not configured');
+        console.error('[Commit-to-Group-Buy] PAYSTACK_SECRET_KEY not configured');
         return new Response(JSON.stringify({ error: 'Payment service not configured' }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      // Fetch dynamic callback URL from app_config, fallback to APP_BASE_URL env var
+      // Get callback URL from config or env
       const { data: configData } = await supabase
         .from('app_config')
         .select('value')
         .eq('key', 'live_callback_url')
         .maybeSingle();
       
-      const dynamicBaseUrl = (configData?.value as any)?.url || Deno.env.get('APP_BASE_URL');
+      const appBaseUrl = (configData?.value as any)?.url || Deno.env.get('APP_BASE_URL');
 
-      if (!dynamicBaseUrl) {
-        console.error('❌ APP_BASE_URL not configured');
+      if (!appBaseUrl) {
+        console.error('[Commit-to-Group-Buy] APP_BASE_URL not configured');
         return new Response(JSON.stringify({ error: 'Application base URL not configured' }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
+
+      // SERVER-SIDE AMOUNT CALCULATION - never trust client
+      const amountInKobo = Math.round(commitmentPrice * quantity * 100);
+
+      console.log(`[Commit-to-Group-Buy] Paystack amount: ${amountInKobo} kobo`);
 
       const paystackResponse = await fetch('https://api.paystack.co/transaction/initialize', {
         method: 'POST',
@@ -288,28 +293,28 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           email: profile?.email || user.email,
-          amount: Math.round(Number(campaign.discount_price) * quantity * 100),
+          amount: amountInKobo,
           metadata: {
             commitment_id: commitment.id,
             campaign_id: campaignId,
             user_id: user.id,
             type: 'group_buy_commitment'
           },
-          callback_url: `${dynamicBaseUrl}/checkout/success?commitment_id=${commitment.id}&type=group_buy`
+          callback_url: `${appBaseUrl}/checkout/success?commitment_id=${commitment.id}&type=group_buy`
         }),
       });
 
       const paystackData = await paystackResponse.json();
 
       if (!paystackData.status) {
-        console.error('❌ Paystack error:', paystackData);
+        console.error('[Commit-to-Group-Buy] Paystack error:', paystackData);
         return new Response(JSON.stringify({ error: 'Payment initialization failed' }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      console.log('✅ Paystack payment initialized with callback URL:', `${dynamicBaseUrl}/profile/groupbuys`);
+      console.log('[Commit-to-Group-Buy] Payment URL generated successfully');
 
       return new Response(JSON.stringify({
         commitment,
@@ -322,7 +327,7 @@ serve(async (req) => {
     }
 
     // pay_on_success mode - just return success
-    console.log('✅ Commitment completed (pay_on_success mode)');
+    console.log('[Commit-to-Group-Buy] Success (pay_on_success mode)');
     return new Response(JSON.stringify({
       commitment,
       message: 'Commitment created successfully. You will be notified when the goal is reached.'
@@ -332,8 +337,8 @@ serve(async (req) => {
     });
 
   } catch (error: any) {
-    console.error('💥 Error in commit-to-group-buy:', error);
-    console.error('Stack trace:', error.stack);
+    console.error('[Commit-to-Group-Buy] Error:', error.message);
+    console.error('[Commit-to-Group-Buy] Stack:', error.stack);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

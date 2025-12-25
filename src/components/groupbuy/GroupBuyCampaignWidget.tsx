@@ -1,13 +1,12 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Share2, Users, Clock, Tag, AlertTriangle, Minus, Plus } from "lucide-react";
+import { Share2, Users, Clock, Minus, Plus, Crown, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 
 interface GroupBuyCampaignWidgetProps {
   campaignId: string;
@@ -40,7 +39,7 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
       const distance = expiry - now;
 
       if (distance < 0) {
-        setTimeLeft("Expired");
+        setTimeLeft("Closed");
         setIsExpired(true);
         return;
       }
@@ -51,7 +50,7 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
       const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
 
       if (days > 0) {
-        setTimeLeft(`${days}d ${hours}h ${minutes}m`);
+        setTimeLeft(`${days}d ${hours}h`);
       } else if (hours > 0) {
         setTimeLeft(`${hours}h ${minutes}m`);
       } else {
@@ -74,7 +73,6 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
 
       if (error) throw error;
       
-      // Check if campaign is actually active and not expired
       const now = new Date();
       const expiry = new Date(data.expiry_at);
       const status = data.status as CampaignStatus;
@@ -86,7 +84,7 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
       setCampaign(data);
     } catch (error: any) {
       console.error('Error fetching campaign:', error);
-      toast.error('Failed to load group buy details');
+      toast.error('Failed to load circle details');
     } finally {
       setLoading(false);
     }
@@ -110,17 +108,16 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
   const handleCommit = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
-      toast.error('Please sign in to join this group buy');
+      toast.error('Please sign in to join this circle');
       navigate('/auth');
       return;
     }
 
     if (isExpired) {
-      toast.error('This group buy has expired');
+      toast.error('This circle has closed');
       return;
     }
 
-    // Validate quantity doesn't exceed remaining spots
     const remainingSpots = campaign.goal_quantity - campaign.current_quantity;
     if (quantity > remainingSpots) {
       toast.error(`Only ${remainingSpots} spots remaining`);
@@ -135,7 +132,7 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
 
       if (error) {
         if (error.message?.includes('already have a commitment')) {
-          toast.error('You have already joined this group buy. Check your profile page.');
+          toast.error('You have already joined this circle.');
           navigate('/profile/groupbuys');
           return;
         }
@@ -145,7 +142,7 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
       if (data?.paymentUrl) {
         window.location.href = data.paymentUrl;
       } else {
-        toast.success('Successfully joined the group buy! You will be notified when the goal is reached.');
+        toast.success('Welcome to the Circle! You will be notified when the goal is reached.');
         fetchCampaign();
         checkUserCommitment();
       }
@@ -153,14 +150,14 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
       console.error('Commit error:', error);
       
       if (error.message?.includes('already have a commitment')) {
-        toast.error('You have already joined this group buy.');
+        toast.error('You have already joined this circle.');
       } else if (error.message?.includes('Campaign has expired')) {
-        toast.error('This group buy campaign has expired.');
+        toast.error('This circle has closed.');
         setIsExpired(true);
       } else if (error.message?.includes('Campaign is not active')) {
-        toast.error('This group buy is no longer active.');
+        toast.error('This circle is no longer active.');
       } else {
-        toast.error('Unable to join group buy. Please try again later.');
+        toast.error('Unable to join circle. Please try again.');
       }
     } finally {
       setCommitting(false);
@@ -169,45 +166,34 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
 
   const handleShare = async () => {
     const shareUrl = window.location.href;
-    const shareText = `Join me in this group buy for ${campaign.products?.name} at ₦${campaign.discount_price?.toLocaleString()}!`;
+    const shareText = `Join me in this exclusive Sentra Circle for ${campaign.products?.name} at ₦${campaign.discount_price?.toLocaleString()}!`;
 
     if (navigator.share) {
       try {
         await navigator.share({ 
-          title: campaign.products?.name, 
+          title: `Sentra Circle: ${campaign.products?.name}`, 
           text: shareText, 
           url: shareUrl 
         });
-        toast.success('Shared successfully!');
       } catch (error: any) {
         if (error.name !== 'AbortError') {
-          try {
-            await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
-            toast.success('Link copied to clipboard!');
-          } catch (clipboardError) {
-            toast.error('Unable to share. Please copy the URL manually.');
-          }
+          await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
+          toast.success('Link copied!');
         }
       }
     } else {
-      try {
-        await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
-        toast.success('Link copied to clipboard!');
-      } catch (error) {
-        toast.error('Unable to copy link. Please copy the URL manually.');
-      }
+      await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
+      toast.success('Link copied!');
     }
   };
 
   if (loading) {
-    return <div className="animate-pulse h-64 bg-muted rounded-lg" />;
+    return <div className="animate-pulse h-64 bg-muted/30 rounded-lg" />;
   }
 
   if (!campaign) return null;
 
-  // Validate campaign data
   const hasValidData = campaign.discount_price > 0 && campaign.goal_quantity > 0;
-
   const progress = campaign.goal_quantity > 0 
     ? Math.min((campaign.current_quantity / campaign.goal_quantity) * 100, 100) 
     : 0;
@@ -217,173 +203,169 @@ export const GroupBuyCampaignWidget = ({ campaignId, productId }: GroupBuyCampai
 
   const status = campaign.status as CampaignStatus;
   const isInactive = isExpired || ['expired', 'failed_expired', 'cancelled', 'completed', 'goal_met_paid_finalized'].includes(status);
+  const spotsRemaining = campaign.goal_quantity - campaign.current_quantity;
 
-  // If campaign has invalid data, show warning instead
   if (!hasValidData) {
     return (
-      <Card className="p-6 bg-muted/50 border-2 border-muted">
+      <Card className="p-6 bg-muted/20 border border-border/50">
         <div className="text-center space-y-2">
-          <AlertTriangle className="w-8 h-8 mx-auto text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            This group buy campaign is not properly configured.
+            Circle details unavailable.
           </p>
         </div>
       </Card>
     );
   }
 
-  const getStatusBadge = () => {
-    if (status === 'goal_met_pending_payment' || status === 'goal_reached') {
-      return (
-        <Badge variant="default" className="text-sm bg-green-600">
-          <Tag className="w-3 h-3 mr-1" />
-          Goal Reached!
-        </Badge>
-      );
-    }
-    if (isInactive) {
-      return (
-        <Badge variant="secondary" className="text-sm">
-          <AlertTriangle className="w-3 h-3 mr-1" />
-          Campaign Ended
-        </Badge>
-      );
-    }
-    return (
-      <Badge variant="default" className="text-sm">
-        <Tag className="w-3 h-3 mr-1" />
-        Group Buy Active
-      </Badge>
-    );
-  };
-
   return (
-    <Card className={`p-6 border-2 ${isInactive ? 'bg-muted/50 border-muted' : 'bg-gradient-to-br from-primary/5 to-secondary/5 border-primary/20'}`}>
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          {getStatusBadge()}
-          {!isInactive && (
-            <Button variant="ghost" size="sm" onClick={handleShare}>
-              <Share2 className="w-4 h-4 mr-2" />
-              Share
-            </Button>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-baseline gap-2">
-            <span className={`text-3xl font-bold ${isInactive ? 'text-muted-foreground' : 'text-primary'}`}>
-              ₦{campaign.discount_price?.toLocaleString()}
-            </span>
-            {campaign.products?.price && (
-              <span className="text-lg text-muted-foreground line-through">
-                ₦{campaign.products.price?.toLocaleString()}
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+    >
+      <Card className={`overflow-hidden border ${isInactive ? 'bg-muted/20 border-border/50' : 'glass-gold'}`}>
+        {/* Header */}
+        <div className={`px-6 py-4 ${isInactive ? 'bg-muted/30' : 'bg-secondary/5'}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Crown className={`w-4 h-4 ${isInactive ? 'text-muted-foreground' : 'text-secondary'}`} />
+              <span className={`text-xs uppercase tracking-[0.2em] font-medium ${isInactive ? 'text-muted-foreground' : 'text-secondary'}`}>
+                {isInactive ? 'Circle Closed' : status === 'goal_reached' || status === 'goal_met_pending_payment' ? 'Goal Reached' : 'Sentra Circle'}
               </span>
-            )}
-            {savingsPercent > 0 && (
-              <Badge variant="secondary" className="ml-2">Save {savingsPercent}%</Badge>
+            </div>
+            {!isInactive && (
+              <Button variant="ghost" size="sm" onClick={handleShare} className="h-8 px-2">
+                <Share2 className="w-4 h-4" />
+              </Button>
             )}
           </div>
-          {!isInactive && (
-            <p className="text-sm text-muted-foreground">
-              {campaign.payment_mode === 'pay_on_success' 
-                ? 'Pay only when the goal is reached' 
-                : 'Pay now to secure your spot'}
-            </p>
-          )}
         </div>
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <span className="flex items-center gap-1">
-              <Users className="w-4 h-4" />
-              Progress
-            </span>
-            <span className="font-semibold">{campaign.current_quantity} / {campaign.goal_quantity}</span>
+        <div className="p-6 space-y-5">
+          {/* Price */}
+          <div className="space-y-1">
+            <div className="flex items-baseline gap-3">
+              <span className={`text-3xl font-serif ${isInactive ? 'text-muted-foreground' : 'text-foreground'}`}>
+                ₦{campaign.discount_price?.toLocaleString()}
+              </span>
+              {campaign.products?.price && (
+                <span className="text-base text-muted-foreground line-through">
+                  ₦{campaign.products.price?.toLocaleString()}
+                </span>
+              )}
+            </div>
+            {savingsPercent > 0 && !isInactive && (
+              <p className="text-sm text-secondary font-medium">
+                Save {savingsPercent}% when you join
+              </p>
+            )}
           </div>
-          <Progress value={progress} className="h-2" />
-        </div>
 
-        {!isInactive && (
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Clock className="w-4 h-4" />
-              Time left
-            </span>
-            <span className={`font-medium ${timeLeft === 'Expired' ? 'text-destructive' : ''}`}>
-              {timeLeft}
-            </span>
-          </div>
-        )}
-
-        {isInactive ? (
-          <div className="text-center py-2">
-            <p className="text-sm text-muted-foreground">
-              This group buy campaign has ended.
-            </p>
-          </div>
-        ) : userCommitment ? (
-          <Button 
-            onClick={() => navigate('/profile/groupbuys')} 
-            className="w-full" 
-            size="lg"
-            variant="secondary"
-          >
-            View Your Commitment
-          </Button>
-        ) : (
+          {/* Progress */}
           <div className="space-y-3">
-            {/* Quantity Selector */}
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Quantity</span>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                  disabled={quantity <= 1}
-                >
-                  <Minus className="h-4 w-4" />
-                </Button>
-                <span className="w-8 text-center font-semibold">{quantity}</span>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setQuantity(q => Math.min(10, campaign.goal_quantity - campaign.current_quantity, q + 1))}
-                  disabled={quantity >= Math.min(10, campaign.goal_quantity - campaign.current_quantity)}
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="flex items-center gap-2 text-muted-foreground">
+                <Users className="w-4 h-4" />
+                Member Slots
+              </span>
+              <span className="font-medium">{campaign.current_quantity} / {campaign.goal_quantity}</span>
             </div>
             
-            {/* Total Price */}
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Total</span>
-              <span className="font-bold text-primary">
-                ₦{(campaign.discount_price * quantity)?.toLocaleString()}
-              </span>
+            {/* Elegant thin progress line */}
+            <div className="relative h-1 bg-muted/50 rounded-full overflow-hidden">
+              <motion.div 
+                className="absolute inset-y-0 left-0 bg-secondary rounded-full"
+                initial={{ width: 0 }}
+                animate={{ width: `${progress}%` }}
+                transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+              />
             </div>
-
-            <Button 
-              onClick={handleCommit} 
-              className="w-full" 
-              size="lg"
-              disabled={committing}
-            >
-              {committing ? 'Processing...' : 'Commit to Buy'}
-            </Button>
+            
+            {!isInactive && spotsRemaining > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {spotsRemaining} {spotsRemaining === 1 ? 'spot' : 'spots'} remaining
+              </p>
+            )}
           </div>
-        )}
 
-        {!isInactive && !userCommitment && (
-          <p className="text-xs text-center text-muted-foreground">
-            Join others in this group buy to unlock the special price!
-          </p>
-        )}
-      </div>
-    </Card>
+          {/* Timer */}
+          {!isInactive && (
+            <div className="flex items-center justify-between text-sm py-2 border-t border-border/50">
+              <span className="flex items-center gap-2 text-muted-foreground">
+                <Clock className="w-4 h-4" />
+                Circle closes in
+              </span>
+              <span className="font-medium text-amber">{timeLeft}</span>
+            </div>
+          )}
+
+          {/* Action Area */}
+          {isInactive ? (
+            <p className="text-center text-sm text-muted-foreground py-2">
+              This circle has ended.
+            </p>
+          ) : userCommitment ? (
+            <Button 
+              onClick={() => navigate('/profile/groupbuys')} 
+              variant="outline"
+              className="w-full h-12 border-secondary/30 text-secondary hover:bg-secondary/5"
+            >
+              <Sparkles className="w-4 h-4 mr-2" />
+              View Your Membership
+            </Button>
+          ) : (
+            <div className="space-y-4">
+              {/* Quantity Selector */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Quantity</span>
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 rounded-full border-border/50"
+                    onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                    disabled={quantity <= 1}
+                  >
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                  <span className="w-8 text-center font-medium">{quantity}</span>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 rounded-full border-border/50"
+                    onClick={() => setQuantity(q => Math.min(10, spotsRemaining, q + 1))}
+                    disabled={quantity >= Math.min(10, spotsRemaining)}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Total */}
+              <div className="flex items-center justify-between py-3 border-t border-border/50">
+                <span className="text-sm text-muted-foreground">Total</span>
+                <span className="text-lg font-serif text-foreground">
+                  ₦{(campaign.discount_price * quantity)?.toLocaleString()}
+                </span>
+              </div>
+
+              <Button 
+                onClick={handleCommit} 
+                className="w-full h-12 bg-secondary hover:bg-secondary/90 text-secondary-foreground font-medium"
+                disabled={committing}
+              >
+                {committing ? 'Processing...' : 'Join This Circle'}
+              </Button>
+              
+              <p className="text-xs text-center text-muted-foreground">
+                {campaign.payment_mode === 'pay_on_success' 
+                  ? 'You\'ll only be charged when the goal is reached' 
+                  : 'Secure your spot with payment now'}
+              </p>
+            </div>
+          )}
+        </div>
+      </Card>
+    </motion.div>
   );
 };

@@ -10,9 +10,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
-import { Sparkles, SlidersHorizontal, Search, Users } from 'lucide-react';
+import { Sparkles, SlidersHorizontal, Search, Crown } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { CountdownBadge } from '@/components/groupbuy/CountdownBadge';
+import { StaggerContainer, StaggerItem, FadeUp } from '@/components/layout/PageTransition';
+import { motion } from 'framer-motion';
 
 interface GroupBuyCampaign {
   id: string;
@@ -36,7 +38,6 @@ export default function Products() {
   const [maxPrice, setMaxPrice] = useState(1000000);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Sync URL search param with local state on mount
   useEffect(() => {
     const urlQuery = searchParams.get('q') || '';
     setSearchQuery(urlQuery);
@@ -45,7 +46,6 @@ export default function Products() {
   useEffect(() => {
     loadData();
     
-    // Update URL param for persistence
     const newSearchParams = new URLSearchParams(searchParams.toString());
     if (searchQuery) {
       newSearchParams.set('q', searchQuery);
@@ -81,7 +81,6 @@ export default function Products() {
       query = query.in('vendor_id', selectedVendors);
     }
 
-    // Sorting
     switch (sortBy) {
       case 'price-asc':
         query = query.order('price', { ascending: true });
@@ -99,7 +98,6 @@ export default function Products() {
     const { data } = await query;
     let filteredData = data || [];
 
-    // Client-side search filtering
     if (searchQuery) {
       const lowerCaseQuery = searchQuery.toLowerCase();
       filteredData = filteredData.filter(p => 
@@ -142,32 +140,32 @@ export default function Products() {
   };
 
   const FilterSidebar = () => (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <h3 className="font-semibold mb-4">Search</h3>
+        <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-4">Search</h3>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input 
             type="text" 
-            placeholder="Search products..." 
+            placeholder="Search..." 
             value={searchQuery}
             onChange={handleSearchChange}
-            className="pl-9"
+            className="pl-9 border-border/50"
           />
         </div>
       </div>
 
       <div>
-        <h3 className="font-semibold mb-4">Categories</h3>
-        <div className="space-y-2">
+        <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-4">Categories</h3>
+        <div className="space-y-3">
           {categories.map((category) => (
-            <div key={category.id} className="flex items-center space-x-2">
+            <div key={category.id} className="flex items-center space-x-3">
               <Checkbox
                 id={category.id}
                 checked={selectedCategories.includes(category.id)}
                 onCheckedChange={() => toggleCategory(category.id)}
               />
-              <Label htmlFor={category.id} className="cursor-pointer">
+              <Label htmlFor={category.id} className="cursor-pointer text-sm">
                 {category.name}
               </Label>
             </div>
@@ -176,16 +174,16 @@ export default function Products() {
       </div>
 
       <div>
-        <h3 className="font-semibold mb-4">Vendors</h3>
-        <div className="space-y-2">
+        <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-4">Brands</h3>
+        <div className="space-y-3">
           {vendors.map((vendor) => (
-            <div key={vendor.id} className="flex items-center space-x-2">
+            <div key={vendor.id} className="flex items-center space-x-3">
               <Checkbox
                 id={`vendor-${vendor.id}`}
                 checked={selectedVendors.includes(vendor.id)}
                 onCheckedChange={() => toggleVendor(vendor.id)}
               />
-              <Label htmlFor={`vendor-${vendor.id}`} className="cursor-pointer">
+              <Label htmlFor={`vendor-${vendor.id}`} className="cursor-pointer text-sm">
                 {vendor.rep_full_name}
               </Label>
             </div>
@@ -194,9 +192,9 @@ export default function Products() {
       </div>
 
       <div>
-        <h3 className="font-semibold mb-4">Sort By</h3>
+        <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-4">Sort</h3>
         <Select value={sortBy} onValueChange={setSortBy}>
-          <SelectTrigger>
+          <SelectTrigger className="border-border/50">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -214,11 +212,15 @@ export default function Products() {
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      <div className="container mx-auto px-4 py-6 md:py-8">
-        <div className="mb-6 md:mb-8">
-          <h1 className="text-3xl md:text-4xl font-bold mb-2">Our Collection</h1>
-          <p className="text-sm md:text-base text-muted-foreground">Discover luxury perfumes crafted to perfection</p>
-        </div>
+      <div className="container mx-auto px-4 py-8 md:py-12">
+        <FadeUp>
+          <div className="mb-10 md:mb-16 text-center">
+            <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground mb-4">
+              Curated Selection
+            </p>
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-serif">Our Collection</h1>
+          </div>
+        </FadeUp>
 
         {/* Mobile Search Bar */}
         <div className="lg:hidden w-full mb-6">
@@ -226,30 +228,32 @@ export default function Products() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input 
               type="text" 
-              placeholder="Search products..." 
+              placeholder="Search..." 
               value={searchQuery}
               onChange={handleSearchChange}
-              className="w-full pl-9"
+              className="w-full pl-9 border-border/50"
             />
           </div>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
+        <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
           {/* Desktop Filters */}
-          <aside className="hidden lg:block w-64 flex-shrink-0">
-            <FilterSidebar />
+          <aside className="hidden lg:block w-56 flex-shrink-0">
+            <div className="sticky top-24">
+              <FilterSidebar />
+            </div>
           </aside>
 
           {/* Mobile Filters */}
           <div className="lg:hidden w-full">
             <Sheet>
               <SheetTrigger asChild>
-                <Button variant="outline" className="w-full justify-between">
+                <Button variant="outline" className="w-full justify-between border-border/50">
                   <SlidersHorizontal className="h-4 w-4 mr-2" />
-                  Filters & Sort
+                  Filters
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left">
+              <SheetContent side="left" className="bg-card">
                 <div className="mt-8">
                   <FilterSidebar />
                 </div>
@@ -260,18 +264,19 @@ export default function Products() {
           {/* Products Grid */}
           <div className="flex-1">
             {loading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[...Array(6)].map((_, i) => (
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+                {[...Array(9)].map((_, i) => (
                   <div key={i} className="animate-pulse">
-                    <div className="aspect-square bg-muted rounded-lg mb-4" />
-                    <div className="h-4 bg-muted rounded w-3/4 mb-2" />
-                    <div className="h-4 bg-muted rounded w-1/2" />
+                    <div className="aspect-[3/4] bg-muted/30 rounded-lg mb-4" />
+                    <div className="h-3 bg-muted/30 rounded w-1/2 mb-2" />
+                    <div className="h-4 bg-muted/30 rounded w-3/4 mb-2" />
+                    <div className="h-4 bg-muted/30 rounded w-1/3" />
                   </div>
                 ))}
               </div>
             ) : products.length === 0 ? (
               <div className="text-center py-20">
-                <p className="text-muted-foreground text-lg">No products found</p>
+                <p className="text-muted-foreground">No products found</p>
                 {searchQuery && (
                   <Button variant="link" onClick={() => setSearchQuery('')} className="mt-2">
                     Clear search
@@ -279,7 +284,7 @@ export default function Products() {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+              <StaggerContainer className="grid grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
                 {products.map((product) => {
                   const displayImage = product.images && Array.isArray(product.images) && product.images.length > 0
                     ? product.images[0]
@@ -289,63 +294,67 @@ export default function Products() {
                   const hasActiveGroupBuy = isGroupBuyActive(campaign);
 
                   return (
-                    <Card key={product.id} className="group overflow-hidden border-0 bg-card hover:shadow-gold transition-all duration-500 hover:-translate-y-1">
-                      <Link to={`/products/${product.id}`} className="block">
-                        <div className="aspect-square bg-muted/50 overflow-hidden relative flex items-center justify-center">
-                          {displayImage ? (
-                            <img
-                              src={displayImage}
-                              alt={product.name}
-                              className="w-full h-full object-contain p-2 group-hover:scale-105 transition-all duration-700 ease-out"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center gradient-primary">
-                              <Sparkles className="h-16 w-16 text-primary-foreground/30" />
-                            </div>
-                          )}
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-                          
-                          {/* Group Buy Badges */}
-                          {hasActiveGroupBuy && campaign && (
-                            <>
-                              <Badge className="absolute top-3 left-3 bg-primary text-primary-foreground shadow-lg">
-                                <Users className="w-3 h-3 mr-1" />
-                                Group Buy
-                              </Badge>
-                              <CountdownBadge 
-                                expiryAt={campaign.expiry_at} 
-                                className="absolute top-3 right-3"
+                    <StaggerItem key={product.id}>
+                      <Link to={`/products/${product.id}`} className="group block">
+                        <Card className="overflow-hidden border-0 bg-transparent hover-lift">
+                          <div className="relative aspect-[3/4] bg-accent overflow-hidden rounded-lg image-zoom">
+                            {displayImage ? (
+                              <img
+                                src={displayImage}
+                                alt={product.name}
+                                className="w-full h-full object-cover"
+                                loading="lazy"
                               />
-                            </>
-                          )}
-                        </div>
-                        <CardContent className="p-5 space-y-3">
-                          <h3 className="font-display text-lg font-semibold line-clamp-2 min-h-[3.5rem] group-hover:text-secondary transition-colors duration-300">
-                            {product.name}
-                          </h3>
-                          {product.scent_profile && (
-                            <p className="text-sm text-muted-foreground capitalize tracking-wide">
-                              {product.scent_profile}
-                            </p>
-                          )}
-                          <div className="space-y-3 pt-2">
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-muted/30">
+                                <Sparkles className="h-12 w-12 text-muted-foreground/30" />
+                              </div>
+                            )}
+                            
+                            {/* Badges */}
+                            {hasActiveGroupBuy && campaign && (
+                              <>
+                                <Badge className="absolute top-3 left-3 bg-secondary/90 text-secondary-foreground shadow-lg backdrop-blur-sm">
+                                  <Crown className="w-3 h-3 mr-1" />
+                                  Circle
+                                </Badge>
+                                <CountdownBadge 
+                                  expiryAt={campaign.expiry_at} 
+                                  className="absolute top-3 right-3"
+                                />
+                              </>
+                            )}
+                            
+                            {/* Quick View Overlay */}
+                            <div className="absolute inset-0 bg-foreground/0 group-hover:bg-foreground/5 transition-colors duration-500 flex items-end justify-center pb-6 opacity-0 group-hover:opacity-100">
+                              <Button variant="outline" size="sm" className="bg-background/90 backdrop-blur-sm border-0 text-xs tracking-wider">
+                                {hasActiveGroupBuy ? 'Join Circle' : 'View Details'}
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          <CardContent className="p-4 space-y-2">
+                            {product.vendors?.rep_full_name && (
+                              <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-serif">
+                                {product.vendors.rep_full_name}
+                              </p>
+                            )}
+                            <h3 className="font-medium text-sm line-clamp-2 group-hover:text-secondary transition-colors duration-300">
+                              {product.name}
+                            </h3>
                             <div className="flex items-baseline gap-2 flex-wrap">
                               {hasActiveGroupBuy && campaign ? (
                                 <>
-                                  <span className="text-2xl font-bold text-primary">
+                                  <span className="text-lg font-serif text-secondary">
                                     ₦{campaign.discount_price?.toLocaleString()}
                                   </span>
                                   <span className="text-sm text-muted-foreground line-through">
                                     ₦{product.price?.toLocaleString()}
                                   </span>
-                                  <Badge variant="secondary" className="text-xs">
-                                    {campaign.current_quantity}/{campaign.goal_quantity} joined
-                                  </Badge>
                                 </>
                               ) : (
                                 <>
-                                  <span className="text-2xl font-bold text-foreground">
+                                  <span className="text-lg font-serif">
                                     ₦{product.price?.toLocaleString()}
                                   </span>
                                   {product.original_price && product.original_price > product.price && (
@@ -356,18 +365,13 @@ export default function Products() {
                                 </>
                               )}
                             </div>
-                            <Button 
-                              className="w-full bg-primary hover:bg-secondary hover:text-secondary-foreground transition-all duration-300 font-medium"
-                            >
-                              {hasActiveGroupBuy ? 'Join Group Buy' : 'View Details'}
-                            </Button>
-                          </div>
-                        </CardContent>
+                          </CardContent>
+                        </Card>
                       </Link>
-                    </Card>
+                    </StaggerItem>
                   );
                 })}
-              </div>
+              </StaggerContainer>
             )}
           </div>
         </div>

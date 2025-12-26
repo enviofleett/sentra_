@@ -14,6 +14,72 @@ export type Database = {
   }
   public: {
     Tables: {
+      affiliate_config: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          key: string
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          key?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
+      }
+      affiliate_links: {
+        Row: {
+          clicks: number
+          code: string
+          conversions: number
+          created_at: string
+          id: string
+          is_active: boolean
+          signups: number
+          total_revenue: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          clicks?: number
+          code: string
+          conversions?: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          signups?: number
+          total_revenue?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          clicks?: number
+          code?: string
+          conversions?: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          signups?: number
+          total_revenue?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       app_config: {
         Row: {
           created_at: string | null
@@ -307,6 +373,36 @@ export type Database = {
           },
         ]
       }
+      monthly_volumes: {
+        Row: {
+          created_at: string
+          id: string
+          order_count: number
+          total_volume: number
+          updated_at: string
+          user_id: string
+          year_month: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          order_count?: number
+          total_volume?: number
+          updated_at?: string
+          user_id: string
+          year_month: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          order_count?: number
+          total_volume?: number
+          updated_at?: string
+          user_id?: string
+          year_month?: string
+        }
+        Relationships: []
+      }
       orders: {
         Row: {
           billing_address: Json | null
@@ -529,36 +625,56 @@ export type Database = {
       }
       profiles: {
         Row: {
+          affiliate_code: string | null
           created_at: string
+          current_rank_id: string | null
           default_billing_address: Json | null
           default_shipping_address: Json | null
           email: string
           full_name: string | null
           id: string
           phone: string | null
+          rank_updated_at: string | null
+          referred_by: string | null
           updated_at: string
         }
         Insert: {
+          affiliate_code?: string | null
           created_at?: string
+          current_rank_id?: string | null
           default_billing_address?: Json | null
           default_shipping_address?: Json | null
           email: string
           full_name?: string | null
           id: string
           phone?: string | null
+          rank_updated_at?: string | null
+          referred_by?: string | null
           updated_at?: string
         }
         Update: {
+          affiliate_code?: string | null
           created_at?: string
+          current_rank_id?: string | null
           default_billing_address?: Json | null
           default_shipping_address?: Json | null
           email?: string
           full_name?: string | null
           id?: string
           phone?: string | null
+          rank_updated_at?: string | null
+          referred_by?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_current_rank_id_fkey"
+            columns: ["current_rank_id"]
+            isOneToOne: false
+            referencedRelation: "reseller_ranks"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profit_allocations: {
         Row: {
@@ -660,6 +776,92 @@ export type Database = {
         }
         Relationships: []
       }
+      referrals: {
+        Row: {
+          affiliate_link_id: string | null
+          commission_paid: number
+          created_at: string
+          first_order_id: string | null
+          id: string
+          referred_id: string
+          referrer_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          affiliate_link_id?: string | null
+          commission_paid?: number
+          created_at?: string
+          first_order_id?: string | null
+          id?: string
+          referred_id: string
+          referrer_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          affiliate_link_id?: string | null
+          commission_paid?: number
+          created_at?: string
+          first_order_id?: string | null
+          id?: string
+          referred_id?: string
+          referrer_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referrals_affiliate_link_id_fkey"
+            columns: ["affiliate_link_id"]
+            isOneToOne: false
+            referencedRelation: "affiliate_links"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reseller_ranks: {
+        Row: {
+          badge_color: string | null
+          created_at: string
+          description: string | null
+          discount_percentage: number
+          display_order: number
+          id: string
+          is_active: boolean
+          min_monthly_volume: number
+          name: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          badge_color?: string | null
+          created_at?: string
+          description?: string | null
+          discount_percentage?: number
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          min_monthly_volume?: number
+          name: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          badge_color?: string | null
+          created_at?: string
+          description?: string | null
+          discount_percentage?: number
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          min_monthly_volume?: number
+          name?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       scent_profiles: {
         Row: {
           created_at: string | null
@@ -710,6 +912,42 @@ export type Database = {
           created_at?: string
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_wallets: {
+        Row: {
+          balance_promo: number
+          balance_real: number
+          created_at: string
+          id: string
+          pending_withdrawal: number
+          total_earned: number
+          total_withdrawn: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          balance_promo?: number
+          balance_real?: number
+          created_at?: string
+          id?: string
+          pending_withdrawal?: number
+          total_earned?: number
+          total_withdrawn?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          balance_promo?: number
+          balance_real?: number
+          created_at?: string
+          id?: string
+          pending_withdrawal?: number
+          total_earned?: number
+          total_withdrawn?: number
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
@@ -792,6 +1030,115 @@ export type Database = {
         }
         Relationships: []
       }
+      wallet_transactions: {
+        Row: {
+          amount: number
+          balance_after: number
+          created_at: string
+          description: string | null
+          id: string
+          is_promo: boolean
+          metadata: Json | null
+          reference_id: string | null
+          reference_type: string | null
+          type: Database["public"]["Enums"]["wallet_transaction_type"]
+          user_id: string
+          wallet_id: string
+        }
+        Insert: {
+          amount: number
+          balance_after: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_promo?: boolean
+          metadata?: Json | null
+          reference_id?: string | null
+          reference_type?: string | null
+          type: Database["public"]["Enums"]["wallet_transaction_type"]
+          user_id: string
+          wallet_id: string
+        }
+        Update: {
+          amount?: number
+          balance_after?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_promo?: boolean
+          metadata?: Json | null
+          reference_id?: string | null
+          reference_type?: string | null
+          type?: Database["public"]["Enums"]["wallet_transaction_type"]
+          user_id?: string
+          wallet_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wallet_transactions_wallet_id_fkey"
+            columns: ["wallet_id"]
+            isOneToOne: false
+            referencedRelation: "user_wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      withdrawal_requests: {
+        Row: {
+          account_name: string
+          account_number: string
+          admin_notes: string | null
+          amount: number
+          bank_name: string
+          created_at: string
+          id: string
+          processed_at: string | null
+          processed_by: string | null
+          status: Database["public"]["Enums"]["withdrawal_status"]
+          updated_at: string
+          user_id: string
+          wallet_id: string
+        }
+        Insert: {
+          account_name: string
+          account_number: string
+          admin_notes?: string | null
+          amount: number
+          bank_name: string
+          created_at?: string
+          id?: string
+          processed_at?: string | null
+          processed_by?: string | null
+          status?: Database["public"]["Enums"]["withdrawal_status"]
+          updated_at?: string
+          user_id: string
+          wallet_id: string
+        }
+        Update: {
+          account_name?: string
+          account_number?: string
+          admin_notes?: string | null
+          amount?: number
+          bank_name?: string
+          created_at?: string
+          id?: string
+          processed_at?: string | null
+          processed_by?: string | null
+          status?: Database["public"]["Enums"]["withdrawal_status"]
+          updated_at?: string
+          user_id?: string
+          wallet_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "withdrawal_requests_wallet_id_fkey"
+            columns: ["wallet_id"]
+            isOneToOne: false
+            referencedRelation: "user_wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       profit_bucket_totals: {
@@ -807,6 +1154,15 @@ export type Database = {
       }
     }
     Functions: {
+      add_affiliate_commission: {
+        Args: {
+          p_commission_percentage?: number
+          p_order_amount: number
+          p_order_id: string
+          p_referrer_id: string
+        }
+        Returns: string
+      }
       atomic_decrement_campaign_quantity: {
         Args: { p_campaign_id: string; p_quantity: number }
         Returns: boolean
@@ -821,6 +1177,8 @@ export type Database = {
         }[]
       }
       cleanup_expired_campaigns: { Args: never; Returns: undefined }
+      ensure_user_wallet: { Args: { p_user_id: string }; Returns: string }
+      generate_affiliate_code: { Args: { p_user_id: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -830,6 +1188,15 @@ export type Database = {
       }
       is_admin: { Args: never; Returns: boolean }
       is_product_manager: { Args: never; Returns: boolean }
+      process_withdrawal: {
+        Args: {
+          p_admin_id: string
+          p_notes?: string
+          p_status: Database["public"]["Enums"]["withdrawal_status"]
+          p_withdrawal_id: string
+        }
+        Returns: boolean
+      }
       record_profit_split: {
         Args: {
           p_commitment_id: string
@@ -882,6 +1249,22 @@ export type Database = {
       payment_status: "pending" | "paid" | "failed" | "refunded"
       target_type: "global" | "product" | "category"
       threshold_type: "quantity" | "value"
+      wallet_transaction_type:
+        | "affiliate_commission"
+        | "reseller_bonus"
+        | "referral_signup"
+        | "promo_credit"
+        | "withdrawal_request"
+        | "withdrawal_completed"
+        | "withdrawal_cancelled"
+        | "admin_adjustment"
+      withdrawal_status:
+        | "pending"
+        | "approved"
+        | "processing"
+        | "completed"
+        | "rejected"
+        | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1050,6 +1433,24 @@ export const Constants = {
       payment_status: ["pending", "paid", "failed", "refunded"],
       target_type: ["global", "product", "category"],
       threshold_type: ["quantity", "value"],
+      wallet_transaction_type: [
+        "affiliate_commission",
+        "reseller_bonus",
+        "referral_signup",
+        "promo_credit",
+        "withdrawal_request",
+        "withdrawal_completed",
+        "withdrawal_cancelled",
+        "admin_adjustment",
+      ],
+      withdrawal_status: [
+        "pending",
+        "approved",
+        "processing",
+        "completed",
+        "rejected",
+        "cancelled",
+      ],
     },
   },
 } as const

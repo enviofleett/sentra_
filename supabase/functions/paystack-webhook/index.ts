@@ -6,6 +6,75 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Helper function to process affiliate commission
+async function processAffiliateCommission(
+  supabase: any, 
+  userId: string, 
+  orderId: string, 
+  orderAmount: number
+): Promise<void> {
+  try {
+    console.log(`[Paystack Webhook] Checking affiliate commission for user ${userId}`);
+    
+    // Check if user was referred by someone
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("referred_by")
+      .eq("id", userId)
+      .single();
+    
+    if (profileError || !profile?.referred_by) {
+      console.log(`[Paystack Webhook] No referrer found for user ${userId}`);
+      return;
+    }
+    
+    const referrerId = profile.referred_by;
+    console.log(`[Paystack Webhook] User ${userId} was referred by ${referrerId}`);
+    
+    // Get commission percentage from affiliate_config
+    const { data: config } = await supabase
+      .from("affiliate_config")
+      .select("value")
+      .eq("key", "commission_percentage")
+      .single();
+    
+    const commissionPercentage = config?.value ?? 5; // Default 5%
+    console.log(`[Paystack Webhook] Commission percentage: ${commissionPercentage}%`);
+    
+    // Call the add_affiliate_commission function
+    const { data: transactionId, error: commissionError } = await supabase
+      .rpc('add_affiliate_commission', {
+        p_referrer_id: referrerId,
+        p_order_id: orderId,
+        p_order_amount: orderAmount,
+        p_commission_percentage: commissionPercentage
+      });
+    
+    if (commissionError) {
+      console.error(`[Paystack Webhook] Affiliate commission error:`, commissionError);
+      return;
+    }
+    
+    console.log(`[Paystack Webhook] Affiliate commission credited - Transaction: ${transactionId}`);
+    
+    // Update referral status if exists
+    await supabase
+      .from("referrals")
+      .update({ 
+        status: 'converted',
+        first_order_id: orderId,
+        commission_paid: orderAmount * commissionPercentage / 100,
+        updated_at: new Date().toISOString()
+      })
+      .eq("referred_id", userId)
+      .eq("referrer_id", referrerId)
+      .eq("status", 'pending');
+      
+  } catch (error: any) {
+    console.error(`[Paystack Webhook] Affiliate commission processing error (non-blocking):`, error.message);
+  }
+}
+
 // Helper function to verify signature
 async function verifySignature(paystackSecretKey: string, rawBody: string, signature: string): Promise<boolean> {
   const encoder = new TextEncoder();
@@ -135,6 +204,9 @@ serve(async (req: Request) => {
         } else {
           console.log(`[Paystack Webhook] Profit split recorded: ${allocationId}`);
         }
+        
+        // Process affiliate commission if user was referred
+        await processAffiliateCommission(supabase, order.user_id, order.id, order.total_amount);
         
         console.log(`[Paystack Webhook] SUCCESS: Order ${order.id} updated to 'processing'`);
         return new Response(JSON.stringify({ message: "Order processed successfully" }), { status: 200 });
@@ -284,6 +356,9 @@ serve(async (req: Request) => {
           } else {
             console.log(`[Paystack Webhook] Profit split recorded: ${allocationId}`);
           }
+          
+          // Process affiliate commission for group buy order
+          await processAffiliateCommission(supabase, commitment.user_id, newOrder.id, totalAmount);
 
           console.log(`[Paystack Webhook] SUCCESS: Order ${newOrder.id} created for commitment ${commitmentId}`);
 
@@ -438,6 +513,9 @@ serve(async (req: Request) => {
         } else {
           console.log(`[Paystack Webhook] Profit split recorded: ${allocationId}`);
         }
+        
+        // Process affiliate commission for final payment order
+        await processAffiliateCommission(supabase, commitment.user_id, newOrder.id, totalAmount);
         
         console.log(`[Paystack Webhook] SUCCESS: Final payment processed - Order ${newOrder.id} created, Commitment ${commitmentId} finalized`);
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Gift } from 'lucide-react';
 
 // Validation schemas
 const signInSchema = z.object({
@@ -37,17 +38,19 @@ interface AuthFormContentProps {
   onSuccess?: () => void;
   initialTab?: 'signin' | 'signup';
   navigate?: ReturnType<typeof useNavigate>;
+  referralCode?: string;
 }
 
 export const AuthFormContent: React.FC<AuthFormContentProps> = ({ 
   onSuccess, 
   initialTab = 'signin',
-  navigate: externalNavigate
+  navigate: externalNavigate,
+  referralCode
 }) => {
   const defaultNavigate = useNavigate();
   const navigate = externalNavigate || defaultNavigate;
   const { signIn, signUp } = useAuth();
-  const [activeTab, setActiveTab] = useState<'signin' | 'signup'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'signin' | 'signup'>(referralCode ? 'signup' : initialTab);
 
   const signInForm = useForm<SignInFormData>({
     resolver: zodResolver(signInSchema),
@@ -114,7 +117,7 @@ export const AuthFormContent: React.FC<AuthFormContentProps> = ({
 
   const handleSignUp = async (data: SignUpFormData) => {
     try {
-      const { error } = await signUp(data.email, data.password, data.fullName);
+      const { error } = await signUp(data.email, data.password, data.fullName, referralCode);
       
       if (error) {
         let errorMessage = error.message;
@@ -162,6 +165,12 @@ export const AuthFormContent: React.FC<AuthFormContentProps> = ({
 
   return (
     <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'signin' | 'signup')}>
+      {referralCode && (
+        <div className="mb-4 p-3 bg-primary/10 border border-primary/20 rounded-lg flex items-center gap-2">
+          <Gift className="h-4 w-4 text-primary" />
+          <span className="text-sm text-primary">You were referred! Sign up to get started.</span>
+        </div>
+      )}
       <TabsList className="grid w-full grid-cols-2">
         <TabsTrigger value="signin">Sign In</TabsTrigger>
         <TabsTrigger value="signup">Sign Up</TabsTrigger>
@@ -298,8 +307,12 @@ export const AuthFormContent: React.FC<AuthFormContentProps> = ({
 
 export default function Auth() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { logoUrl } = useBranding();
+  
+  // Capture referral code from URL (?ref=CODE)
+  const referralCode = searchParams.get('ref') || searchParams.get('referral') || undefined;
 
   useEffect(() => {
     if (user) navigate('/');
@@ -319,7 +332,7 @@ export default function Auth() {
           <CardDescription className="text-center">Sign in to your account or create a new one</CardDescription>
         </CardHeader>
         <CardContent>
-          <AuthFormContent navigate={navigate} />
+          <AuthFormContent navigate={navigate} referralCode={referralCode} />
         </CardContent>
       </Card>
     </div>

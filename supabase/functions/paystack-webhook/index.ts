@@ -120,6 +120,22 @@ serve(async (req: Request) => {
           return new Response(JSON.stringify({ error: "Failed to update order" }), { status: 500 });
         }
         
+        // Record 4-way profit split
+        console.log(`[Paystack Webhook] Recording profit split for order ${order.id}`);
+        const { data: allocationId, error: splitError } = await supabase
+          .rpc('record_profit_split', {
+            p_order_id: order.id,
+            p_commitment_id: null,
+            p_payment_reference: reference,
+            p_total_amount: order.total_amount
+          });
+
+        if (splitError) {
+          console.error(`[Paystack Webhook] Profit split error (non-blocking):`, splitError);
+        } else {
+          console.log(`[Paystack Webhook] Profit split recorded: ${allocationId}`);
+        }
+        
         console.log(`[Paystack Webhook] SUCCESS: Order ${order.id} updated to 'processing'`);
         return new Response(JSON.stringify({ message: "Order processed successfully" }), { status: 200 });
 
@@ -252,6 +268,22 @@ serve(async (req: Request) => {
               updated_at: new Date().toISOString(),
             })
             .eq("id", commitmentId);
+
+          // Record 4-way profit split for group buy order
+          console.log(`[Paystack Webhook] Recording profit split for group buy order ${newOrder.id}`);
+          const { data: allocationId, error: splitError } = await supabase
+            .rpc('record_profit_split', {
+              p_order_id: newOrder.id,
+              p_commitment_id: commitmentId,
+              p_payment_reference: reference,
+              p_total_amount: totalAmount
+            });
+
+          if (splitError) {
+            console.error(`[Paystack Webhook] Profit split error (non-blocking):`, splitError);
+          } else {
+            console.log(`[Paystack Webhook] Profit split recorded: ${allocationId}`);
+          }
 
           console.log(`[Paystack Webhook] SUCCESS: Order ${newOrder.id} created for commitment ${commitmentId}`);
 
@@ -389,6 +421,22 @@ serve(async (req: Request) => {
         if (updateError) {
           console.error(`[Paystack Webhook] ERROR: Failed to update commitment ${commitmentId}:`, updateError);
           // Order was created, log but don't fail
+        }
+
+        // Record 4-way profit split for final payment
+        console.log(`[Paystack Webhook] Recording profit split for final payment order ${newOrder.id}`);
+        const { data: allocationId, error: splitError } = await supabase
+          .rpc('record_profit_split', {
+            p_order_id: newOrder.id,
+            p_commitment_id: commitmentId,
+            p_payment_reference: reference,
+            p_total_amount: totalAmount
+          });
+
+        if (splitError) {
+          console.error(`[Paystack Webhook] Profit split error (non-blocking):`, splitError);
+        } else {
+          console.log(`[Paystack Webhook] Profit split recorded: ${allocationId}`);
         }
         
         console.log(`[Paystack Webhook] SUCCESS: Final payment processed - Order ${newOrder.id} created, Commitment ${commitmentId} finalized`);

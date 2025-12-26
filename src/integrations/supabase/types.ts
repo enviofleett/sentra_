@@ -697,6 +697,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      atomic_decrement_campaign_quantity: {
+        Args: { p_campaign_id: string; p_quantity: number }
+        Returns: boolean
+      }
+      atomic_increment_campaign_quantity: {
+        Args: { p_campaign_id: string; p_quantity: number }
+        Returns: {
+          error_message: string
+          new_quantity: number
+          remaining_spots: number
+          success: boolean
+        }[]
+      }
       cleanup_expired_campaigns: { Args: never; Returns: undefined }
       has_role: {
         Args: {

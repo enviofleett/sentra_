@@ -145,50 +145,50 @@ serve(async (req) => {
       });
     }
 
-    // ATOMIC QUANTITY UPDATE with optimistic locking
-    // This single query ensures we don't oversell even under high concurrency
-    const currentVersion = campaign.version || 0;
-    const expectedNewQuantity = campaign.current_quantity + quantity;
-    const remainingSpots = campaign.goal_quantity - campaign.current_quantity;
+    // ATOMIC QUANTITY UPDATE using PostgreSQL row-level locking
+    // This prevents overselling even under high concurrency
+    console.log(`[Commit-to-Group-Buy] Attempting atomic quantity increment: +${quantity}`);
 
-    if (quantity > remainingSpots) {
+    interface AtomicResult {
+      success: boolean;
+      new_quantity: number;
+      remaining_spots: number;
+      error_message: string | null;
+    }
+
+    const { data: atomicResult, error: atomicError } = await supabase
+      .rpc('atomic_increment_campaign_quantity', {
+        p_campaign_id: campaignId,
+        p_quantity: quantity
+      })
+      .single<AtomicResult>();
+
+    if (atomicError) {
+      console.error('[Commit-to-Group-Buy] Atomic increment error:', atomicError);
       return new Response(JSON.stringify({ 
-        error: `Only ${remainingSpots} spots remaining`,
-        remainingSpots 
+        error: 'Failed to reserve spot. Please try again.',
+        details: atomicError.message
       }), {
-        status: 400,
+        status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    console.log(`[Commit-to-Group-Buy] Attempting atomic update - Version: ${currentVersion}, New Qty: ${expectedNewQuantity}`);
-
-    // Atomic update with version check prevents race conditions
-    const { data: updatedCampaign, error: updateError } = await supabase
-      .from('group_buy_campaigns')
-      .update({ 
-        current_quantity: expectedNewQuantity,
-        version: currentVersion + 1,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', campaignId)
-      .eq('version', currentVersion) // Optimistic lock - only update if version matches
-      .lte('current_quantity', campaign.goal_quantity - quantity) // Additional safety check
-      .select()
-      .single();
-
-    if (updateError || !updatedCampaign) {
-      console.error('[Commit-to-Group-Buy] Optimistic lock failed - concurrent update detected');
+    if (!atomicResult?.success) {
+      console.log(`[Commit-to-Group-Buy] Atomic increment failed: ${atomicResult?.error_message}`);
       return new Response(JSON.stringify({ 
-        error: 'Another user just updated this campaign. Please try again.',
-        retry: true
+        error: atomicResult?.error_message || 'Failed to reserve spot',
+        remainingSpots: atomicResult?.remaining_spots || 0,
+        retry: atomicResult?.error_message?.includes('spots remaining')
       }), {
         status: 409,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    console.log('[Commit-to-Group-Buy] Campaign quantity updated atomically');
+    const expectedNewQuantity = atomicResult.new_quantity;
+    const originalQuantity = expectedNewQuantity - quantity;
+    console.log(`[Commit-to-Group-Buy] Atomic increment success - New quantity: ${expectedNewQuantity}`);
 
     // SERVER-SIDE PRICE: Use discount_price from database, never from request
     const commitmentPrice = Number(campaign.discount_price);
@@ -207,16 +207,12 @@ serve(async (req) => {
       .single();
 
     if (commitmentError) {
-      console.error('[Commit-to-Group-Buy] Commitment creation failed, rolling back');
-      // Rollback campaign quantity
-      await supabase
-        .from('group_buy_campaigns')
-        .update({ 
-          current_quantity: campaign.current_quantity,
-          version: currentVersion,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', campaignId);
+      console.error('[Commit-to-Group-Buy] Commitment creation failed, rolling back quantity');
+      // Rollback campaign quantity using atomic decrement
+      await supabase.rpc('atomic_decrement_campaign_quantity', {
+        p_campaign_id: campaignId,
+        p_quantity: quantity
+      });
       
       return new Response(JSON.stringify({ error: 'Failed to create commitment. Please try again.' }), {
         status: 500,

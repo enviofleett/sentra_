@@ -14,6 +14,8 @@ interface WaitlistEntry {
   email: string;
   full_name: string | null;
   social_handle: string | null;
+  facebook_handle: string | null;
+  tiktok_handle: string | null;
   is_social_verified: boolean;
   reward_credited: boolean;
   verified_at: string | null;
@@ -117,16 +119,14 @@ export default function WaitlistManagement() {
     setSavingSettings(false);
   };
 
-  const getSocialLink = (handle: string | null) => {
-    if (!handle) return null;
-    const cleanHandle = handle.replace('@', '').trim();
-    return `https://instagram.com/${cleanHandle}`;
+  const hasSocialHandle = (entry: WaitlistEntry) => {
+    return entry.social_handle || entry.facebook_handle || entry.tiktok_handle;
   };
 
   const stats = {
     total: list.length,
     verified: list.filter(e => e.is_social_verified).length,
-    pending: list.filter(e => !e.is_social_verified && e.social_handle).length,
+    pending: list.filter(e => !e.is_social_verified && hasSocialHandle(e)).length,
   };
 
   if (loading) {
@@ -219,7 +219,7 @@ export default function WaitlistManagement() {
               <TableHeader>
                 <TableRow className="bg-muted/30">
                   <TableHead>User</TableHead>
-                  <TableHead>Social Handle</TableHead>
+                  <TableHead>Social Handles</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Joined</TableHead>
                   <TableHead className="text-right">Action</TableHead>
@@ -242,19 +242,44 @@ export default function WaitlistManagement() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {entry.social_handle ? (
-                          <a
-                            href={getSocialLink(entry.social_handle) || '#'}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-primary hover:underline"
-                          >
-                            {entry.social_handle}
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                        ) : (
-                          <span className="text-muted-foreground">Not provided</span>
-                        )}
+                        <div className="flex flex-col gap-1">
+                          {entry.social_handle && (
+                            <a
+                              href={`https://instagram.com/${entry.social_handle.replace('@', '')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-pink-500 hover:underline text-sm"
+                            >
+                              <span className="w-4">📷</span> {entry.social_handle}
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          )}
+                          {entry.facebook_handle && (
+                            <a
+                              href={`https://facebook.com/${entry.facebook_handle}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-blue-500 hover:underline text-sm"
+                            >
+                              <span className="w-4">📘</span> {entry.facebook_handle}
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          )}
+                          {entry.tiktok_handle && (
+                            <a
+                              href={`https://tiktok.com/@${entry.tiktok_handle.replace('@', '')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-foreground hover:underline text-sm"
+                            >
+                              <span className="w-4">🎵</span> {entry.tiktok_handle}
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          )}
+                          {!entry.social_handle && !entry.facebook_handle && !entry.tiktok_handle && (
+                            <span className="text-muted-foreground text-sm">Not provided</span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Badge 
@@ -268,7 +293,7 @@ export default function WaitlistManagement() {
                         {new Date(entry.created_at).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="text-right">
-                        {!entry.is_social_verified && entry.social_handle && (
+                        {!entry.is_social_verified && (entry.social_handle || entry.facebook_handle || entry.tiktok_handle) && (
                           <Button 
                             size="sm" 
                             onClick={() => verifyUser(entry.id)}

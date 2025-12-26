@@ -1,17 +1,256 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Plus, Mail, Users, FileText, Image as ImageIcon, Link } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Loader2, Plus, Mail, Users, FileText, Image as ImageIcon, Link, Rocket, Upload } from 'lucide-react';
 import { useBranding } from '@/hooks/useBranding';
 
 // --- Sub-components for SettingsManagement ---
+
+// 0. Pre-Launch Settings Manager
+function PreLaunchSettingsManager() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [settings, setSettings] = useState({
+    id: '',
+    is_prelaunch_mode: true,
+    waitlist_reward_amount: 100000,
+    launch_date: '',
+    banner_image_url: '',
+    banner_title: '',
+    banner_subtitle: ''
+  });
+
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  const loadSettings = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('pre_launch_settings')
+      .select('*')
+      .maybeSingle();
+
+    if (data) {
+      setSettings({
+        id: data.id,
+        is_prelaunch_mode: data.is_prelaunch_mode ?? true,
+        waitlist_reward_amount: data.waitlist_reward_amount ?? 100000,
+        launch_date: data.launch_date ? new Date(data.launch_date).toISOString().slice(0, 16) : '',
+        banner_image_url: data.banner_image_url ?? '',
+        banner_title: data.banner_title ?? '',
+        banner_subtitle: data.banner_subtitle ?? ''
+      });
+    }
+    if (error) {
+      toast({ title: 'Error loading settings', description: error.message, variant: 'destructive' });
+    }
+    setLoading(false);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    
+    const { error } = await supabase
+      .from('pre_launch_settings')
+      .update({
+        is_prelaunch_mode: settings.is_prelaunch_mode,
+        waitlist_reward_amount: settings.waitlist_reward_amount,
+        launch_date: settings.launch_date ? new Date(settings.launch_date).toISOString() : null,
+        banner_image_url: settings.banner_image_url || null,
+        banner_title: settings.banner_title || null,
+        banner_subtitle: settings.banner_subtitle || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', settings.id);
+
+    if (error) {
+      toast({ title: 'Error saving', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Success', description: 'Pre-launch settings updated.' });
+    }
+    setSaving(false);
+  };
+
+  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    
+    const fileExt = file.name.split('.').pop();
+    const fileName = `waitlist-banner-${Date.now()}.${fileExt}`;
+    const filePath = fileName;
+
+    const { error: uploadError } = await supabase.storage
+      .from('branding')
+      .upload(filePath, file, { upsert: true });
+
+    if (uploadError) {
+      toast({ title: 'Upload failed', description: uploadError.message, variant: 'destructive' });
+      setUploading(false);
+      return;
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('branding')
+      .getPublicUrl(filePath);
+
+    setSettings({ ...settings, banner_image_url: publicUrl });
+    setUploading(false);
+    toast({ title: 'Banner uploaded', description: 'Remember to save your changes.' });
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Pre-Launch Mode Toggle */}
+      <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
+        <div>
+          <h3 className="font-semibold text-foreground">Pre-Launch Mode</h3>
+          <p className="text-sm text-muted-foreground">
+            When enabled, visitors see the waitlist page instead of the store
+          </p>
+        </div>
+        <Switch
+          checked={settings.is_prelaunch_mode}
+          onCheckedChange={(checked) => setSettings({ ...settings, is_prelaunch_mode: checked })}
+        />
+      </div>
+
+      {/* Launch Date */}
+      <div className="space-y-2">
+        <Label htmlFor="launch-date">Launch Date & Time</Label>
+        <Input
+          id="launch-date"
+          type="datetime-local"
+          value={settings.launch_date}
+          onChange={(e) => setSettings({ ...settings, launch_date: e.target.value })}
+          className="max-w-xs"
+        />
+        <p className="text-xs text-muted-foreground">
+          A countdown timer will appear on the waitlist page
+        </p>
+      </div>
+
+      {/* Reward Amount */}
+      <div className="space-y-2">
+        <Label htmlFor="reward-amount">Waitlist Reward Amount (₦)</Label>
+        <Input
+          id="reward-amount"
+          type="number"
+          value={settings.waitlist_reward_amount}
+          onChange={(e) => setSettings({ ...settings, waitlist_reward_amount: parseFloat(e.target.value) || 0 })}
+          className="max-w-xs"
+        />
+        <p className="text-xs text-muted-foreground">
+          Amount credited to verified waitlist signups
+        </p>
+      </div>
+
+      {/* Banner Section */}
+      <div className="border-t pt-6">
+        <h3 className="text-lg font-semibold mb-4">Waitlist Page Banner</h3>
+        
+        <div className="grid gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="banner-title">Banner Title</Label>
+            <Input
+              id="banner-title"
+              value={settings.banner_title}
+              onChange={(e) => setSettings({ ...settings, banner_title: e.target.value })}
+              placeholder="Sentra"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="banner-subtitle">Banner Subtitle</Label>
+            <Input
+              id="banner-subtitle"
+              value={settings.banner_subtitle}
+              onChange={(e) => setSettings({ ...settings, banner_subtitle: e.target.value })}
+              placeholder="Nigeria's Premier Fragrance Boutique"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Banner Background Image</Label>
+            <div className="flex items-center gap-4">
+              {settings.banner_image_url && (
+                <div className="relative w-32 h-20 rounded-lg overflow-hidden border">
+                  <img 
+                    src={settings.banner_image_url} 
+                    alt="Banner preview" 
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+              <div>
+                <label className="cursor-pointer">
+                  <div className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 transition-colors">
+                    {uploading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4" />
+                    )}
+                    {uploading ? 'Uploading...' : 'Upload Image'}
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleBannerUpload}
+                    className="hidden"
+                    disabled={uploading}
+                  />
+                </label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Recommended: 1920x1080px, JPG or PNG
+                </p>
+              </div>
+            </div>
+            {settings.banner_image_url && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSettings({ ...settings, banner_image_url: '' })}
+                className="text-destructive hover:text-destructive"
+              >
+                Remove Image
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <Button onClick={handleSave} disabled={saving} className="mt-4">
+        {saving ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Saving...
+          </>
+        ) : (
+          'Save Pre-Launch Settings'
+        )}
+      </Button>
+    </div>
+  );
+}
 
 // 1. Terms & Conditions Management
 function TermsAndConditionsManager() {
@@ -802,14 +1041,17 @@ export default function SettingsManagement() {
       <h1 className="text-3xl font-bold">Admin Settings</h1>
       
       <Card>
-        <Tabs defaultValue="roles" className="w-full">
-          <CardHeader className="p-0">
-            <TabsList className="grid w-full grid-cols-5 h-auto rounded-none border-b bg-transparent p-0">
+        <Tabs defaultValue="prelaunch" className="w-full">
+          <CardHeader className="p-0 overflow-x-auto">
+            <TabsList className="grid w-full grid-cols-6 h-auto rounded-none border-b bg-transparent p-0 min-w-[600px]">
+              <TabsTrigger value="prelaunch" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
+                <Rocket className="h-4 w-4 mr-2" /> Pre-Launch
+              </TabsTrigger>
               <TabsTrigger value="roles" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
-                <Users className="h-4 w-4 mr-2" /> User Roles
+                <Users className="h-4 w-4 mr-2" /> Roles
               </TabsTrigger>
               <TabsTrigger value="templates" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
-                <Mail className="h-4 w-4 mr-2" /> Email Templates
+                <Mail className="h-4 w-4 mr-2" /> Emails
               </TabsTrigger>
               <TabsTrigger value="terms" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
                 <FileText className="h-4 w-4 mr-2" /> T&C
@@ -822,6 +1064,10 @@ export default function SettingsManagement() {
               </TabsTrigger>
             </TabsList>
           </CardHeader>
+
+          <TabsContent value="prelaunch" className="p-6">
+            <PreLaunchSettingsManager />
+          </TabsContent>
 
           <TabsContent value="roles" className="p-6">
             <UserRoleManager />

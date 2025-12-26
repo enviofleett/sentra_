@@ -372,6 +372,9 @@ export type Database = {
       }
       pre_launch_settings: {
         Row: {
+          banner_image_url: string | null
+          banner_subtitle: string | null
+          banner_title: string | null
           created_at: string
           id: string
           is_prelaunch_mode: boolean | null
@@ -380,6 +383,9 @@ export type Database = {
           waitlist_reward_amount: number | null
         }
         Insert: {
+          banner_image_url?: string | null
+          banner_subtitle?: string | null
+          banner_title?: string | null
           created_at?: string
           id?: string
           is_prelaunch_mode?: boolean | null
@@ -388,6 +394,9 @@ export type Database = {
           waitlist_reward_amount?: number | null
         }
         Update: {
+          banner_image_url?: string | null
+          banner_subtitle?: string | null
+          banner_title?: string | null
           created_at?: string
           id?: string
           is_prelaunch_mode?: boolean | null
@@ -642,11 +651,13 @@ export type Database = {
         Row: {
           created_at: string
           email: string
+          facebook_handle: string | null
           full_name: string | null
           id: string
           is_social_verified: boolean | null
           reward_credited: boolean | null
           social_handle: string | null
+          tiktok_handle: string | null
           updated_at: string
           verified_at: string | null
           verified_by: string | null
@@ -654,11 +665,13 @@ export type Database = {
         Insert: {
           created_at?: string
           email: string
+          facebook_handle?: string | null
           full_name?: string | null
           id?: string
           is_social_verified?: boolean | null
           reward_credited?: boolean | null
           social_handle?: string | null
+          tiktok_handle?: string | null
           updated_at?: string
           verified_at?: string | null
           verified_by?: string | null
@@ -666,11 +679,13 @@ export type Database = {
         Update: {
           created_at?: string
           email?: string
+          facebook_handle?: string | null
           full_name?: string | null
           id?: string
           is_social_verified?: boolean | null
           reward_credited?: boolean | null
           social_handle?: string | null
+          tiktok_handle?: string | null
           updated_at?: string
           verified_at?: string | null
           verified_by?: string | null

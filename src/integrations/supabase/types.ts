@@ -560,6 +560,106 @@ export type Database = {
         }
         Relationships: []
       }
+      profit_allocations: {
+        Row: {
+          admin_amount: number
+          capital_amount: number
+          commitment_id: string | null
+          created_at: string
+          growth_amount: number
+          id: string
+          marketing_amount: number
+          order_id: string | null
+          payment_reference: string
+          split_config_id: string | null
+          total_amount: number
+        }
+        Insert: {
+          admin_amount: number
+          capital_amount: number
+          commitment_id?: string | null
+          created_at?: string
+          growth_amount: number
+          id?: string
+          marketing_amount: number
+          order_id?: string | null
+          payment_reference: string
+          split_config_id?: string | null
+          total_amount: number
+        }
+        Update: {
+          admin_amount?: number
+          capital_amount?: number
+          commitment_id?: string | null
+          created_at?: string
+          growth_amount?: number
+          id?: string
+          marketing_amount?: number
+          order_id?: string | null
+          payment_reference?: string
+          split_config_id?: string | null
+          total_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profit_allocations_commitment_id_fkey"
+            columns: ["commitment_id"]
+            isOneToOne: false
+            referencedRelation: "group_buy_commitments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profit_allocations_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profit_allocations_split_config_id_fkey"
+            columns: ["split_config_id"]
+            isOneToOne: false
+            referencedRelation: "profit_split_config"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profit_split_config: {
+        Row: {
+          admin_percentage: number
+          capital_percentage: number
+          created_at: string
+          growth_percentage: number
+          id: string
+          is_active: boolean
+          marketing_percentage: number
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          admin_percentage?: number
+          capital_percentage?: number
+          created_at?: string
+          growth_percentage?: number
+          id?: string
+          is_active?: boolean
+          marketing_percentage?: number
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          admin_percentage?: number
+          capital_percentage?: number
+          created_at?: string
+          growth_percentage?: number
+          id?: string
+          is_active?: boolean
+          marketing_percentage?: number
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       scent_profiles: {
         Row: {
           created_at: string | null
@@ -694,7 +794,17 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      profit_bucket_totals: {
+        Row: {
+          total_admin: number | null
+          total_capital: number | null
+          total_growth: number | null
+          total_marketing: number | null
+          total_revenue: number | null
+          transaction_count: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       atomic_decrement_campaign_quantity: {
@@ -720,6 +830,15 @@ export type Database = {
       }
       is_admin: { Args: never; Returns: boolean }
       is_product_manager: { Args: never; Returns: boolean }
+      record_profit_split: {
+        Args: {
+          p_commitment_id: string
+          p_order_id: string
+          p_payment_reference: string
+          p_total_amount: number
+        }
+        Returns: string
+      }
       verify_and_reward_user: {
         Args: { admin_id: string; entry_id: string }
         Returns: boolean

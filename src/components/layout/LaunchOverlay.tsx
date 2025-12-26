@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -71,6 +72,7 @@ function CountdownTimer({ launchDate }: { launchDate: string }) {
 }
 
 export function LaunchOverlay({ children }: LaunchOverlayProps) {
+  const location = useLocation();
   const [settings, setSettings] = useState<PreLaunchSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [email, setEmail] = useState('');
@@ -146,8 +148,11 @@ export function LaunchOverlay({ children }: LaunchOverlayProps) {
     );
   }
 
-  // Not in prelaunch mode or no settings, show normal app
-  if (!settings?.is_prelaunch_mode) {
+  // Bypass lockdown for admin and auth routes
+  const isExcludedRoute = location.pathname.startsWith('/admin') || location.pathname.startsWith('/auth');
+  
+  // Not in prelaunch mode, no settings, or excluded route - show normal app
+  if (!settings?.is_prelaunch_mode || isExcludedRoute) {
     return <>{children}</>;
   }
 

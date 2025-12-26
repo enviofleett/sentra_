@@ -7,7 +7,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, fullName: string, referralCode?: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
 }
@@ -25,6 +25,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      
+      // Process referral after signup (deferred to avoid deadlock)
+      if (event === 'SIGNED_IN' && session?.user) {
+        setTimeout(() => {
+          processReferralFromMetadata(session.user);
+        }, 0);
+      }
     });
 
     // THEN check for existing session
@@ -37,7 +44,98 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, fullName: string) => {
+  // Process referral after user signs up
+  const processReferralFromMetadata = async (user: User) => {
+    try {
+      const referralCode = user.user_metadata?.referral_code;
+      if (!referralCode) return;
+      
+      console.log('[Auth] Processing referral code:', referralCode);
+      
+      // Find the affiliate link by code
+      const { data: affiliateLink, error: linkError } = await supabase
+        .from('affiliate_links')
+        .select('id, user_id')
+        .eq('code', referralCode.toUpperCase())
+        .eq('is_active', true)
+        .single();
+      
+      if (linkError || !affiliateLink) {
+        console.log('[Auth] Affiliate link not found for code:', referralCode);
+        return;
+      }
+      
+      // Don't allow self-referral
+      if (affiliateLink.user_id === user.id) {
+        console.log('[Auth] Self-referral attempt blocked');
+        return;
+      }
+      
+      // Check if referral already exists
+      const { data: existingReferral } = await supabase
+        .from('referrals')
+        .select('id')
+        .eq('referred_id', user.id)
+        .maybeSingle();
+      
+      if (existingReferral) {
+        console.log('[Auth] Referral already exists for user');
+        return;
+      }
+      
+      // Update the user's profile with referred_by
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ 
+          referred_by: affiliateLink.user_id,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+      
+      if (profileError) {
+        console.error('[Auth] Failed to update profile with referrer:', profileError);
+        return;
+      }
+      
+      // Create referral record
+      const { error: referralError } = await supabase
+        .from('referrals')
+        .insert({
+          referrer_id: affiliateLink.user_id,
+          referred_id: user.id,
+          affiliate_link_id: affiliateLink.id,
+          status: 'pending'
+        });
+      
+      if (referralError) {
+        console.error('[Auth] Failed to create referral record:', referralError);
+        return;
+      }
+      
+      // Increment affiliate link signups
+      const { data: currentLink } = await supabase
+        .from('affiliate_links')
+        .select('signups')
+        .eq('id', affiliateLink.id)
+        .single();
+      
+      if (currentLink) {
+        await supabase
+          .from('affiliate_links')
+          .update({ 
+            signups: (currentLink.signups || 0) + 1,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', affiliateLink.id);
+      }
+      
+      console.log('[Auth] Referral successfully processed');
+    } catch (error) {
+      console.error('[Auth] Error processing referral:', error);
+    }
+  };
+
+  const signUp = async (email: string, password: string, fullName: string, referralCode?: string) => {
     const redirectUrl = `${window.location.origin}/`;
     
     const { error } = await supabase.auth.signUp({
@@ -46,7 +144,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       options: {
         emailRedirectTo: redirectUrl,
         data: {
-          full_name: fullName
+          full_name: fullName,
+          referral_code: referralCode || undefined
         }
       }
     });

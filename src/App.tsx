@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { CartProvider } from "./contexts/CartContext";
 import { BrandingProvider } from "./hooks/useBranding";
+import { LaunchOverlay } from "./components/layout/LaunchOverlay";
 import Index from "./pages/Index";
 import Products from "./pages/Products";
 import ProductDetail from "./pages/ProductDetail";
@@ -28,19 +29,21 @@ const App = () => (
         <AuthProvider>
           <BrandingProvider>
             <CartProvider>
-              <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/products" element={<Products />} />
-              <Route path="/products/:id" element={<ProductDetail />} />
-              <Route path="/cart" element={<Cart />} />
-              <Route path="/checkout" element={<Checkout />} />
-              <Route path="/checkout/success" element={<CheckoutSuccess />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/profile/*" element={<Profile />} />
-              <Route path="/admin/*" element={<AdminDashboard />} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-              </Routes>
+              <LaunchOverlay>
+                <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/products" element={<Products />} />
+                <Route path="/products/:id" element={<ProductDetail />} />
+                <Route path="/cart" element={<Cart />} />
+                <Route path="/checkout" element={<Checkout />} />
+                <Route path="/checkout/success" element={<CheckoutSuccess />} />
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/profile/*" element={<Profile />} />
+                <Route path="/admin/*" element={<AdminDashboard />} />
+                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                <Route path="*" element={<NotFound />} />
+                </Routes>
+              </LaunchOverlay>
             </CartProvider>
           </BrandingProvider>
         </AuthProvider>

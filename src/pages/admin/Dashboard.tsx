@@ -13,6 +13,7 @@ import GroupBuyCampaignsManagement from './GroupBuyCampaignsManagement';
 import { UsersManagement } from './UsersManagement';
 import { UserDetailPage } from './UserDetailPage';
 import DiscountThresholdsManagement from './DiscountThresholdsManagement';
+import WaitlistManagement from './WaitlistManagement';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -76,6 +77,7 @@ export default function AdminDashboard() {
           <Route path="/users" element={<UsersManagement />} />
           <Route path="/users/:id" element={<UserDetailPage />} />
           <Route path="/settings" element={<SettingsManagement />} />
+          <Route path="/waitlist" element={<WaitlistManagement />} />
         </Routes>
       </main>
     </div>

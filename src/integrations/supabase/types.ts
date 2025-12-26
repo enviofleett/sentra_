@@ -370,6 +370,33 @@ export type Database = {
         }
         Relationships: []
       }
+      pre_launch_settings: {
+        Row: {
+          created_at: string
+          id: string
+          is_prelaunch_mode: boolean | null
+          launch_date: string | null
+          updated_at: string
+          waitlist_reward_amount: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_prelaunch_mode?: boolean | null
+          launch_date?: string | null
+          updated_at?: string
+          waitlist_reward_amount?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_prelaunch_mode?: boolean | null
+          launch_date?: string | null
+          updated_at?: string
+          waitlist_reward_amount?: number | null
+        }
+        Relationships: []
+      }
       product_analytics: {
         Row: {
           created_at: string | null
@@ -611,6 +638,45 @@ export type Database = {
         }
         Relationships: []
       }
+      waiting_list: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string | null
+          id: string
+          is_social_verified: boolean | null
+          reward_credited: boolean | null
+          social_handle: string | null
+          updated_at: string
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name?: string | null
+          id?: string
+          is_social_verified?: boolean | null
+          reward_credited?: boolean | null
+          social_handle?: string | null
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string | null
+          id?: string
+          is_social_verified?: boolean | null
+          reward_credited?: boolean | null
+          social_handle?: string | null
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -626,6 +692,10 @@ export type Database = {
       }
       is_admin: { Args: never; Returns: boolean }
       is_product_manager: { Args: never; Returns: boolean }
+      verify_and_reward_user: {
+        Args: { admin_id: string; entry_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role:

@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Plus, Mail, Users, FileText, Image as ImageIcon, Link, Rocket, Upload } from 'lucide-react';
+import { Loader2, Plus, Mail, Users, FileText, Image as ImageIcon, Link, Rocket, Upload, PieChart, TrendingUp } from 'lucide-react';
 import { useBranding } from '@/hooks/useBranding';
 
 // --- Sub-components for SettingsManagement ---
@@ -1034,6 +1034,284 @@ function IntegrationSettingsManager() {
   );
 }
 
+// 7. Profit Split Manager
+function ProfitSplitManager() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [config, setConfig] = useState({
+    id: '',
+    name: 'Default Split',
+    capital_percentage: 40,
+    admin_percentage: 20,
+    growth_percentage: 25,
+    marketing_percentage: 15
+  });
+  const [totals, setTotals] = useState({
+    total_capital: 0,
+    total_admin: 0,
+    total_growth: 0,
+    total_marketing: 0,
+    total_revenue: 0,
+    transaction_count: 0
+  });
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    setLoading(true);
+    
+    // Load config
+    const { data: configData, error: configError } = await supabase
+      .from('profit_split_config')
+      .select('*')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (configData) {
+      setConfig({
+        id: configData.id,
+        name: configData.name,
+        capital_percentage: Number(configData.capital_percentage),
+        admin_percentage: Number(configData.admin_percentage),
+        growth_percentage: Number(configData.growth_percentage),
+        marketing_percentage: Number(configData.marketing_percentage)
+      });
+    }
+
+    // Load totals
+    const { data: totalsData, error: totalsError } = await supabase
+      .from('profit_bucket_totals')
+      .select('*')
+      .single();
+
+    if (totalsData) {
+      setTotals({
+        total_capital: Number(totalsData.total_capital) || 0,
+        total_admin: Number(totalsData.total_admin) || 0,
+        total_growth: Number(totalsData.total_growth) || 0,
+        total_marketing: Number(totalsData.total_marketing) || 0,
+        total_revenue: Number(totalsData.total_revenue) || 0,
+        transaction_count: Number(totalsData.transaction_count) || 0
+      });
+    }
+
+    if (configError) {
+      toast({ title: 'Error loading config', description: configError.message, variant: 'destructive' });
+    }
+    setLoading(false);
+  };
+
+  const totalPercentage = config.capital_percentage + config.admin_percentage + config.growth_percentage + config.marketing_percentage;
+  const isValidTotal = totalPercentage === 100;
+
+  const handleSave = async () => {
+    if (!isValidTotal) {
+      toast({ title: 'Invalid percentages', description: 'Percentages must sum to exactly 100%', variant: 'destructive' });
+      return;
+    }
+
+    setSaving(true);
+
+    if (config.id) {
+      const { error } = await supabase
+        .from('profit_split_config')
+        .update({
+          name: config.name,
+          capital_percentage: config.capital_percentage,
+          admin_percentage: config.admin_percentage,
+          growth_percentage: config.growth_percentage,
+          marketing_percentage: config.marketing_percentage,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', config.id);
+
+      if (error) {
+        toast({ title: 'Error saving', description: error.message, variant: 'destructive' });
+      } else {
+        toast({ title: 'Success', description: 'Profit split configuration updated.' });
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('profit_split_config')
+        .insert([{
+          name: config.name,
+          capital_percentage: config.capital_percentage,
+          admin_percentage: config.admin_percentage,
+          growth_percentage: config.growth_percentage,
+          marketing_percentage: config.marketing_percentage,
+          is_active: true
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        toast({ title: 'Error creating', description: error.message, variant: 'destructive' });
+      } else {
+        setConfig({ ...config, id: data.id });
+        toast({ title: 'Success', description: 'Profit split configuration created.' });
+      }
+    }
+
+    setSaving(false);
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0 }).format(amount);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Bucket Totals */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <TrendingUp className="h-5 w-5 text-primary" />
+          Profit Bucket Totals
+        </h3>
+        
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+            <p className="text-sm text-muted-foreground mb-1">Capital (Restocking)</p>
+            <p className="text-xl font-bold text-blue-600">{formatCurrency(totals.total_capital)}</p>
+            <p className="text-xs text-muted-foreground">{config.capital_percentage}% of revenue</p>
+          </div>
+          
+          <div className="p-4 rounded-lg bg-purple-500/10 border border-purple-500/20">
+            <p className="text-sm text-muted-foreground mb-1">Admin (Operations)</p>
+            <p className="text-xl font-bold text-purple-600">{formatCurrency(totals.total_admin)}</p>
+            <p className="text-xs text-muted-foreground">{config.admin_percentage}% of revenue</p>
+          </div>
+          
+          <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+            <p className="text-sm text-muted-foreground mb-1">Growth (Expansion)</p>
+            <p className="text-xl font-bold text-green-600">{formatCurrency(totals.total_growth)}</p>
+            <p className="text-xs text-muted-foreground">{config.growth_percentage}% of revenue</p>
+          </div>
+          
+          <div className="p-4 rounded-lg bg-orange-500/10 border border-orange-500/20">
+            <p className="text-sm text-muted-foreground mb-1">Marketing (Ads)</p>
+            <p className="text-xl font-bold text-orange-600">{formatCurrency(totals.total_marketing)}</p>
+            <p className="text-xs text-muted-foreground">{config.marketing_percentage}% of revenue</p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
+          <div>
+            <p className="text-sm text-muted-foreground">Total Revenue Processed</p>
+            <p className="text-2xl font-bold text-foreground">{formatCurrency(totals.total_revenue)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground">Transactions</p>
+            <p className="text-2xl font-bold text-foreground">{totals.transaction_count}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Split Configuration */}
+      <div className="border-t pt-6">
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <PieChart className="h-5 w-5 text-primary" />
+          Split Configuration
+        </h3>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="config-name">Configuration Name</Label>
+            <Input
+              id="config-name"
+              value={config.name}
+              onChange={(e) => setConfig({ ...config, name: e.target.value })}
+              className="max-w-xs"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="capital">Capital %</Label>
+              <Input
+                id="capital"
+                type="number"
+                min="0"
+                max="100"
+                value={config.capital_percentage}
+                onChange={(e) => setConfig({ ...config, capital_percentage: parseFloat(e.target.value) || 0 })}
+                className="bg-blue-500/5"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="admin">Admin %</Label>
+              <Input
+                id="admin"
+                type="number"
+                min="0"
+                max="100"
+                value={config.admin_percentage}
+                onChange={(e) => setConfig({ ...config, admin_percentage: parseFloat(e.target.value) || 0 })}
+                className="bg-purple-500/5"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="growth">Growth %</Label>
+              <Input
+                id="growth"
+                type="number"
+                min="0"
+                max="100"
+                value={config.growth_percentage}
+                onChange={(e) => setConfig({ ...config, growth_percentage: parseFloat(e.target.value) || 0 })}
+                className="bg-green-500/5"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="marketing">Marketing %</Label>
+              <Input
+                id="marketing"
+                type="number"
+                min="0"
+                max="100"
+                value={config.marketing_percentage}
+                onChange={(e) => setConfig({ ...config, marketing_percentage: parseFloat(e.target.value) || 0 })}
+                className="bg-orange-500/5"
+              />
+            </div>
+          </div>
+
+          <div className={`p-3 rounded-lg ${isValidTotal ? 'bg-green-500/10 text-green-700' : 'bg-destructive/10 text-destructive'}`}>
+            <p className="text-sm font-medium">
+              Total: {totalPercentage}% {isValidTotal ? '✓' : '(must equal 100%)'}
+            </p>
+          </div>
+
+          <Button onClick={handleSave} disabled={saving || !isValidTotal}>
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Configuration'
+            )}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- Main Component ---
 export default function SettingsManagement() {
   return (
@@ -1043,9 +1321,12 @@ export default function SettingsManagement() {
       <Card>
         <Tabs defaultValue="prelaunch" className="w-full">
           <CardHeader className="p-0 overflow-x-auto">
-            <TabsList className="grid w-full grid-cols-6 h-auto rounded-none border-b bg-transparent p-0 min-w-[600px]">
+            <TabsList className="grid w-full grid-cols-7 h-auto rounded-none border-b bg-transparent p-0 min-w-[700px]">
               <TabsTrigger value="prelaunch" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
                 <Rocket className="h-4 w-4 mr-2" /> Pre-Launch
+              </TabsTrigger>
+              <TabsTrigger value="profits" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
+                <PieChart className="h-4 w-4 mr-2" /> Profits
               </TabsTrigger>
               <TabsTrigger value="roles" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
                 <Users className="h-4 w-4 mr-2" /> Roles
@@ -1067,6 +1348,10 @@ export default function SettingsManagement() {
 
           <TabsContent value="prelaunch" className="p-6">
             <PreLaunchSettingsManager />
+          </TabsContent>
+
+          <TabsContent value="profits" className="p-6">
+            <ProfitSplitManager />
           </TabsContent>
 
           <TabsContent value="roles" className="p-6">

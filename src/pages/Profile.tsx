@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Package, User as UserIcon, ShoppingBag, MapPin, Shield, Edit, Save, X } from 'lucide-react';
+import { Package, User as UserIcon, ShoppingBag, MapPin, Shield, Edit, Save, X, Wallet } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -18,6 +18,7 @@ import GroupBuysProfile from './profile/GroupBuysProfile';
 import AddressesProfile from './profile/AddressesProfile';
 import OrderDetail from './profile/OrderDetail';
 import SecurityProfile from './profile/SecurityProfile';
+import WalletProfile from './profile/WalletProfile';
 
 const profileSchema = z.object({
   full_name: z.string().max(100, 'Name must be less than 100 characters').optional(),
@@ -305,6 +306,12 @@ export default function Profile() {
                   Security
                 </Button>
               </Link>
+              <Link to="/profile/wallet" className="flex-shrink-0">
+                <Button variant="ghost" className="w-full justify-start whitespace-nowrap">
+                  <Wallet className="h-4 w-4 mr-2" />
+                  Wallet
+                </Button>
+              </Link>
               <Button 
                 variant="ghost" 
                 className="w-full justify-start text-destructive hover:text-destructive"
@@ -324,6 +331,7 @@ export default function Profile() {
                 <Route path="addresses" element={<AddressesProfile />} />
                 <Route path="groupbuys" element={<GroupBuysProfile />} />
                 <Route path="security" element={<SecurityProfile />} />
+                <Route path="wallet" element={<WalletProfile />} />
               </Routes>
             </Card>
           </div>

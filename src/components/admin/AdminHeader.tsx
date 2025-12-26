@@ -11,7 +11,8 @@ import {
   Users,
   Sparkles,
   Tag,
-  UserPlus
+  UserPlus,
+  Wallet
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -25,6 +26,7 @@ const navigation = [
   { name: 'Vendors', href: '/admin/vendors', icon: Store },
   { name: 'Group Buys', href: '/admin/groupbuys', icon: Sparkles },
   { name: 'Discounts', href: '/admin/discounts', icon: Tag },
+  { name: 'Affiliates', href: '/admin/affiliates', icon: Wallet },
   { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'Waitlist', href: '/admin/waitlist', icon: UserPlus },
   { name: 'Settings', href: '/admin/settings', icon: Settings },

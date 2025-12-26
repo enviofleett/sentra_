@@ -3,7 +3,6 @@ import { ShoppingCart, User, Search, Menu, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCart } from '@/contexts/CartContext';
-import { Badge } from '@/components/ui/badge';
 import sentraLogo from '@/assets/sentra-logo.png';
 import {
   DropdownMenu,
@@ -47,7 +46,6 @@ export const Navbar = () => {
   }, [user]);
 
   useEffect(() => {
-    // Fetch featured products for curated recommendations
     const fetchFeatured = async () => {
       const { data } = await supabase
         .from('products')
@@ -78,6 +76,7 @@ export const Navbar = () => {
   };
 
   const navigation = [
+    { name: 'Home', href: '/' },
     { name: 'Collection', href: '/products' },
     { name: 'Circles', href: '/products' },
   ];
@@ -94,23 +93,21 @@ export const Navbar = () => {
           <img 
             src={sentraLogo} 
             alt="Sentra" 
-            className="h-8 md:h-9 w-auto object-contain"
+            className="h-7 md:h-8 w-auto object-contain"
             loading="eager"
-            width="auto"
-            height="36"
           />
         </Link>
 
         {/* Desktop Navigation */}
-        <div className="hidden md:flex items-center space-x-10">
+        <div className="hidden md:flex items-center space-x-8">
           {navigation.map((item) => (
             <Link
               key={item.name}
               to={item.href}
-              className="text-sm font-medium uppercase tracking-[0.15em] text-foreground/70 hover:text-foreground transition-colors relative group"
+              className="text-sm font-medium text-foreground/70 hover:text-foreground transition-colors relative group"
             >
               {item.name}
-              <span className="absolute -bottom-1 left-0 w-0 h-px bg-secondary transition-all duration-300 group-hover:w-full" />
+              <span className="absolute -bottom-1 left-0 w-0 h-px bg-foreground transition-all duration-300 group-hover:w-full" />
             </Link>
           ))}
         </div>
@@ -120,17 +117,17 @@ export const Navbar = () => {
           <Button 
             variant="ghost" 
             size="icon" 
-            className="hover:bg-accent/50"
+            className="hover:bg-accent"
             onClick={() => setIsSearchOpen(true)}
           >
             <Search className="h-5 w-5" />
           </Button>
 
           <Link to="/cart">
-            <Button variant="ghost" size="icon" className="relative hover:bg-accent/50">
+            <Button variant="ghost" size="icon" className="relative hover:bg-accent">
               <ShoppingCart className="h-5 w-5" />
               {totalItems > 0 && (
-                <span className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center rounded-full bg-secondary text-secondary-foreground text-xs font-semibold">
+                <span className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center rounded-full bg-foreground text-background text-xs font-semibold">
                   {totalItems}
                 </span>
               )}
@@ -140,7 +137,7 @@ export const Navbar = () => {
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="hover:bg-accent/50">
+                <Button variant="ghost" size="icon" className="hover:bg-accent">
                   <User className="h-5 w-5" />
                 </Button>
               </DropdownMenuTrigger>
@@ -178,19 +175,19 @@ export const Navbar = () => {
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-80 bg-card">
+            <SheetContent side="right" className="w-80 bg-background">
               <div className="flex flex-col space-y-6 mt-8">
                 {navigation.map((item) => (
                   <Link
                     key={item.name}
                     to={item.href}
-                    className="text-lg font-serif tracking-wide text-foreground/80 hover:text-foreground transition-colors"
+                    className="text-lg font-serif text-foreground/80 hover:text-foreground transition-colors"
                   >
                     {item.name}
                   </Link>
                 ))}
                 {!user && (
-                  <Button asChild variant="outline" className="w-full mt-4">
+                  <Button asChild variant="outline" className="w-full mt-4 rounded-full">
                     <Link to="/auth">Sign In</Link>
                   </Button>
                 )}
@@ -200,12 +197,12 @@ export const Navbar = () => {
         </div>
       </nav>
 
-      {/* Concierge Search Modal */}
+      {/* Search Modal */}
       <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
-        <DialogContent className="overflow-hidden p-0 max-w-lg bg-card/95 backdrop-blur-xl border-border/50">
+        <DialogContent className="overflow-hidden p-0 max-w-lg bg-background border-border">
           <Command className="bg-transparent">
             <form onSubmit={handleSearchSubmit}>
-              <div className="flex items-center border-b border-border/50 px-4">
+              <div className="flex items-center border-b border-border px-4">
                 <Search className="mr-3 h-4 w-4 shrink-0 text-muted-foreground" />
                 <CommandInput
                   value={searchQuery}
@@ -228,28 +225,30 @@ export const Navbar = () => {
                     <CommandItem 
                       key={product.id}
                       onSelect={() => handleProductSelect(product.id)}
-                      className="cursor-pointer flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50"
+                      className="cursor-pointer flex items-center gap-3 p-3 rounded-lg hover:bg-accent"
                     >
                       {product.image_url ? (
-                        <img 
-                          src={product.image_url} 
-                          alt={product.name}
-                          className="w-12 h-12 object-cover rounded-md bg-muted"
-                        />
+                        <div className="w-12 h-12 bg-accent rounded-lg flex items-center justify-center overflow-hidden">
+                          <img 
+                            src={product.image_url} 
+                            alt={product.name}
+                            className="w-full h-full object-contain p-1"
+                          />
+                        </div>
                       ) : (
-                        <div className="w-12 h-12 bg-muted rounded-md flex items-center justify-center">
+                        <div className="w-12 h-12 bg-accent rounded-lg flex items-center justify-center">
                           <Sparkles className="h-5 w-5 text-muted-foreground" />
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">{product.name}</p>
                         {product.brand && (
-                          <p className="text-xs uppercase tracking-wider text-muted-foreground font-serif">
+                          <p className="text-xs uppercase tracking-wider text-muted-foreground">
                             {product.brand}
                           </p>
                         )}
                       </div>
-                      <span className="text-sm font-medium text-foreground">
+                      <span className="text-sm font-medium">
                         ₦{product.price?.toLocaleString()}
                       </span>
                     </CommandItem>

@@ -15,6 +15,7 @@ import { UserDetailPage } from './UserDetailPage';
 import DiscountThresholdsManagement from './DiscountThresholdsManagement';
 import WaitlistManagement from './WaitlistManagement';
 import AffiliatesManagement from './AffiliatesManagement';
+import ContentManagement from './ContentManagement';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -80,6 +81,7 @@ export default function AdminDashboard() {
           <Route path="/settings" element={<SettingsManagement />} />
           <Route path="/waitlist" element={<WaitlistManagement />} />
           <Route path="/affiliates" element={<AffiliatesManagement />} />
+          <Route path="/content" element={<ContentManagement />} />
         </Routes>
       </main>
     </div>

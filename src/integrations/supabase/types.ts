@@ -261,6 +261,36 @@ export type Database = {
         }
         Relationships: []
       }
+      featured_brands: {
+        Row: {
+          created_at: string | null
+          display_order: number | null
+          id: string
+          is_active: boolean | null
+          logo_url: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          logo_url: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          logo_url?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       group_buy_campaigns: {
         Row: {
           created_at: string | null
@@ -891,6 +921,78 @@ export type Database = {
           is_active?: boolean
           name?: string
           notes?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      site_banners: {
+        Row: {
+          button_link: string | null
+          button_text: string | null
+          created_at: string | null
+          display_order: number | null
+          id: string
+          image_url: string
+          is_active: boolean | null
+          section: string
+          subtitle: string | null
+          title: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          button_link?: string | null
+          button_text?: string | null
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          image_url: string
+          is_active?: boolean | null
+          section: string
+          subtitle?: string | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          button_link?: string | null
+          button_text?: string | null
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          image_url?: string
+          is_active?: boolean | null
+          section?: string
+          subtitle?: string | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      site_content: {
+        Row: {
+          content_key: string
+          content_type: string | null
+          content_value: string
+          created_at: string | null
+          id: string
+          section: string
+          updated_at: string | null
+        }
+        Insert: {
+          content_key: string
+          content_type?: string | null
+          content_value: string
+          created_at?: string | null
+          id?: string
+          section: string
+          updated_at?: string | null
+        }
+        Update: {
+          content_key?: string
+          content_type?: string | null
+          content_value?: string
+          created_at?: string | null
+          id?: string
+          section?: string
           updated_at?: string | null
         }
         Relationships: []

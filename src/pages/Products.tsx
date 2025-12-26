@@ -10,10 +10,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
-import { Sparkles, SlidersHorizontal, Search, Crown } from 'lucide-react';
+import { Sparkles, SlidersHorizontal, Search, Crown, ShoppingCart } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { CountdownBadge } from '@/components/groupbuy/CountdownBadge';
-import { StaggerContainer, StaggerItem, FadeUp } from '@/components/layout/PageTransition';
 import { motion } from 'framer-motion';
 
 interface GroupBuyCampaign {
@@ -142,7 +141,7 @@ export default function Products() {
   const FilterSidebar = () => (
     <div className="space-y-8">
       <div>
-        <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-4">Search</h3>
+        <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-4 font-medium">Search</h3>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input 
@@ -150,13 +149,13 @@ export default function Products() {
             placeholder="Search..." 
             value={searchQuery}
             onChange={handleSearchChange}
-            className="pl-9 border-border/50"
+            className="pl-9 rounded-full"
           />
         </div>
       </div>
 
       <div>
-        <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-4">Categories</h3>
+        <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-4 font-medium">Categories</h3>
         <div className="space-y-3">
           {categories.map((category) => (
             <div key={category.id} className="flex items-center space-x-3">
@@ -165,7 +164,7 @@ export default function Products() {
                 checked={selectedCategories.includes(category.id)}
                 onCheckedChange={() => toggleCategory(category.id)}
               />
-              <Label htmlFor={category.id} className="cursor-pointer text-sm">
+              <Label htmlFor={category.id} className="cursor-pointer text-sm font-normal">
                 {category.name}
               </Label>
             </div>
@@ -174,7 +173,7 @@ export default function Products() {
       </div>
 
       <div>
-        <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-4">Brands</h3>
+        <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-4 font-medium">Brands</h3>
         <div className="space-y-3">
           {vendors.map((vendor) => (
             <div key={vendor.id} className="flex items-center space-x-3">
@@ -183,7 +182,7 @@ export default function Products() {
                 checked={selectedVendors.includes(vendor.id)}
                 onCheckedChange={() => toggleVendor(vendor.id)}
               />
-              <Label htmlFor={`vendor-${vendor.id}`} className="cursor-pointer text-sm">
+              <Label htmlFor={`vendor-${vendor.id}`} className="cursor-pointer text-sm font-normal">
                 {vendor.rep_full_name}
               </Label>
             </div>
@@ -192,9 +191,9 @@ export default function Products() {
       </div>
 
       <div>
-        <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-4">Sort</h3>
+        <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-4 font-medium">Sort By</h3>
         <Select value={sortBy} onValueChange={setSortBy}>
-          <SelectTrigger className="border-border/50">
+          <SelectTrigger className="rounded-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -213,25 +212,25 @@ export default function Products() {
       <Navbar />
 
       <div className="container mx-auto px-4 py-8 md:py-12">
-        <FadeUp>
-          <div className="mb-10 md:mb-16 text-center">
-            <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground mb-4">
-              Curated Selection
-            </p>
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-serif">Our Collection</h1>
-          </div>
-        </FadeUp>
+        <motion.div 
+          className="mb-10 md:mb-12 text-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <h1 className="text-4xl md:text-5xl font-serif">Our Collection</h1>
+          <p className="text-muted-foreground mt-3">Discover your perfect scent</p>
+        </motion.div>
 
         {/* Mobile Search Bar */}
         <div className="lg:hidden w-full mb-6">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input 
               type="text" 
-              placeholder="Search..." 
+              placeholder="Search products..." 
               value={searchQuery}
               onChange={handleSearchChange}
-              className="w-full pl-9 border-border/50"
+              className="w-full pl-10 rounded-full"
             />
           </div>
         </div>
@@ -248,12 +247,19 @@ export default function Products() {
           <div className="lg:hidden w-full">
             <Sheet>
               <SheetTrigger asChild>
-                <Button variant="outline" className="w-full justify-between border-border/50">
-                  <SlidersHorizontal className="h-4 w-4 mr-2" />
-                  Filters
+                <Button variant="outline" className="w-full justify-between rounded-full">
+                  <span className="flex items-center gap-2">
+                    <SlidersHorizontal className="h-4 w-4" />
+                    Filters
+                  </span>
+                  {(selectedCategories.length > 0 || selectedVendors.length > 0) && (
+                    <Badge variant="secondary" className="ml-2">
+                      {selectedCategories.length + selectedVendors.length}
+                    </Badge>
+                  )}
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="bg-card">
+              <SheetContent side="left" className="bg-background">
                 <div className="mt-8">
                   <FilterSidebar />
                 </div>
@@ -264,18 +270,19 @@ export default function Products() {
           {/* Products Grid */}
           <div className="flex-1">
             {loading ? (
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                 {[...Array(9)].map((_, i) => (
                   <div key={i} className="animate-pulse">
-                    <div className="aspect-[3/4] bg-muted/30 rounded-lg mb-4" />
-                    <div className="h-3 bg-muted/30 rounded w-1/2 mb-2" />
-                    <div className="h-4 bg-muted/30 rounded w-3/4 mb-2" />
-                    <div className="h-4 bg-muted/30 rounded w-1/3" />
+                    <div className="aspect-square bg-accent rounded-lg mb-3" />
+                    <div className="h-3 bg-muted rounded w-1/2 mb-2" />
+                    <div className="h-4 bg-muted rounded w-3/4 mb-2" />
+                    <div className="h-4 bg-muted rounded w-1/3" />
                   </div>
                 ))}
               </div>
             ) : products.length === 0 ? (
               <div className="text-center py-20">
+                <Sparkles className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
                 <p className="text-muted-foreground">No products found</p>
                 {searchQuery && (
                   <Button variant="link" onClick={() => setSearchQuery('')} className="mt-2">
@@ -284,8 +291,8 @@ export default function Products() {
                 )}
               </div>
             ) : (
-              <StaggerContainer className="grid grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-                {products.map((product) => {
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                {products.map((product, index) => {
                   const displayImage = product.images && Array.isArray(product.images) && product.images.length > 0
                     ? product.images[0]
                     : product.image_url;
@@ -294,71 +301,81 @@ export default function Products() {
                   const hasActiveGroupBuy = isGroupBuyActive(campaign);
 
                   return (
-                    <StaggerItem key={product.id}>
+                    <motion.div
+                      key={product.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: index * 0.03 }}
+                    >
                       <Link to={`/products/${product.id}`} className="group block">
-                        <Card className="overflow-hidden border-0 bg-transparent hover-lift">
-                          <div className="relative aspect-[3/4] bg-accent overflow-hidden rounded-lg image-zoom">
-                            {displayImage ? (
-                              <img
-                                src={displayImage}
-                                alt={product.name}
-                                className="w-full h-full object-cover"
-                                loading="lazy"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-muted/30">
-                                <Sparkles className="h-12 w-12 text-muted-foreground/30" />
-                              </div>
-                            )}
-                            
-                            {/* Badges */}
+                        <Card className="overflow-hidden border-0 bg-transparent">
+                          <div className="relative aspect-square bg-accent rounded-lg overflow-hidden">
                             {hasActiveGroupBuy && campaign && (
                               <>
-                                <Badge className="absolute top-3 left-3 bg-secondary/90 text-secondary-foreground shadow-lg backdrop-blur-sm">
+                                <Badge className="absolute top-2 left-2 z-10 bg-foreground text-background text-[10px]">
                                   <Crown className="w-3 h-3 mr-1" />
                                   Circle
                                 </Badge>
                                 <CountdownBadge 
                                   expiryAt={campaign.expiry_at} 
-                                  className="absolute top-3 right-3"
+                                  className="absolute top-2 right-2 z-10"
                                 />
                               </>
                             )}
+
+                            {displayImage ? (
+                              <div className="w-full h-full p-4 flex items-center justify-center group-hover:scale-105 transition-transform duration-500">
+                                <img
+                                  src={displayImage}
+                                  alt={product.name}
+                                  className="max-w-full max-h-full object-contain"
+                                  loading="lazy"
+                                />
+                              </div>
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Sparkles className="h-10 w-10 text-muted-foreground/20" />
+                              </div>
+                            )}
                             
-                            {/* Quick View Overlay */}
-                            <div className="absolute inset-0 bg-foreground/0 group-hover:bg-foreground/5 transition-colors duration-500 flex items-end justify-center pb-6 opacity-0 group-hover:opacity-100">
-                              <Button variant="outline" size="sm" className="bg-background/90 backdrop-blur-sm border-0 text-xs tracking-wider">
-                                {hasActiveGroupBuy ? 'Join Circle' : 'View Details'}
+                            {/* Quick Add Overlay */}
+                            <div className="absolute bottom-0 left-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                              <Button 
+                                size="sm" 
+                                className="w-full bg-foreground/90 hover:bg-foreground text-background text-xs h-9 rounded-full backdrop-blur-sm"
+                              >
+                                <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
+                                Add to Cart
                               </Button>
                             </div>
                           </div>
                           
-                          <CardContent className="p-4 space-y-2">
+                          <CardContent className="p-3 pt-4 space-y-1">
                             {product.vendors?.rep_full_name && (
-                              <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-serif">
+                              <p className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
                                 {product.vendors.rep_full_name}
                               </p>
                             )}
-                            <h3 className="font-medium text-sm line-clamp-2 group-hover:text-secondary transition-colors duration-300">
+                            <h3 className="font-medium text-sm line-clamp-2 leading-snug">
                               {product.name}
                             </h3>
-                            <div className="flex items-baseline gap-2 flex-wrap">
+                            <div className="flex items-baseline gap-2 pt-1">
                               {hasActiveGroupBuy && campaign ? (
                                 <>
-                                  <span className="text-lg font-serif text-secondary">
+                                  <span className="text-base font-medium">
                                     ₦{campaign.discount_price?.toLocaleString()}
                                   </span>
-                                  <span className="text-sm text-muted-foreground line-through">
+                                  <span className="text-xs text-muted-foreground line-through">
                                     ₦{product.price?.toLocaleString()}
                                   </span>
                                 </>
                               ) : (
                                 <>
-                                  <span className="text-lg font-serif">
+                                  <span className="text-base font-medium">
                                     ₦{product.price?.toLocaleString()}
                                   </span>
                                   {product.original_price && product.original_price > product.price && (
-                                    <span className="text-sm text-muted-foreground line-through">
+                                    <span className="text-xs text-muted-foreground line-through">
                                       ₦{product.original_price?.toLocaleString()}
                                     </span>
                                   )}
@@ -368,10 +385,10 @@ export default function Products() {
                           </CardContent>
                         </Card>
                       </Link>
-                    </StaggerItem>
+                    </motion.div>
                   );
                 })}
-              </StaggerContainer>
+              </div>
             )}
           </div>
         </div>

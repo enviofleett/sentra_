@@ -4,7 +4,7 @@ import sentraLogo from '@/assets/sentra-logo.png';
 
 export const Footer = () => {
   return (
-    <footer className="bg-primary text-primary-foreground mt-20">
+    <footer className="bg-foreground text-background mt-20">
       <div className="container mx-auto px-4 py-16 md:py-20">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 lg:gap-8">
           {/* Brand */}
@@ -12,9 +12,9 @@ export const Footer = () => {
             <img 
               src={sentraLogo} 
               alt="Sentra" 
-              className="h-8 w-auto brightness-0 invert opacity-90"
+              className="h-7 w-auto brightness-0 invert opacity-90"
             />
-            <p className="text-sm text-primary-foreground/70 leading-relaxed max-w-xs">
+            <p className="text-sm text-background/60 leading-relaxed max-w-xs">
               Curating exceptional fragrances for the discerning collector. 
               Every scent tells a story.
             </p>
@@ -22,14 +22,14 @@ export const Footer = () => {
 
           {/* Quick Links */}
           <div className="space-y-6">
-            <h4 className="text-xs uppercase tracking-[0.2em] font-medium text-primary-foreground/50">
+            <h4 className="text-xs uppercase tracking-[0.2em] font-medium text-background/40">
               Explore
             </h4>
             <ul className="space-y-3">
               <li>
                 <Link 
                   to="/products" 
-                  className="text-sm text-primary-foreground/70 hover:text-secondary transition-colors"
+                  className="text-sm text-background/60 hover:text-background transition-colors"
                 >
                   Collection
                 </Link>
@@ -37,7 +37,7 @@ export const Footer = () => {
               <li>
                 <Link 
                   to="/products" 
-                  className="text-sm text-primary-foreground/70 hover:text-secondary transition-colors"
+                  className="text-sm text-background/60 hover:text-background transition-colors"
                 >
                   Sentra Circles
                 </Link>
@@ -45,7 +45,7 @@ export const Footer = () => {
               <li>
                 <a 
                   href="#" 
-                  className="text-sm text-primary-foreground/70 hover:text-secondary transition-colors"
+                  className="text-sm text-background/60 hover:text-background transition-colors"
                 >
                   Affiliate Programme
                 </a>
@@ -55,14 +55,14 @@ export const Footer = () => {
 
           {/* Support */}
           <div className="space-y-6">
-            <h4 className="text-xs uppercase tracking-[0.2em] font-medium text-primary-foreground/50">
+            <h4 className="text-xs uppercase tracking-[0.2em] font-medium text-background/40">
               Support
             </h4>
             <ul className="space-y-3">
               <li>
                 <a 
                   href="#" 
-                  className="text-sm text-primary-foreground/70 hover:text-secondary transition-colors"
+                  className="text-sm text-background/60 hover:text-background transition-colors"
                 >
                   Shipping Policy
                 </a>
@@ -70,7 +70,7 @@ export const Footer = () => {
               <li>
                 <a 
                   href="#" 
-                  className="text-sm text-primary-foreground/70 hover:text-secondary transition-colors"
+                  className="text-sm text-background/60 hover:text-background transition-colors"
                 >
                   Terms & Conditions
                 </a>
@@ -78,7 +78,7 @@ export const Footer = () => {
               <li>
                 <a 
                   href="#" 
-                  className="text-sm text-primary-foreground/70 hover:text-secondary transition-colors"
+                  className="text-sm text-background/60 hover:text-background transition-colors"
                 >
                   Privacy Policy
                 </a>
@@ -86,7 +86,7 @@ export const Footer = () => {
               <li>
                 <a 
                   href="#" 
-                  className="text-sm text-primary-foreground/70 hover:text-secondary transition-colors"
+                  className="text-sm text-background/60 hover:text-background transition-colors"
                 >
                   FAQ
                 </a>
@@ -96,42 +96,42 @@ export const Footer = () => {
 
           {/* Contact */}
           <div className="space-y-6">
-            <h4 className="text-xs uppercase tracking-[0.2em] font-medium text-primary-foreground/50">
+            <h4 className="text-xs uppercase tracking-[0.2em] font-medium text-background/40">
               Contact
             </h4>
             <ul className="space-y-4">
               <li className="flex items-start gap-3">
-                <MapPin className="h-4 w-4 text-secondary flex-shrink-0 mt-0.5" />
-                <address className="text-sm text-primary-foreground/70 not-italic">
+                <MapPin className="h-4 w-4 text-background/40 flex-shrink-0 mt-0.5" />
+                <address className="text-sm text-background/60 not-italic">
                   57 Ebitu Street, Jabi<br />
                   Abuja, Nigeria
                 </address>
               </li>
               <li className="flex items-center gap-3">
-                <Phone className="h-4 w-4 text-secondary flex-shrink-0" />
+                <Phone className="h-4 w-4 text-background/40 flex-shrink-0" />
                 <a 
                   href="tel:+2341234567890" 
-                  className="text-sm text-primary-foreground/70 hover:text-secondary transition-colors"
+                  className="text-sm text-background/60 hover:text-background transition-colors"
                 >
                   +234 123 456 7890
                 </a>
               </li>
               <li className="flex items-center gap-3">
-                <Mail className="h-4 w-4 text-secondary flex-shrink-0" />
+                <Mail className="h-4 w-4 text-background/40 flex-shrink-0" />
                 <a 
                   href="mailto:hello@sentra.com" 
-                  className="text-sm text-primary-foreground/70 hover:text-secondary transition-colors"
+                  className="text-sm text-background/60 hover:text-background transition-colors"
                 >
                   hello@sentra.com
                 </a>
               </li>
               <li className="flex items-center gap-3">
-                <Instagram className="h-4 w-4 text-secondary flex-shrink-0" />
+                <Instagram className="h-4 w-4 text-background/40 flex-shrink-0" />
                 <a 
                   href="https://instagram.com/sentra" 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="text-sm text-primary-foreground/70 hover:text-secondary transition-colors"
+                  className="text-sm text-background/60 hover:text-background transition-colors"
                 >
                   @sentra
                 </a>
@@ -141,8 +141,8 @@ export const Footer = () => {
         </div>
 
         {/* Bottom Bar */}
-        <div className="mt-16 pt-8 border-t border-primary-foreground/10">
-          <p className="text-xs text-primary-foreground/40 text-center tracking-wider">
+        <div className="mt-16 pt-8 border-t border-background/10">
+          <p className="text-xs text-background/30 text-center tracking-wider">
             © {new Date().getFullYear()} SENTRA. All rights reserved.
           </p>
         </div>

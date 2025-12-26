@@ -12,7 +12,8 @@ import {
   Sparkles,
   Tag,
   UserPlus,
-  Wallet
+  Wallet,
+  FileText
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -29,6 +30,7 @@ const navigation = [
   { name: 'Affiliates', href: '/admin/affiliates', icon: Wallet },
   { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'Waitlist', href: '/admin/waitlist', icon: UserPlus },
+  { name: 'Content', href: '/admin/content', icon: FileText },
   { name: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 

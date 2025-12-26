@@ -125,7 +125,6 @@ serve(async (req: Request) => {
 
       } else if (paymentType === 'group_buy_commitment') {
         // --- GROUP BUY PAY-TO-BOOK LOGIC ---
-        // Only update status, order created when campaign goal is met by process-group-buy-goals
         const commitmentId = metadata?.commitment_id;
         if (!commitmentId) {
           console.error("[Paystack Webhook] ERROR: group_buy_commitment payment missing commitment_id");
@@ -134,9 +133,13 @@ serve(async (req: Request) => {
 
         console.log(`[Paystack Webhook] Group Buy Commitment - ID: ${commitmentId}`);
 
+        // Fetch commitment with profile data
         const { data: commitment, error: fetchError } = await supabase
           .from("group_buy_commitments")
-          .select("id, committed_price, quantity, status, campaign_id")
+          .select(`
+            id, committed_price, quantity, status, campaign_id, user_id,
+            profiles:user_id(email, full_name, default_shipping_address, default_billing_address)
+          `)
           .eq("id", commitmentId)
           .single();
         
@@ -159,6 +162,7 @@ serve(async (req: Request) => {
           return new Response(JSON.stringify({ message: "Already processed" }), { status: 200 });
         }
 
+        // Update commitment to paid
         const { error: updateError } = await supabase
           .from("group_buy_commitments")
           .update({
@@ -174,8 +178,104 @@ serve(async (req: Request) => {
           return new Response(JSON.stringify({ error: "Failed to update commitment" }), { status: 500 });
         }
         
-        console.log(`[Paystack Webhook] SUCCESS: Commitment ${commitmentId} updated to 'committed_paid'`);
-        console.log(`[Paystack Webhook] Note: Order will be created when campaign goal is met`);
+        console.log(`[Paystack Webhook] Commitment ${commitmentId} updated to 'committed_paid'`);
+
+        // Fetch campaign to check if goal is already met
+        const { data: campaign, error: campaignError } = await supabase
+          .from("group_buy_campaigns")
+          .select(`*, products!group_buy_campaigns_product_id_fkey(id, name, price, vendor_id, image_url)`)
+          .eq("id", commitment.campaign_id)
+          .single();
+
+        if (campaignError || !campaign) {
+          console.error(`[Paystack Webhook] Campaign fetch error:`, campaignError);
+          // Still return success - commitment was updated
+          return new Response(JSON.stringify({ message: "Commitment processed, campaign check skipped" }), { status: 200 });
+        }
+
+        // Check if campaign goal is already reached (create order immediately)
+        const goalReached = campaign.current_quantity >= campaign.goal_quantity;
+        const isGoalMetStatus = ['goal_reached', 'goal_met_pending_payment', 'goal_met_paid_finalized'].includes(campaign.status);
+        
+        if (goalReached || isGoalMetStatus) {
+          console.log(`[Paystack Webhook] Campaign goal already reached - creating order immediately`);
+          
+          const profile = commitment.profiles as any;
+          const product = campaign.products as any;
+          const totalAmount = Number(commitment.committed_price) * commitment.quantity;
+
+          const orderData = {
+            user_id: commitment.user_id,
+            customer_email: profile?.email || '',
+            status: 'processing' as const,
+            payment_status: 'paid' as const,
+            paystack_status: 'success',
+            payment_reference: reference,
+            items: [{
+              product_id: product?.id,
+              name: product?.name,
+              price: Number(commitment.committed_price),
+              quantity: commitment.quantity,
+              vendor_id: product?.vendor_id,
+              image_url: product?.image_url,
+              commitment_id: commitmentId,
+            }],
+            subtotal: totalAmount,
+            tax: 0,
+            shipping_cost: 0,
+            total_amount: totalAmount,
+            shipping_address: profile?.default_shipping_address || {},
+            billing_address: profile?.default_billing_address || {},
+          };
+
+          const { data: newOrder, error: orderError } = await supabase
+            .from("orders")
+            .insert([orderData])
+            .select("id")
+            .single();
+
+          if (orderError) {
+            console.error(`[Paystack Webhook] Order creation failed:`, orderError);
+            // Commitment is paid, but order failed - log but don't fail webhook
+            return new Response(JSON.stringify({ 
+              message: "Commitment processed, order creation pending",
+              warning: "Order will be created by scheduled job" 
+            }), { status: 200 });
+          }
+
+          // Update commitment to finalized with order linkage
+          await supabase
+            .from("group_buy_commitments")
+            .update({
+              status: "paid_finalized",
+              order_id: newOrder.id,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", commitmentId);
+
+          console.log(`[Paystack Webhook] SUCCESS: Order ${newOrder.id} created for commitment ${commitmentId}`);
+
+          // Send confirmation email
+          supabase.functions.invoke('send-email', {
+            body: {
+              to: profile?.email,
+              templateId: 'GROUPBUY_SUCCESS_PAID_FINALIZED',
+              data: {
+                customer_name: profile?.full_name || 'Customer',
+                product_name: product?.name,
+                order_id: newOrder.id.slice(0, 8),
+              }
+            }
+          }).catch(err => console.error('[Paystack Webhook] Email error (non-blocking):', err));
+
+          return new Response(JSON.stringify({ 
+            message: "Commitment processed and order created",
+            order_id: newOrder.id 
+          }), { status: 200 });
+        }
+
+        // Goal not yet reached - order will be created when goal is met
+        console.log(`[Paystack Webhook] SUCCESS: Commitment ${commitmentId} paid, awaiting campaign goal`);
         return new Response(JSON.stringify({ message: "Commitment processed successfully" }), { status: 200 });
 
       } else if (paymentType === 'group_buy_final_payment') {

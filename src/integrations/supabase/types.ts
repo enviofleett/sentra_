@@ -498,10 +498,17 @@ export type Database = {
       }
       pre_launch_settings: {
         Row: {
+          badge_1_icon: string | null
+          badge_1_text: string | null
+          badge_2_icon: string | null
+          badge_2_text: string | null
           banner_image_url: string | null
           banner_subtitle: string | null
           banner_title: string | null
           created_at: string
+          description_text: string | null
+          headline_accent: string | null
+          headline_text: string | null
           id: string
           is_prelaunch_mode: boolean | null
           launch_date: string | null
@@ -509,10 +516,17 @@ export type Database = {
           waitlist_reward_amount: number | null
         }
         Insert: {
+          badge_1_icon?: string | null
+          badge_1_text?: string | null
+          badge_2_icon?: string | null
+          badge_2_text?: string | null
           banner_image_url?: string | null
           banner_subtitle?: string | null
           banner_title?: string | null
           created_at?: string
+          description_text?: string | null
+          headline_accent?: string | null
+          headline_text?: string | null
           id?: string
           is_prelaunch_mode?: boolean | null
           launch_date?: string | null
@@ -520,10 +534,17 @@ export type Database = {
           waitlist_reward_amount?: number | null
         }
         Update: {
+          badge_1_icon?: string | null
+          badge_1_text?: string | null
+          badge_2_icon?: string | null
+          badge_2_text?: string | null
           banner_image_url?: string | null
           banner_subtitle?: string | null
           banner_title?: string | null
           created_at?: string
+          description_text?: string | null
+          headline_accent?: string | null
+          headline_text?: string | null
           id?: string
           is_prelaunch_mode?: boolean | null
           launch_date?: string | null

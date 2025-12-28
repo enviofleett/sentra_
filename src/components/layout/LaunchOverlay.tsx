@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Gift, Clock, Instagram } from 'lucide-react';
+import { Loader2, Gift, Clock, Instagram, Star, Percent, Truck, Shield, Sparkles, Heart } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useBranding } from '@/hooks/useBranding';
@@ -26,6 +26,13 @@ interface PreLaunchSettings {
   banner_title: string | null;
   banner_subtitle: string | null;
   waitlist_reward_amount: number;
+  headline_text: string | null;
+  headline_accent: string | null;
+  description_text: string | null;
+  badge_1_text: string | null;
+  badge_1_icon: string | null;
+  badge_2_text: string | null;
+  badge_2_icon: string | null;
 }
 
 interface CountdownTime {
@@ -33,6 +40,22 @@ interface CountdownTime {
   hours: number;
   minutes: number;
   seconds: number;
+}
+
+const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+  gift: Gift,
+  clock: Clock,
+  star: Star,
+  percent: Percent,
+  truck: Truck,
+  shield: Shield,
+  sparkles: Sparkles,
+  heart: Heart
+};
+
+function BadgeIcon({ icon, className }: { icon: string; className?: string }) {
+  const IconComponent = iconMap[icon] || Gift;
+  return <IconComponent className={className} />;
 }
 
 function CountdownTimer({ launchDate }: { launchDate: string }) {
@@ -251,6 +274,21 @@ function WaitlistFormModal({
   );
 }
 
+function renderHeadlineWithAccent(headline: string, accent: string) {
+  if (!accent || !headline.includes(accent)) {
+    return <span>{headline}</span>;
+  }
+  
+  const parts = headline.split(accent);
+  return (
+    <>
+      {parts[0]}
+      <span className="text-primary">{accent}</span>
+      {parts[1]}
+    </>
+  );
+}
+
 export function LaunchOverlay({ children }: LaunchOverlayProps) {
   const location = useLocation();
   const { logoUrl } = useBranding();
@@ -299,6 +337,13 @@ export function LaunchOverlay({ children }: LaunchOverlayProps) {
 
   const rewardAmount = settings.waitlist_reward_amount || 100000;
   const bannerImage = settings.banner_image_url || '/placeholder.svg';
+  const headline = settings.headline_text || 'Exclusive fragrances at BETTER PRICES always.';
+  const headlineAccent = settings.headline_accent || 'at BETTER PRICES';
+  const description = settings.description_text || 'Join our exclusive waiting list to get early access to premium fragrances at unbeatable prices. Plus, earn rewards just for signing up!';
+  const badge1Text = settings.badge_1_text || `₦${rewardAmount.toLocaleString()} Credits`;
+  const badge1Icon = settings.badge_1_icon || 'gift';
+  const badge2Text = settings.badge_2_text || '24hr Early Access';
+  const badge2Icon = settings.badge_2_icon || 'clock';
 
   return (
     <div className="min-h-screen bg-background">
@@ -313,7 +358,7 @@ export function LaunchOverlay({ children }: LaunchOverlayProps) {
             />
           ) : (
             <h1 className="font-serif text-2xl md:text-3xl font-bold text-foreground mb-3">
-              SENTRA
+              {settings.banner_title || 'SENTRA'}
             </h1>
           )}
           <span className="inline-block bg-muted text-muted-foreground text-xs md:text-sm px-4 py-1.5 rounded-full font-medium tracking-wide">
@@ -356,14 +401,12 @@ export function LaunchOverlay({ children }: LaunchOverlayProps) {
           >
             {/* Headline */}
             <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-4 leading-tight">
-              Exclusive fragrances{' '}
-              <span className="text-primary">at BETTER PRICES</span>{' '}
-              always.
+              {renderHeadlineWithAccent(headline, headlineAccent)}
             </h2>
 
             {/* Description */}
             <p className="text-muted-foreground text-base md:text-lg mb-8 max-w-lg mx-auto lg:mx-0">
-              {settings.banner_subtitle || "Join our exclusive waiting list to get early access to premium fragrances at unbeatable prices. Plus, earn rewards just for signing up!"}
+              {description}
             </p>
 
             {/* Countdown Timer */}
@@ -383,14 +426,18 @@ export function LaunchOverlay({ children }: LaunchOverlayProps) {
 
             {/* Feature Badges */}
             <div className="flex flex-wrap gap-3 justify-center lg:justify-start mb-8">
-              <div className="flex items-center gap-2 bg-muted/50 px-4 py-2 rounded-full">
-                <Gift className="h-4 w-4 text-primary" />
-                <span className="text-sm font-medium">₦{rewardAmount.toLocaleString()} Credits</span>
-              </div>
-              <div className="flex items-center gap-2 bg-muted/50 px-4 py-2 rounded-full">
-                <Clock className="h-4 w-4 text-primary" />
-                <span className="text-sm font-medium">24hr Early Access</span>
-              </div>
+              {badge1Text && (
+                <div className="flex items-center gap-2 bg-muted/50 px-4 py-2 rounded-full">
+                  <BadgeIcon icon={badge1Icon} className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-medium">{badge1Text}</span>
+                </div>
+              )}
+              {badge2Text && (
+                <div className="flex items-center gap-2 bg-muted/50 px-4 py-2 rounded-full">
+                  <BadgeIcon icon={badge2Icon} className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-medium">{badge2Text}</span>
+                </div>
+              )}
             </div>
 
             {/* CTA Button */}

@@ -26,7 +26,14 @@ function PreLaunchSettingsManager() {
     launch_date: '',
     banner_image_url: '',
     banner_title: '',
-    banner_subtitle: ''
+    banner_subtitle: '',
+    headline_text: '',
+    headline_accent: '',
+    description_text: '',
+    badge_1_text: '',
+    badge_1_icon: 'gift',
+    badge_2_text: '',
+    badge_2_icon: 'clock'
   });
 
   useEffect(() => {
@@ -48,7 +55,14 @@ function PreLaunchSettingsManager() {
         launch_date: data.launch_date ? new Date(data.launch_date).toISOString().slice(0, 16) : '',
         banner_image_url: data.banner_image_url ?? '',
         banner_title: data.banner_title ?? '',
-        banner_subtitle: data.banner_subtitle ?? ''
+        banner_subtitle: data.banner_subtitle ?? '',
+        headline_text: data.headline_text ?? 'Exclusive fragrances at BETTER PRICES always.',
+        headline_accent: data.headline_accent ?? 'at BETTER PRICES',
+        description_text: data.description_text ?? 'Join our exclusive waiting list to get early access to premium fragrances at unbeatable prices. Plus, earn rewards just for signing up!',
+        badge_1_text: data.badge_1_text ?? '₦100,000 Credits',
+        badge_1_icon: data.badge_1_icon ?? 'gift',
+        badge_2_text: data.badge_2_text ?? '24hr Early Access',
+        badge_2_icon: data.badge_2_icon ?? 'clock'
       });
     }
     if (error) {
@@ -69,6 +83,13 @@ function PreLaunchSettingsManager() {
         banner_image_url: settings.banner_image_url || null,
         banner_title: settings.banner_title || null,
         banner_subtitle: settings.banner_subtitle || null,
+        headline_text: settings.headline_text || null,
+        headline_accent: settings.headline_accent || null,
+        description_text: settings.description_text || null,
+        badge_1_text: settings.badge_1_text || null,
+        badge_1_icon: settings.badge_1_icon || 'gift',
+        badge_2_text: settings.badge_2_text || null,
+        badge_2_icon: settings.badge_2_icon || 'clock',
         updated_at: new Date().toISOString()
       })
       .eq('id', settings.id);
@@ -109,6 +130,17 @@ function PreLaunchSettingsManager() {
     setUploading(false);
     toast({ title: 'Banner uploaded', description: 'Remember to save your changes.' });
   };
+
+  const iconOptions = [
+    { value: 'gift', label: 'Gift' },
+    { value: 'clock', label: 'Clock' },
+    { value: 'star', label: 'Star' },
+    { value: 'percent', label: 'Percent' },
+    { value: 'truck', label: 'Truck' },
+    { value: 'shield', label: 'Shield' },
+    { value: 'sparkles', label: 'Sparkles' },
+    { value: 'heart', label: 'Heart' }
+  ];
 
   if (loading) {
     return (
@@ -164,40 +196,148 @@ function PreLaunchSettingsManager() {
         </p>
       </div>
 
-      {/* Banner Section */}
+      {/* Content Customization Section */}
       <div className="border-t pt-6">
-        <h3 className="text-lg font-semibold mb-4">Waitlist Page Banner</h3>
+        <h3 className="text-lg font-semibold mb-4">Waitlist Page Content</h3>
         
         <div className="grid gap-4">
           <div className="space-y-2">
-            <Label htmlFor="banner-title">Banner Title</Label>
+            <Label htmlFor="headline-text">Headline Text</Label>
+            <Input
+              id="headline-text"
+              value={settings.headline_text}
+              onChange={(e) => setSettings({ ...settings, headline_text: e.target.value })}
+              placeholder="Exclusive fragrances at BETTER PRICES always."
+            />
+            <p className="text-xs text-muted-foreground">
+              The main headline on the waitlist page
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="headline-accent">Headline Accent Text</Label>
+            <Input
+              id="headline-accent"
+              value={settings.headline_accent}
+              onChange={(e) => setSettings({ ...settings, headline_accent: e.target.value })}
+              placeholder="at BETTER PRICES"
+            />
+            <p className="text-xs text-muted-foreground">
+              This portion of the headline will be highlighted in the accent color
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="description-text">Description Text</Label>
+            <Textarea
+              id="description-text"
+              value={settings.description_text}
+              onChange={(e) => setSettings({ ...settings, description_text: e.target.value })}
+              placeholder="Join our exclusive waiting list..."
+              rows={3}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Feature Badges Section */}
+      <div className="border-t pt-6">
+        <h3 className="text-lg font-semibold mb-4">Feature Badges</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          These badges appear below the countdown timer to highlight key benefits
+        </p>
+        
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Badge 1 */}
+          <div className="p-4 border rounded-lg space-y-3">
+            <h4 className="font-medium">Badge 1</h4>
+            <div className="space-y-2">
+              <Label htmlFor="badge-1-text">Text</Label>
+              <Input
+                id="badge-1-text"
+                value={settings.badge_1_text}
+                onChange={(e) => setSettings({ ...settings, badge_1_text: e.target.value })}
+                placeholder="₦100,000 Credits"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="badge-1-icon">Icon</Label>
+              <Select 
+                value={settings.badge_1_icon} 
+                onValueChange={(val) => setSettings({ ...settings, badge_1_icon: val })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select icon" />
+                </SelectTrigger>
+                <SelectContent>
+                  {iconOptions.map((icon) => (
+                    <SelectItem key={icon.value} value={icon.value}>
+                      {icon.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Badge 2 */}
+          <div className="p-4 border rounded-lg space-y-3">
+            <h4 className="font-medium">Badge 2</h4>
+            <div className="space-y-2">
+              <Label htmlFor="badge-2-text">Text</Label>
+              <Input
+                id="badge-2-text"
+                value={settings.badge_2_text}
+                onChange={(e) => setSettings({ ...settings, badge_2_text: e.target.value })}
+                placeholder="24hr Early Access"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="badge-2-icon">Icon</Label>
+              <Select 
+                value={settings.badge_2_icon} 
+                onValueChange={(val) => setSettings({ ...settings, badge_2_icon: val })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select icon" />
+                </SelectTrigger>
+                <SelectContent>
+                  {iconOptions.map((icon) => (
+                    <SelectItem key={icon.value} value={icon.value}>
+                      {icon.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Banner Image Section */}
+      <div className="border-t pt-6">
+        <h3 className="text-lg font-semibold mb-4">Product Image</h3>
+        
+        <div className="grid gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="banner-title">Brand Name (Header)</Label>
             <Input
               id="banner-title"
               value={settings.banner_title}
               onChange={(e) => setSettings({ ...settings, banner_title: e.target.value })}
-              placeholder="Sentra"
+              placeholder="SENTRA"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="banner-subtitle">Banner Subtitle</Label>
-            <Input
-              id="banner-subtitle"
-              value={settings.banner_subtitle}
-              onChange={(e) => setSettings({ ...settings, banner_subtitle: e.target.value })}
-              placeholder="Nigeria's Premier Fragrance Boutique"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Banner Background Image</Label>
+            <Label>Product Image</Label>
             <div className="flex items-center gap-4">
               {settings.banner_image_url && (
-                <div className="relative w-32 h-20 rounded-lg overflow-hidden border">
+                <div className="relative w-32 h-40 rounded-lg overflow-hidden border bg-muted/30">
                   <img 
                     src={settings.banner_image_url} 
-                    alt="Banner preview" 
-                    className="w-full h-full object-cover"
+                    alt="Product preview" 
+                    className="w-full h-full object-contain"
                   />
                 </div>
               )}
@@ -220,7 +360,7 @@ function PreLaunchSettingsManager() {
                   />
                 </label>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Recommended: 1920x1080px, JPG or PNG
+                  Recommended: PNG with transparent background
                 </p>
               </div>
             </div>

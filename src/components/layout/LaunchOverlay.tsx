@@ -390,12 +390,33 @@ export function LaunchOverlay({ children }: LaunchOverlayProps) {
       <main className="container mx-auto px-4 py-8 md:py-12 lg:py-16">
         <div className="flex flex-col lg:grid lg:grid-cols-2 gap-8 lg:gap-12 items-center max-w-6xl mx-auto">
           
-          {/* Content Column - Always first on mobile */}
+          {/* Product Image - First on mobile */}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.6 }}
+            className="relative flex justify-center order-1 lg:order-1 w-full"
+          >
+            <div className="relative w-full max-w-md lg:max-w-none">
+              {/* Decorative circle behind image */}
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-primary/5 rounded-full blur-3xl scale-110" />
+              
+              <motion.img
+                src={bannerImage}
+                alt="Featured Fragrance"
+                className="relative w-full h-auto object-contain drop-shadow-2xl mx-auto lg:w-96"
+                animate={{ y: [0, -10, 0] }}
+                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+              />
+            </div>
+          </motion.div>
+
+          {/* Content Column - Second on mobile */}
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="text-center lg:text-left order-1 lg:order-2"
+            className="text-center lg:text-left order-2 lg:order-2"
           >
             {/* Headline */}
             <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-4 leading-tight">
@@ -474,27 +495,6 @@ export function LaunchOverlay({ children }: LaunchOverlayProps) {
                 </motion.div>
               )}
             </AnimatePresence>
-          </motion.div>
-
-          {/* Product Image - Always last on mobile */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6 }}
-            className="relative flex justify-center lg:justify-end order-2 lg:order-1"
-          >
-            <div className="relative">
-              {/* Decorative circle behind image */}
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-primary/5 rounded-full blur-3xl scale-110" />
-              
-              <motion.img
-                src={bannerImage}
-                alt="Featured Fragrance"
-                className="relative w-64 md:w-80 lg:w-96 h-auto object-contain drop-shadow-2xl"
-                animate={{ y: [0, -10, 0] }}
-                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-              />
-            </div>
           </motion.div>
         </div>
       </main>

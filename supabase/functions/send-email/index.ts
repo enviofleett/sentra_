@@ -1,6 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.76.1';
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -57,7 +57,7 @@ serve(async (req) => {
 
     console.log('✅ Template compiled for:', to);
 
-    // Configure SMTP client
+    // Configure nodemailer with Gmail SMTP
     const gmailEmail = Deno.env.get('GMAIL_EMAIL');
     const gmailPassword = Deno.env.get('GMAIL_APP_PASSWORD');
 
@@ -65,19 +65,22 @@ serve(async (req) => {
       throw new Error('Gmail credentials not configured');
     }
 
-    const client = new SmtpClient();
-
-    await client.connectTLS({
-      hostname: "smtp.gmail.com",
-      port: 465,
-      username: gmailEmail,
-      password: gmailPassword,
+    const client = new SMTPClient({
+      connection: {
+        hostname: "smtp.gmail.com",
+        port: 465,
+        tls: true,
+        auth: {
+          username: gmailEmail,
+          password: gmailPassword,
+        },
+      },
     });
 
-    console.log('✅ SMTP connection established');
+    console.log('✅ SMTP client created');
 
     // Send email
-    await client.send({
+    const sendResult = await client.send({
       from: gmailEmail,
       to: to,
       subject: compiledSubject,
@@ -87,9 +90,10 @@ serve(async (req) => {
 
     await client.close();
 
-    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    console.log('✅ Email sent successfully:', messageId);
+    console.log('✅ Email sent successfully');
 
+    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
     return new Response(
       JSON.stringify({ 
         success: true, 

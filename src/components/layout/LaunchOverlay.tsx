@@ -192,7 +192,7 @@ function WaitlistFormModal({
           </div>
 
           <div className="pt-3 border-t border-border">
-            <p className="text-xs text-muted-foreground mb-3">
+            <p className="text-xs text-muted-foreground mb-3 font-extrabold">
               Follow us on social media for bonus rewards @sentra_africa.
 Also add your social handles to unlock the N100,000 Giftcard.          
  

@@ -481,6 +481,8 @@ function EmailTemplateManager() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [currentTemplate, setCurrentTemplate] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+  const [testEmail, setTestEmail] = useState('');
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [newTemplate, setNewTemplate] = useState({
@@ -548,6 +550,48 @@ function EmailTemplateManager() {
       toast({ title: 'Success', description: `Template ${currentTemplate.template_id} updated.` });
     }
     setIsSaving(false);
+  };
+
+  const handleTestEmail = async () => {
+    if (!currentTemplate || !testEmail) {
+      toast({ title: 'Error', description: 'Please enter a test email address', variant: 'destructive' });
+      return;
+    }
+
+    setIsTesting(true);
+
+    try {
+      // Build test data based on template variables
+      const testData: { [key: string]: string } = {
+        name: 'Test User',
+        email: testEmail,
+        reward_amount: '100,000',
+        order_id: 'TEST-12345',
+        total_amount: '₦50,000',
+        tracking_number: 'TRK123456789'
+      };
+
+      const { data, error } = await supabase.functions.invoke('send-email', {
+        body: {
+          to: testEmail,
+          templateId: currentTemplate.template_id,
+          data: testData
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast({ title: 'Test email sent!', description: `Check ${testEmail} for the test email.` });
+      } else {
+        throw new Error(data?.error || 'Failed to send test email');
+      }
+    } catch (error: any) {
+      console.error('Test email error:', error);
+      toast({ title: 'Error sending test email', description: error.message, variant: 'destructive' });
+    }
+
+    setIsTesting(false);
   };
 
   const handleCreateTemplate = async () => {
@@ -671,7 +715,7 @@ function EmailTemplateManager() {
           <div>
             <Label>Template ID (read-only)</Label>
             <Input value={currentTemplate.template_id} disabled className="bg-muted/50" />
-            <p className="text-xs text-muted-foreground mt-1">Variables: {JSON.stringify(currentTemplate.variables)}</p>
+            <p className="text-xs text-muted-foreground mt-1">Available variables: {"{{name}}"}, {"{{email}}"}, {"{{reward_amount}}"}, {"{{order_id}}"}, {"{{total_amount}}"}, {"{{tracking_number}}"}</p>
           </div>
 
           <div>
@@ -698,6 +742,36 @@ function EmailTemplateManager() {
               onChange={(e) => handleUpdate('text_content', e.target.value)}
               rows={5}
             />
+          </div>
+
+          {/* Test Email Section */}
+          <div className="border-t pt-4 mt-4">
+            <h4 className="font-medium mb-3">Test This Template</h4>
+            <div className="flex gap-3">
+              <Input
+                type="email"
+                value={testEmail}
+                onChange={(e) => setTestEmail(e.target.value)}
+                placeholder="Enter test email address..."
+                className="flex-1"
+              />
+              <Button onClick={handleTestEmail} disabled={isTesting} variant="secondary">
+                {isTesting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Mail className="mr-2 h-4 w-4" />
+                    Send Test
+                  </>
+                )}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Test data will be used for variables (e.g., name="Test User")
+            </p>
           </div>
 
           <Button onClick={handleSave} disabled={isSaving}>

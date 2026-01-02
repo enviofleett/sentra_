@@ -137,7 +137,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signUp = async (email: string, password: string, fullName: string, referralCode?: string) => {
     const redirectUrl = `${window.location.origin}/`;
-    
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -146,7 +146,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         data: {
           full_name: fullName,
           referral_code: referralCode || undefined
-        }
+        },
+        // Require email confirmation before allowing sign in
+        // Note: This requires email confirmation to be enabled in Supabase Auth settings
       }
     });
     return { error };

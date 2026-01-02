@@ -45,7 +45,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
   const loadCart = async () => {
     if (!user) return;
-    
+
     setLoading(true);
     const { data, error } = await supabase
       .from('cart_items')
@@ -63,7 +63,29 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         variant: 'destructive'
       });
     } else {
-      setItems(data || []);
+      // Filter out items with deleted products and clean up orphaned cart items
+      const validItems = (data || []).filter(item => {
+        if (!item.product) {
+          // Product was deleted - remove from cart
+          supabase
+            .from('cart_items')
+            .delete()
+            .eq('id', item.id)
+            .then(() => console.log(`Cleaned up cart item ${item.id} for deleted product`));
+          return false;
+        }
+        return true;
+      });
+
+      if (validItems.length < (data || []).length) {
+        toast({
+          title: 'Cart Updated',
+          description: 'Some items were removed because products are no longer available',
+          duration: 5000
+        });
+      }
+
+      setItems(validItems);
     }
     setLoading(false);
   };

@@ -67,7 +67,7 @@ export default function GroupBuyCampaignsManagement() {
     try {
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, price, vendor_id')
+        .select('id, name, price, vendor_id, stock_quantity')
         .eq('is_active', true);
 
       if (error) throw error;
@@ -106,10 +106,28 @@ export default function GroupBuyCampaignsManagement() {
       toast.error('Expiry date must be in the future');
       return;
     }
-    
+
     let campaignIdToUpdate = selectedCampaign?.id;
 
     try {
+      // Validate stock availability for the goal quantity
+      const { data: productData, error: productError } = await supabase
+        .from('products')
+        .select('stock_quantity, name')
+        .eq('id', formData.product_id)
+        .single();
+
+      if (productError) throw productError;
+
+      if (productData && formData.goal_quantity > productData.stock_quantity) {
+        toast.error(
+          `Goal quantity (${formData.goal_quantity}) exceeds available stock (${productData.stock_quantity}) for ${productData.name}`,
+          { duration: 5000 }
+        );
+        return;
+      }
+
+
       if (selectedCampaign) {
         const { error } = await supabase
           .from('group_buy_campaigns')

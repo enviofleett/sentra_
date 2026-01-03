@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useSearchParams, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Gift, Clock, Instagram, Star, Percent, Truck, Shield, Sparkles, Heart } from 'lucide-react';
+import { Loader2, Gift, Clock, Instagram, Star, Percent, Truck, Shield, Sparkles, Heart, Eye, X, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useBranding } from '@/hooks/useBranding';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
 interface LaunchOverlayProps {
   children: React.ReactNode;
 }
@@ -253,25 +255,97 @@ function renderHeadlineWithAccent(headline: string, accent: string) {
       {parts[1]}
     </>;
 }
+// Admin Preview Bar Component
+function AdminPreviewBar({ onExit }: { onExit: () => void }) {
+  return (
+    <motion.div
+      initial={{ y: -50, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      className="fixed top-0 left-0 right-0 z-50 bg-primary text-primary-foreground py-2 px-4 flex items-center justify-between shadow-lg"
+    >
+      <div className="flex items-center gap-2">
+        <Eye className="h-4 w-4" />
+        <span className="text-sm font-medium">Admin Preview Mode</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <Link to="/admin/settings">
+          <Button variant="ghost" size="sm" className="text-primary-foreground hover:bg-primary-foreground/20 h-8">
+            <Settings className="h-4 w-4 mr-1" />
+            Admin
+          </Button>
+        </Link>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={onExit}
+          className="text-primary-foreground hover:bg-primary-foreground/20 h-8"
+        >
+          <X className="h-4 w-4 mr-1" />
+          Exit Preview
+        </Button>
+      </div>
+    </motion.div>
+  );
+}
+
 export function LaunchOverlay({
   children
 }: LaunchOverlayProps) {
   const location = useLocation();
-  const {
-    logoUrl
-  } = useBranding();
+  const [searchParams] = useSearchParams();
+  const { user } = useAuth();
+  const { logoUrl } = useBranding();
   const [settings, setSettings] = useState<PreLaunchSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+
+  // Check for admin status
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      if (!user) {
+        setIsAdmin(false);
+        return;
+      }
+
+      const { data } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('role', 'admin')
+        .maybeSingle();
+
+      setIsAdmin(!!data);
+    };
+
+    checkAdminStatus();
+  }, [user]);
+
+  // Check for preview mode from URL or localStorage
+  useEffect(() => {
+    const previewParam = searchParams.get('preview');
+    const storedPreview = localStorage.getItem('admin_preview_mode');
+    
+    if (previewParam === 'admin') {
+      localStorage.setItem('admin_preview_mode', 'true');
+      setIsPreviewMode(true);
+    } else if (storedPreview === 'true') {
+      setIsPreviewMode(true);
+    }
+  }, [searchParams]);
+
   useEffect(() => {
     checkPrelaunchMode();
   }, []);
+
   const checkPrelaunchMode = async () => {
-    const {
-      data,
-      error
-    } = await supabase.from('pre_launch_settings').select('*').maybeSingle();
+    const { data, error } = await supabase
+      .from('pre_launch_settings')
+      .select('*')
+      .maybeSingle();
+
     if (error) {
       console.error('Error checking prelaunch mode:', error);
       setSettings(null);
@@ -282,15 +356,32 @@ export function LaunchOverlay({
     setIsLoading(false);
   };
 
+  const exitPreviewMode = () => {
+    localStorage.removeItem('admin_preview_mode');
+    setIsPreviewMode(false);
+  };
+
   // Still checking
   if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center bg-background">
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>;
+      </div>
+    );
   }
 
   // Bypass lockdown for admin and auth routes
   const isExcludedRoute = location.pathname.startsWith('/admin') || location.pathname.startsWith('/auth');
+
+  // Admin in preview mode - show store with preview bar
+  if (settings?.is_prelaunch_mode && isAdmin && isPreviewMode && !isExcludedRoute) {
+    return (
+      <>
+        <AdminPreviewBar onExit={exitPreviewMode} />
+        <div className="pt-10">{children}</div>
+      </>
+    );
+  }
 
   // Not in prelaunch mode, no settings, or excluded route - show normal app
   if (!settings?.is_prelaunch_mode || isExcludedRoute) {

@@ -9,8 +9,28 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Plus, Mail, Users, FileText, Image as ImageIcon, Link, Rocket, Upload, PieChart, TrendingUp } from 'lucide-react';
+import { Loader2, Plus, Mail, Users, FileText, Image as ImageIcon, Link, Rocket, Upload, PieChart, TrendingUp, ExternalLink } from 'lucide-react';
 import { useBranding } from '@/hooks/useBranding';
+
+// Preview Store Button Component
+function PreviewStoreButton({ isPrelaunchEnabled }: { isPrelaunchEnabled: boolean }) {
+  if (!isPrelaunchEnabled) return null;
+
+  const handlePreview = () => {
+    window.open('/?preview=admin', '_blank');
+  };
+
+  return (
+    <Button 
+      onClick={handlePreview}
+      variant="outline"
+      className="gap-2"
+    >
+      <ExternalLink className="h-4 w-4" />
+      Preview Store
+    </Button>
+  );
+}
 
 // --- Sub-components for SettingsManagement ---
 
@@ -160,10 +180,13 @@ function PreLaunchSettingsManager() {
             When enabled, visitors see the waitlist page instead of the store
           </p>
         </div>
-        <Switch
-          checked={settings.is_prelaunch_mode}
-          onCheckedChange={(checked) => setSettings({ ...settings, is_prelaunch_mode: checked })}
-        />
+        <div className="flex items-center gap-3">
+          <PreviewStoreButton isPrelaunchEnabled={settings.is_prelaunch_mode} />
+          <Switch
+            checked={settings.is_prelaunch_mode}
+            onCheckedChange={(checked) => setSettings({ ...settings, is_prelaunch_mode: checked })}
+          />
+        </div>
       </div>
 
       {/* Launch Date */}

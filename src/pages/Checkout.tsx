@@ -126,17 +126,6 @@ export default function Checkout() {
       return;
     }
 
-    // Check if email is verified (if Supabase email confirmation is enabled)
-    if (session.user.email && !session.user.email_confirmed_at) {
-      toast({
-        title: 'Email Not Verified',
-        description: 'Please verify your email address before placing an order. Check your inbox for the verification link.',
-        variant: 'destructive',
-        duration: 8000
-      });
-      return;
-    }
-
     setProcessing(true);
 
     try {

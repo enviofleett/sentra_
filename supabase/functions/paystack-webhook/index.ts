@@ -149,7 +149,7 @@ serve(async (req: Request) => {
 
         const { data: order, error: fetchError } = await supabase
           .from("orders")
-          .select("id, total_amount, paystack_status, user_id, items")
+          .select("id, total_amount, paystack_status, user_id")
           .eq("payment_reference", reference)
           .single();
 
@@ -205,29 +205,9 @@ serve(async (req: Request) => {
           console.log(`[Paystack Webhook] Profit split recorded: ${allocationId}`);
         }
         
-        // Deduct stock for each item in the order
-        console.log(`[Paystack Webhook] Deducting stock for ${order.items?.length || 0} items`);
-        if (order.items && Array.isArray(order.items)) {
-          for (const item of order.items) {
-            if (item.product_id && item.quantity) {
-              const { error: stockError } = await supabase.rpc('deduct_product_stock', {
-                p_product_id: item.product_id,
-                p_quantity: item.quantity
-              });
-
-              if (stockError) {
-                console.error(`[Paystack Webhook] Stock deduction error for product ${item.product_id}:`, stockError);
-                // Non-blocking - order is already paid, log for manual resolution
-              } else {
-                console.log(`[Paystack Webhook] Stock deducted: Product ${item.product_id}, Qty ${item.quantity}`);
-              }
-            }
-          }
-        }
-
         // Process affiliate commission if user was referred
         await processAffiliateCommission(supabase, order.user_id, order.id, order.total_amount);
-
+        
         console.log(`[Paystack Webhook] SUCCESS: Order ${order.id} updated to 'processing'`);
         return new Response(JSON.stringify({ message: "Order processed successfully" }), { status: 200 });
 
@@ -377,20 +357,6 @@ serve(async (req: Request) => {
             console.log(`[Paystack Webhook] Profit split recorded: ${allocationId}`);
           }
           
-          // Deduct stock for group buy order
-          if (product?.id && commitment.quantity) {
-            const { error: stockError } = await supabase.rpc('deduct_product_stock', {
-              p_product_id: product.id,
-              p_quantity: commitment.quantity
-            });
-
-            if (stockError) {
-              console.error(`[Paystack Webhook] Group buy stock deduction error for product ${product.id}:`, stockError);
-            } else {
-              console.log(`[Paystack Webhook] Group buy stock deducted: Product ${product.id}, Qty ${commitment.quantity}`);
-            }
-          }
-
           // Process affiliate commission for group buy order
           await processAffiliateCommission(supabase, commitment.user_id, newOrder.id, totalAmount);
 
@@ -548,23 +514,9 @@ serve(async (req: Request) => {
           console.log(`[Paystack Webhook] Profit split recorded: ${allocationId}`);
         }
         
-        // Deduct stock for final payment order
-        if (product?.id && commitment.quantity) {
-          const { error: stockError } = await supabase.rpc('deduct_product_stock', {
-            p_product_id: product.id,
-            p_quantity: commitment.quantity
-          });
-
-          if (stockError) {
-            console.error(`[Paystack Webhook] Final payment stock deduction error for product ${product.id}:`, stockError);
-          } else {
-            console.log(`[Paystack Webhook] Final payment stock deducted: Product ${product.id}, Qty ${commitment.quantity}`);
-          }
-        }
-
         // Process affiliate commission for final payment order
         await processAffiliateCommission(supabase, commitment.user_id, newOrder.id, totalAmount);
-
+        
         console.log(`[Paystack Webhook] SUCCESS: Final payment processed - Order ${newOrder.id} created, Commitment ${commitmentId} finalized`);
 
         // Send confirmation email (fire and forget)

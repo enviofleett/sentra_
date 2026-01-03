@@ -1,8 +1,6 @@
 import { Link } from 'react-router-dom';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { ShoppingCart, Sparkles, Crown } from 'lucide-react';
+import { Sparkles, Crown } from 'lucide-react';
 import { CountdownBadge } from '@/components/groupbuy/CountdownBadge';
 import { motion } from 'framer-motion';
 
@@ -47,27 +45,28 @@ export function ProductGrid({
     return expiry > now && ['active', 'goal_reached', 'goal_met_pending_payment'].includes(campaign.status);
   };
 
+  // Mobile-first: 2 cols, then scale up
   const gridCols = columns === 3 
-    ? 'grid-cols-2 lg:grid-cols-3' 
-    : 'grid-cols-2 lg:grid-cols-4';
+    ? 'grid-cols-2 md:grid-cols-3' 
+    : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4';
 
   if (loading) {
     return (
-      <section className="py-16 md:py-24 bg-background">
-        <div className="container mx-auto px-4">
+      <section className="py-12 md:py-20 lg:py-28 bg-[#fafafa]">
+        <div className="container mx-auto px-4 md:px-6 lg:px-8">
           {title && (
-            <div className="text-center mb-12">
-              {subtitle && <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground mb-3">{subtitle}</p>}
-              <h2 className="text-3xl md:text-4xl font-serif">{title}</h2>
+            <div className="text-center mb-10 md:mb-16">
+              {subtitle && <p className="text-[10px] md:text-xs uppercase tracking-[0.25em] text-muted-foreground/70 mb-2">{subtitle}</p>}
+              <h2 className="text-2xl md:text-3xl lg:text-4xl font-serif font-normal tracking-tight">{title}</h2>
             </div>
           )}
-          <div className={`grid ${gridCols} gap-4 md:gap-6`}>
+          <div className={`grid ${gridCols} gap-x-4 gap-y-10 md:gap-x-6 md:gap-y-14 lg:gap-x-8 lg:gap-y-16`}>
             {[...Array(columns)].map((_, i) => (
               <div key={i} className="animate-pulse">
-                <div className="aspect-square bg-accent rounded-lg mb-3" />
-                <div className="h-3 bg-muted rounded w-1/2 mb-2" />
-                <div className="h-4 bg-muted rounded w-3/4 mb-2" />
-                <div className="h-4 bg-muted rounded w-1/3" />
+                <div className="aspect-[4/5] bg-muted/30 rounded-sm mb-4" />
+                <div className="h-2.5 bg-muted/30 rounded w-1/3 mb-2.5" />
+                <div className="h-3 bg-muted/30 rounded w-2/3 mb-2" />
+                <div className="h-3 bg-muted/30 rounded w-1/4" />
               </div>
             ))}
           </div>
@@ -77,21 +76,22 @@ export function ProductGrid({
   }
 
   return (
-    <section className="py-16 md:py-24 bg-background">
-      <div className="container mx-auto px-4">
+    <section className="py-12 md:py-20 lg:py-28 bg-[#fafafa]">
+      <div className="container mx-auto px-4 md:px-6 lg:px-8">
         {title && (
           <motion.div 
-            className="text-center mb-12"
-            initial={{ opacity: 0, y: 20 }}
+            className="text-center mb-10 md:mb-16"
+            initial={{ opacity: 0, y: 16 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
           >
-            {subtitle && <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground mb-3">{subtitle}</p>}
-            <h2 className="text-3xl md:text-4xl font-serif">{title}</h2>
+            {subtitle && <p className="text-[10px] md:text-xs uppercase tracking-[0.25em] text-muted-foreground/70 mb-2">{subtitle}</p>}
+            <h2 className="text-2xl md:text-3xl lg:text-4xl font-serif font-normal tracking-tight">{title}</h2>
           </motion.div>
         )}
 
-        <div className={`grid ${gridCols} gap-4 md:gap-6`}>
+        <div className={`grid ${gridCols} gap-x-4 gap-y-10 md:gap-x-6 md:gap-y-14 lg:gap-x-8 lg:gap-y-16`}>
           {products.map((product, index) => {
             const displayImage = product.images && Array.isArray(product.images) && product.images.length > 0
               ? product.images[0]
@@ -105,103 +105,100 @@ export function ProductGrid({
             return (
               <motion.div
                 key={product.id}
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 24 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ duration: 0.4, delay: index * 0.05 }}
+                transition={{ duration: 0.5, delay: index * 0.04, ease: "easeOut" }}
               >
                 <Link to={`/products/${product.id}`} className="group block">
-                  <Card className="overflow-hidden border-0 bg-transparent">
-                    <div className="relative aspect-square bg-cream rounded-xl overflow-hidden">
-                      {/* Badges Container - Top Left */}
-                      <div className="absolute top-3 left-3 z-10 flex flex-col gap-1.5">
-                        {isInStock && (
-                          <Badge className="bg-emerald-500 text-white text-[10px] px-2 py-0.5 rounded-sm font-medium">
-                            IN STOCK
-                          </Badge>
-                        )}
-                        {(isOnSale || hasActiveGroupBuy) && (
-                          <Badge className="bg-coral text-coral-foreground text-[10px] px-2 py-0.5 rounded-sm font-medium">
-                            SALE
-                          </Badge>
-                        )}
-                        {hasActiveGroupBuy && (
-                          <Badge className="bg-foreground text-background text-[10px] px-2 py-0.5 rounded-sm font-medium">
-                            <Crown className="w-3 h-3 mr-1" />
-                            CIRCLE
-                          </Badge>
-                        )}
-                      </div>
-
-                      {/* Countdown - Top Right */}
-                      {hasActiveGroupBuy && campaign && (
-                        <CountdownBadge 
-                          expiryAt={campaign.expiry_at} 
-                          className="absolute top-3 right-3 z-10"
-                        />
+                  {/* Floating Product Container - No background, no border */}
+                  <div className="relative">
+                    {/* Badges - Refined pills */}
+                    <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+                      {isInStock && (
+                        <span className="inline-flex items-center px-2 py-0.5 text-[9px] md:text-[10px] font-medium tracking-wide uppercase bg-emerald-50 text-emerald-700 rounded-full">
+                          In Stock
+                        </span>
                       )}
-                      
+                      {(isOnSale || hasActiveGroupBuy) && (
+                        <span className="inline-flex items-center px-2 py-0.5 text-[9px] md:text-[10px] font-medium tracking-wide uppercase bg-rose-50 text-rose-600 rounded-full">
+                          Sale
+                        </span>
+                      )}
+                      {hasActiveGroupBuy && (
+                        <span className="inline-flex items-center gap-0.5 px-2 py-0.5 text-[9px] md:text-[10px] font-medium tracking-wide uppercase bg-neutral-100 text-neutral-700 rounded-full">
+                          <Crown className="w-2.5 h-2.5" />
+                          Circle
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Countdown - Subtle positioning */}
+                    {hasActiveGroupBuy && campaign && (
+                      <CountdownBadge 
+                        expiryAt={campaign.expiry_at} 
+                        className="absolute top-2 right-2 z-10"
+                      />
+                    )}
+
+                    {/* Product Image - Floating with showroom shadow */}
+                    <div className="aspect-[4/5] flex items-center justify-center p-4 md:p-6 lg:p-8">
                       {displayImage ? (
-                        <div className="w-full h-full p-6 flex items-center justify-center group-hover:scale-105 transition-transform duration-500">
+                        <div 
+                          className="relative w-full h-full flex items-center justify-center transition-transform duration-500 ease-out group-hover:scale-[1.02]"
+                        >
+                          {/* Showroom-style shadow - appears under the product */}
+                          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[70%] h-4 bg-black/[0.06] blur-xl rounded-full transition-all duration-500 ease-out group-hover:w-[75%] group-hover:bg-black/[0.08]" />
+                          
                           <img 
                             src={displayImage} 
                             alt={product.name}
-                            className="max-w-full max-h-full object-contain"
+                            className="relative max-w-full max-h-full object-contain drop-shadow-sm"
                             loading="lazy"
                           />
                         </div>
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
-                          <Sparkles className="h-10 w-10 text-muted-foreground/20" />
+                          <Sparkles className="h-8 w-8 text-muted-foreground/15" />
                         </div>
                       )}
-
-                      {/* Quick Add Overlay */}
-                      <div className="absolute bottom-0 left-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        <Button 
-                          size="sm" 
-                          className="w-full bg-foreground hover:bg-foreground/90 text-background text-xs h-10 rounded-none"
-                        >
-                          <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
-                          Add to Cart
-                        </Button>
-                      </div>
                     </div>
-                    
-                    <CardContent className="p-3 pt-4 space-y-1">
-                      {product.vendors?.rep_full_name && (
-                        <p className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
-                          {product.vendors.rep_full_name}
-                        </p>
+                  </div>
+                  
+                  {/* Product Info - Minimal typography */}
+                  <div className="mt-4 md:mt-5 space-y-1 text-center">
+                    {product.vendors?.rep_full_name && (
+                      <p className="text-[10px] md:text-[11px] uppercase tracking-[0.2em] text-muted-foreground/60 font-light">
+                        {product.vendors.rep_full_name}
+                      </p>
+                    )}
+                    <h3 className="text-sm md:text-[15px] font-normal text-foreground/90 line-clamp-2 leading-relaxed tracking-tight">
+                      {product.name}
+                    </h3>
+                    <div className="flex items-baseline justify-center gap-2 pt-0.5">
+                      {hasActiveGroupBuy && campaign ? (
+                        <>
+                          <span className="text-sm md:text-base font-medium text-foreground tracking-tight">
+                            ₦{campaign.discount_price?.toLocaleString()}
+                          </span>
+                          <span className="text-xs text-muted-foreground/50 line-through font-light">
+                            ₦{product.price?.toLocaleString()}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-sm md:text-base font-medium text-foreground tracking-tight">
+                            ₦{product.price?.toLocaleString()}
+                          </span>
+                          {product.original_price && product.original_price > product.price && (
+                            <span className="text-xs text-muted-foreground/50 line-through font-light">
+                              ₦{product.original_price?.toLocaleString()}
+                            </span>
+                          )}
+                        </>
                       )}
-                      <h3 className="font-medium text-sm line-clamp-2 leading-snug">
-                        {product.name}
-                      </h3>
-                      <div className="flex items-baseline gap-2 pt-1">
-                        {hasActiveGroupBuy && campaign ? (
-                          <>
-                            <span className="text-base font-semibold">
-                              ₦{campaign.discount_price?.toLocaleString()}
-                            </span>
-                            <span className="text-xs text-muted-foreground line-through">
-                              ₦{product.price?.toLocaleString()}
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="text-base font-semibold">
-                              ₦{product.price?.toLocaleString()}
-                            </span>
-                            {product.original_price && product.original_price > product.price && (
-                              <span className="text-xs text-muted-foreground line-through">
-                                ₦{product.original_price?.toLocaleString()}
-                              </span>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 </Link>
               </motion.div>
             );
@@ -210,13 +207,18 @@ export function ProductGrid({
 
         {showViewAll && (
           <motion.div 
-            className="text-center mt-12"
+            className="text-center mt-14 md:mt-20"
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.2 }}
           >
-            <Button asChild variant="outline" size="lg" className="px-10 h-12 rounded-none text-sm tracking-wider border-foreground text-foreground hover:bg-foreground hover:text-background">
-              <Link to="/products">View All Products</Link>
+            <Button 
+              asChild 
+              variant="outline" 
+              className="px-8 md:px-12 h-11 md:h-12 rounded-none text-xs md:text-sm tracking-[0.15em] uppercase font-light border-foreground/20 text-foreground/80 hover:bg-foreground hover:text-background hover:border-foreground transition-all duration-300"
+            >
+              <Link to="/products">View All</Link>
             </Button>
           </motion.div>
         )}

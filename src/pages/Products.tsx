@@ -3,14 +3,13 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
-import { Sparkles, SlidersHorizontal, Search, Crown, ShoppingCart } from 'lucide-react';
+import { Sparkles, SlidersHorizontal, Search, Crown } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { CountdownBadge } from '@/components/groupbuy/CountdownBadge';
 import { motion } from 'framer-motion';
@@ -270,13 +269,13 @@ export default function Products() {
           {/* Products Grid */}
           <div className="flex-1">
             {loading ? (
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-10 md:gap-x-6 md:gap-y-14 lg:gap-x-8 lg:gap-y-16">
                 {[...Array(9)].map((_, i) => (
                   <div key={i} className="animate-pulse">
-                    <div className="aspect-square bg-accent rounded-lg mb-3" />
-                    <div className="h-3 bg-muted rounded w-1/2 mb-2" />
-                    <div className="h-4 bg-muted rounded w-3/4 mb-2" />
-                    <div className="h-4 bg-muted rounded w-1/3" />
+                    <div className="aspect-[4/5] bg-muted/30 rounded-sm mb-4" />
+                    <div className="h-2 bg-muted/40 rounded w-1/3 mb-2" />
+                    <div className="h-3 bg-muted/40 rounded w-2/3 mb-2" />
+                    <div className="h-3 bg-muted/40 rounded w-1/4" />
                   </div>
                 ))}
               </div>
@@ -291,7 +290,7 @@ export default function Products() {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-10 md:gap-x-6 md:gap-y-14 lg:gap-x-8 lg:gap-y-16 bg-[#fafafa] rounded-sm p-4 md:p-6 lg:p-8">
                 {products.map((product, index) => {
                   const displayImage = product.images && Array.isArray(product.images) && product.images.length > 0
                     ? product.images[0]
@@ -299,91 +298,101 @@ export default function Products() {
                   
                   const campaign = product.group_buy_campaigns as GroupBuyCampaign | null;
                   const hasActiveGroupBuy = isGroupBuyActive(campaign);
+                  const hasSale = !hasActiveGroupBuy && product.original_price && product.original_price > product.price;
+                  const inStock = product.stock_quantity > 0;
 
                   return (
                     <motion.div
                       key={product.id}
-                      initial={{ opacity: 0, y: 20 }}
+                      initial={{ opacity: 0, y: 24 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: index * 0.03 }}
+                      transition={{ duration: 0.5, delay: index * 0.04, ease: [0.25, 0.1, 0.25, 1] }}
                     >
                       <Link to={`/products/${product.id}`} className="group block">
-                        <Card className="overflow-hidden border-0 bg-transparent">
-                          <div className="relative aspect-square bg-accent rounded-lg overflow-hidden">
-                            {hasActiveGroupBuy && campaign && (
-                              <>
-                                <Badge className="absolute top-2 left-2 z-10 bg-foreground text-background text-[10px]">
-                                  <Crown className="w-3 h-3 mr-1" />
-                                  Circle
-                                </Badge>
-                                <CountdownBadge 
-                                  expiryAt={campaign.expiry_at} 
-                                  className="absolute top-2 right-2 z-10"
-                                />
-                              </>
+                        {/* Floating Product Container */}
+                        <div className="relative">
+                          {/* Badges - Positioned top-left */}
+                          <div className="absolute top-2 left-2 z-10 flex flex-col gap-1.5">
+                            {hasActiveGroupBuy && (
+                              <span className="inline-flex items-center px-2 py-0.5 text-[9px] md:text-[10px] font-medium uppercase tracking-wide rounded-full bg-foreground/90 text-background">
+                                <Crown className="w-2.5 h-2.5 mr-1" />
+                                Circle
+                              </span>
                             )}
+                            {inStock && !hasActiveGroupBuy && (
+                              <span className="inline-flex px-2 py-0.5 text-[9px] md:text-[10px] font-medium uppercase tracking-wide rounded-full bg-emerald-500/10 text-emerald-700">
+                                In Stock
+                              </span>
+                            )}
+                            {hasSale && (
+                              <span className="inline-flex px-2 py-0.5 text-[9px] md:text-[10px] font-medium uppercase tracking-wide rounded-full bg-rose-500/10 text-rose-600">
+                                Sale
+                              </span>
+                            )}
+                          </div>
 
+                          {/* Countdown badge for group buy */}
+                          {hasActiveGroupBuy && campaign && (
+                            <CountdownBadge 
+                              expiryAt={campaign.expiry_at} 
+                              className="absolute top-2 right-2 z-10"
+                            />
+                          )}
+
+                          {/* Image Container with Floating Shadow */}
+                          <div className="relative aspect-[4/5] flex items-center justify-center p-4 md:p-6 transition-transform duration-500 ease-out group-hover:scale-[1.02]">
+                            {/* Showroom Shadow - sits behind the image */}
+                            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[70%] h-6 bg-black/[0.06] blur-xl rounded-full transition-all duration-500 group-hover:w-[75%] group-hover:bg-black/[0.08]" />
+                            
                             {displayImage ? (
-                              <div className="w-full h-full p-4 flex items-center justify-center group-hover:scale-105 transition-transform duration-500">
-                                <img
-                                  src={displayImage}
-                                  alt={product.name}
-                                  className="max-w-full max-h-full object-contain"
-                                  loading="lazy"
-                                />
-                              </div>
+                              <img
+                                src={displayImage}
+                                alt={product.name}
+                                className="relative z-[1] max-w-full max-h-full object-contain"
+                                loading="lazy"
+                              />
                             ) : (
-                              <div className="w-full h-full flex items-center justify-center">
+                              <div className="relative z-[1] flex items-center justify-center">
                                 <Sparkles className="h-10 w-10 text-muted-foreground/20" />
                               </div>
                             )}
-                            
-                            {/* Quick Add Overlay */}
-                            <div className="absolute bottom-0 left-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                              <Button 
-                                size="sm" 
-                                className="w-full bg-foreground/90 hover:bg-foreground text-background text-xs h-9 rounded-full backdrop-blur-sm"
-                              >
-                                <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
-                                Add to Cart
-                              </Button>
-                            </div>
                           </div>
-                          
-                          <CardContent className="p-3 pt-4 space-y-1">
-                            {product.vendors?.rep_full_name && (
-                              <p className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
-                                {product.vendors.rep_full_name}
-                              </p>
+                        </div>
+
+                        {/* Product Info - Minimal Typography */}
+                        <div className="mt-4 space-y-1 text-center">
+                          {product.vendors?.rep_full_name && (
+                            <p className="text-[10px] md:text-[11px] uppercase tracking-[0.2em] text-muted-foreground/70">
+                              {product.vendors.rep_full_name}
+                            </p>
+                          )}
+                          <h3 className="text-sm md:text-[15px] font-normal text-foreground line-clamp-2 leading-relaxed">
+                            {product.name}
+                          </h3>
+                          <div className="flex items-baseline justify-center gap-2 pt-0.5">
+                            {hasActiveGroupBuy && campaign ? (
+                              <>
+                                <span className="text-sm md:text-base font-medium text-foreground">
+                                  ₦{campaign.discount_price?.toLocaleString()}
+                                </span>
+                                <span className="text-xs text-muted-foreground/60 line-through">
+                                  ₦{product.price?.toLocaleString()}
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="text-sm md:text-base font-medium text-foreground">
+                                  ₦{product.price?.toLocaleString()}
+                                </span>
+                                {hasSale && (
+                                  <span className="text-xs text-muted-foreground/60 line-through">
+                                    ₦{product.original_price?.toLocaleString()}
+                                  </span>
+                                )}
+                              </>
                             )}
-                            <h3 className="font-medium text-sm line-clamp-2 leading-snug">
-                              {product.name}
-                            </h3>
-                            <div className="flex items-baseline gap-2 pt-1">
-                              {hasActiveGroupBuy && campaign ? (
-                                <>
-                                  <span className="text-base font-medium">
-                                    ₦{campaign.discount_price?.toLocaleString()}
-                                  </span>
-                                  <span className="text-xs text-muted-foreground line-through">
-                                    ₦{product.price?.toLocaleString()}
-                                  </span>
-                                </>
-                              ) : (
-                                <>
-                                  <span className="text-base font-medium">
-                                    ₦{product.price?.toLocaleString()}
-                                  </span>
-                                  {product.original_price && product.original_price > product.price && (
-                                    <span className="text-xs text-muted-foreground line-through">
-                                      ₦{product.original_price?.toLocaleString()}
-                                    </span>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
+                          </div>
+                        </div>
                       </Link>
                     </motion.div>
                   );

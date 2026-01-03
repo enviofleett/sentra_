@@ -369,7 +369,14 @@ export function LaunchOverlay({
     setIsPreviewMode(false);
   };
 
-  // Still checking settings or admin status
+  // Bypass lockdown for admin and auth routes IMMEDIATELY - no loading check needed
+  const isExcludedRoute = location.pathname.startsWith('/admin') || location.pathname.startsWith('/auth');
+  
+  if (isExcludedRoute) {
+    return <>{children}</>;
+  }
+
+  // Still checking settings or admin status for non-excluded routes
   if (isLoading || !adminCheckDone) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -378,11 +385,8 @@ export function LaunchOverlay({
     );
   }
 
-  // Bypass lockdown for admin and auth routes
-  const isExcludedRoute = location.pathname.startsWith('/admin') || location.pathname.startsWith('/auth');
-
   // Admin in preview mode - show store with preview bar
-  if (settings?.is_prelaunch_mode && isAdmin && isPreviewMode && !isExcludedRoute) {
+  if (settings?.is_prelaunch_mode && isAdmin && isPreviewMode) {
     return (
       <>
         <AdminPreviewBar onExit={exitPreviewMode} />
@@ -391,8 +395,8 @@ export function LaunchOverlay({
     );
   }
 
-  // Not in prelaunch mode, no settings, or excluded route - show normal app
-  if (!settings?.is_prelaunch_mode || isExcludedRoute) {
+  // Not in prelaunch mode or no settings - show normal app
+  if (!settings?.is_prelaunch_mode) {
     return <>{children}</>;
   }
   const rewardAmount = settings.waitlist_reward_amount || 100000;

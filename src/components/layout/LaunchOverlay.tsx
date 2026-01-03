@@ -301,15 +301,23 @@ export function LaunchOverlay({
   const [submitted, setSubmitted] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [adminCheckDone, setAdminCheckDone] = useState(false);
 
-  // Check for admin status
+  // Check for admin status and preview mode together
   useEffect(() => {
-    const checkAdminStatus = async () => {
+    const checkAdminAndPreview = async () => {
+      const previewParam = searchParams.get('preview');
+      const storedPreview = localStorage.getItem('admin_preview_mode');
+      const wantsPreview = previewParam === 'admin' || storedPreview === 'true';
+
       if (!user) {
         setIsAdmin(false);
+        setIsPreviewMode(false);
+        setAdminCheckDone(true);
         return;
       }
 
+      // Check admin role
       const { data } = await supabase
         .from('user_roles')
         .select('role')
@@ -317,24 +325,24 @@ export function LaunchOverlay({
         .eq('role', 'admin')
         .maybeSingle();
 
-      setIsAdmin(!!data);
+      const userIsAdmin = !!data;
+      setIsAdmin(userIsAdmin);
+
+      // Only allow preview mode if user is actually an admin
+      if (userIsAdmin && wantsPreview) {
+        localStorage.setItem('admin_preview_mode', 'true');
+        setIsPreviewMode(true);
+      } else if (!userIsAdmin) {
+        // Clear preview mode if not admin
+        localStorage.removeItem('admin_preview_mode');
+        setIsPreviewMode(false);
+      }
+      
+      setAdminCheckDone(true);
     };
 
-    checkAdminStatus();
-  }, [user]);
-
-  // Check for preview mode from URL or localStorage
-  useEffect(() => {
-    const previewParam = searchParams.get('preview');
-    const storedPreview = localStorage.getItem('admin_preview_mode');
-    
-    if (previewParam === 'admin') {
-      localStorage.setItem('admin_preview_mode', 'true');
-      setIsPreviewMode(true);
-    } else if (storedPreview === 'true') {
-      setIsPreviewMode(true);
-    }
-  }, [searchParams]);
+    checkAdminAndPreview();
+  }, [user, searchParams]);
 
   useEffect(() => {
     checkPrelaunchMode();
@@ -361,8 +369,8 @@ export function LaunchOverlay({
     setIsPreviewMode(false);
   };
 
-  // Still checking
-  if (isLoading) {
+  // Still checking settings or admin status
+  if (isLoading || !adminCheckDone) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

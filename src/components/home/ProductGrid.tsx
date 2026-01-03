@@ -13,6 +13,7 @@ interface Product {
   original_price?: number;
   image_url?: string;
   images?: string[];
+  stock_quantity?: number;
   vendors?: { rep_full_name: string };
   group_buy_campaigns?: {
     id: string;
@@ -98,6 +99,8 @@ export function ProductGrid({
             
             const campaign = product.group_buy_campaigns;
             const hasActiveGroupBuy = isGroupBuyActive(campaign);
+            const isOnSale = product.original_price && product.original_price > product.price;
+            const isInStock = product.stock_quantity === undefined || product.stock_quantity > 0;
 
             return (
               <motion.div
@@ -109,22 +112,37 @@ export function ProductGrid({
               >
                 <Link to={`/products/${product.id}`} className="group block">
                   <Card className="overflow-hidden border-0 bg-transparent">
-                    <div className="relative aspect-square bg-accent rounded-lg overflow-hidden">
-                      {hasActiveGroupBuy && campaign && (
-                        <>
-                          <Badge className="absolute top-2 left-2 z-10 bg-foreground text-background text-[10px]">
-                            <Crown className="w-3 h-3 mr-1" />
-                            Circle
+                    <div className="relative aspect-square bg-cream rounded-xl overflow-hidden">
+                      {/* Badges Container - Top Left */}
+                      <div className="absolute top-3 left-3 z-10 flex flex-col gap-1.5">
+                        {isInStock && (
+                          <Badge className="bg-emerald-500 text-white text-[10px] px-2 py-0.5 rounded-sm font-medium">
+                            IN STOCK
                           </Badge>
-                          <CountdownBadge 
-                            expiryAt={campaign.expiry_at} 
-                            className="absolute top-2 right-2 z-10"
-                          />
-                        </>
+                        )}
+                        {(isOnSale || hasActiveGroupBuy) && (
+                          <Badge className="bg-coral text-coral-foreground text-[10px] px-2 py-0.5 rounded-sm font-medium">
+                            SALE
+                          </Badge>
+                        )}
+                        {hasActiveGroupBuy && (
+                          <Badge className="bg-foreground text-background text-[10px] px-2 py-0.5 rounded-sm font-medium">
+                            <Crown className="w-3 h-3 mr-1" />
+                            CIRCLE
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Countdown - Top Right */}
+                      {hasActiveGroupBuy && campaign && (
+                        <CountdownBadge 
+                          expiryAt={campaign.expiry_at} 
+                          className="absolute top-3 right-3 z-10"
+                        />
                       )}
                       
                       {displayImage ? (
-                        <div className="w-full h-full p-4 flex items-center justify-center group-hover:scale-105 transition-transform duration-500">
+                        <div className="w-full h-full p-6 flex items-center justify-center group-hover:scale-105 transition-transform duration-500">
                           <img 
                             src={displayImage} 
                             alt={product.name}
@@ -142,7 +160,7 @@ export function ProductGrid({
                       <div className="absolute bottom-0 left-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                         <Button 
                           size="sm" 
-                          className="w-full bg-foreground/90 hover:bg-foreground text-background text-xs h-9 rounded-full backdrop-blur-sm"
+                          className="w-full bg-foreground hover:bg-foreground/90 text-background text-xs h-10 rounded-none"
                         >
                           <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
                           Add to Cart
@@ -162,7 +180,7 @@ export function ProductGrid({
                       <div className="flex items-baseline gap-2 pt-1">
                         {hasActiveGroupBuy && campaign ? (
                           <>
-                            <span className="text-base font-medium">
+                            <span className="text-base font-semibold">
                               ₦{campaign.discount_price?.toLocaleString()}
                             </span>
                             <span className="text-xs text-muted-foreground line-through">
@@ -171,7 +189,7 @@ export function ProductGrid({
                           </>
                         ) : (
                           <>
-                            <span className="text-base font-medium">
+                            <span className="text-base font-semibold">
                               ₦{product.price?.toLocaleString()}
                             </span>
                             {product.original_price && product.original_price > product.price && (
@@ -197,7 +215,7 @@ export function ProductGrid({
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
           >
-            <Button asChild variant="outline" size="lg" className="px-10 h-12 rounded-full text-sm tracking-wider">
+            <Button asChild variant="outline" size="lg" className="px-10 h-12 rounded-none text-sm tracking-wider border-foreground text-foreground hover:bg-foreground hover:text-background">
               <Link to="/products">View All Products</Link>
             </Button>
           </motion.div>

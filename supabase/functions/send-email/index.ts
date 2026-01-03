@@ -79,9 +79,9 @@ serve(async (req) => {
 
     console.log('✅ SMTP client created');
 
-    // Send email
+    // Send email with Sentra branding
     const sendResult = await client.send({
-      from: gmailEmail,
+      from: `Sentra <${gmailEmail}>`,
       to: to,
       subject: compiledSubject,
       content: compiledText,

@@ -303,8 +303,18 @@ export function LaunchOverlay({
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [adminCheckDone, setAdminCheckDone] = useState(false);
 
+  // CRITICAL: Bypass lockdown for admin and auth routes IMMEDIATELY at the top
+  // This must be checked BEFORE any hooks or async operations
+  const isExcludedRoute = location.pathname.startsWith('/admin') || location.pathname.startsWith('/auth');
+  
   // Check for admin status and preview mode together
   useEffect(() => {
+    // Skip admin check for excluded routes
+    if (isExcludedRoute) {
+      setAdminCheckDone(true);
+      return;
+    }
+
     const checkAdminAndPreview = async () => {
       const previewParam = searchParams.get('preview');
       const storedPreview = localStorage.getItem('admin_preview_mode');
@@ -342,11 +352,16 @@ export function LaunchOverlay({
     };
 
     checkAdminAndPreview();
-  }, [user, searchParams]);
+  }, [user, searchParams, isExcludedRoute]);
 
   useEffect(() => {
+    // Skip prelaunch check for excluded routes
+    if (isExcludedRoute) {
+      setIsLoading(false);
+      return;
+    }
     checkPrelaunchMode();
-  }, []);
+  }, [isExcludedRoute]);
 
   const checkPrelaunchMode = async () => {
     const { data, error } = await supabase
@@ -369,9 +384,7 @@ export function LaunchOverlay({
     setIsPreviewMode(false);
   };
 
-  // Bypass lockdown for admin and auth routes IMMEDIATELY - no loading check needed
-  const isExcludedRoute = location.pathname.startsWith('/admin') || location.pathname.startsWith('/auth');
-  
+  // Bypass lockdown for admin and auth routes - render children immediately
   if (isExcludedRoute) {
     return <>{children}</>;
   }

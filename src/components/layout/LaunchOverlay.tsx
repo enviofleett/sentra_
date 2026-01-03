@@ -392,8 +392,16 @@ export function LaunchOverlay({
   // Still checking settings or admin status for non-excluded routes
   if (isLoading || !adminCheckDone) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background">
+        {logoUrl ? (
+          <img src={logoUrl} alt="Sentra" className="h-10 md:h-12 mb-6 animate-pulse" />
+        ) : (
+          <h1 className="font-serif text-2xl md:text-3xl font-bold text-foreground mb-6 animate-pulse">
+            SENTRA
+          </h1>
+        )}
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="mt-4 text-sm text-muted-foreground">Loading...</p>
       </div>
     );
   }

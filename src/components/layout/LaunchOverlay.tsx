@@ -8,8 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Gift, Clock, Instagram, Star, Percent, Truck, Shield, Sparkles, Heart, Eye, X, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useBranding } from '@/hooks/useBranding';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import sentraLogo from '@/assets/sentra-logo.png';
 
 interface LaunchOverlayProps {
   children: React.ReactNode;
@@ -294,7 +294,6 @@ export function LaunchOverlay({
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  const { logoUrl } = useBranding();
   const [settings, setSettings] = useState<PreLaunchSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -393,13 +392,7 @@ export function LaunchOverlay({
   if (isLoading || !adminCheckDone) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background">
-        {logoUrl ? (
-          <img src={logoUrl} alt="Sentra" className="h-10 md:h-12 mb-6 animate-pulse" />
-        ) : (
-          <h1 className="font-serif text-2xl md:text-3xl font-bold text-foreground mb-6 animate-pulse">
-            SENTRA
-          </h1>
-        )}
+        <img src={sentraLogo} alt="Sentra" className="h-10 md:h-12 mb-6 animate-pulse" />
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <p className="mt-4 text-sm text-muted-foreground">Loading...</p>
       </div>
@@ -433,9 +426,7 @@ export function LaunchOverlay({
       {/* Header */}
       <header className="py-6 md:py-8">
         <div className="container mx-auto px-4 text-center">
-          {logoUrl ? <img src={logoUrl} alt="Sentra" className="h-8 md:h-10 mx-auto mb-3" /> : <h1 className="font-serif text-2xl md:text-3xl font-bold text-foreground mb-3">
-              {settings.banner_title || 'SENTRA'}
-            </h1>}
+          <img src={sentraLogo} alt="Sentra" className="h-8 md:h-10 mx-auto mb-3" />
           <span className="inline-block bg-muted text-muted-foreground text-xs md:text-sm px-4 py-1.5 rounded-full font-medium tracking-wide">
             Coming Soon
           </span>

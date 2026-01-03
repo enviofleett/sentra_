@@ -288,10 +288,9 @@ function AdminPreviewBar({ onExit }: { onExit: () => void }) {
   );
 }
 
-export function LaunchOverlay({
-  children
-}: LaunchOverlayProps) {
-  const location = useLocation();
+// Inner component that handles all the waitlist/prelaunch logic
+// This is only rendered when we're NOT on an excluded route
+function PrelaunchGate({ children }: { children: React.ReactNode }) {
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const [settings, setSettings] = useState<PreLaunchSettings | null>(null);
@@ -302,18 +301,8 @@ export function LaunchOverlay({
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [adminCheckDone, setAdminCheckDone] = useState(false);
 
-  // CRITICAL: Bypass lockdown for admin and auth routes IMMEDIATELY at the top
-  // This must be checked BEFORE any hooks or async operations
-  const isExcludedRoute = location.pathname.startsWith('/admin') || location.pathname.startsWith('/auth');
-  
   // Check for admin status and preview mode together
   useEffect(() => {
-    // Skip admin check for excluded routes
-    if (isExcludedRoute) {
-      setAdminCheckDone(true);
-      return;
-    }
-
     const checkAdminAndPreview = async () => {
       const previewParam = searchParams.get('preview');
       const storedPreview = localStorage.getItem('admin_preview_mode');
@@ -351,44 +340,34 @@ export function LaunchOverlay({
     };
 
     checkAdminAndPreview();
-  }, [user, searchParams, isExcludedRoute]);
+  }, [user, searchParams]);
 
   useEffect(() => {
-    // Skip prelaunch check for excluded routes
-    if (isExcludedRoute) {
+    const checkPrelaunchMode = async () => {
+      const { data, error } = await supabase
+        .from('pre_launch_settings')
+        .select('*')
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error checking prelaunch mode:', error);
+        setSettings(null);
+        setIsLoading(false);
+        return;
+      }
+      setSettings(data);
       setIsLoading(false);
-      return;
-    }
+    };
+    
     checkPrelaunchMode();
-  }, [isExcludedRoute]);
-
-  const checkPrelaunchMode = async () => {
-    const { data, error } = await supabase
-      .from('pre_launch_settings')
-      .select('*')
-      .maybeSingle();
-
-    if (error) {
-      console.error('Error checking prelaunch mode:', error);
-      setSettings(null);
-      setIsLoading(false);
-      return;
-    }
-    setSettings(data);
-    setIsLoading(false);
-  };
+  }, []);
 
   const exitPreviewMode = () => {
     localStorage.removeItem('admin_preview_mode');
     setIsPreviewMode(false);
   };
 
-  // Bypass lockdown for admin and auth routes - render children immediately
-  if (isExcludedRoute) {
-    return <>{children}</>;
-  }
-
-  // Still checking settings or admin status for non-excluded routes
+  // Still checking settings or admin status
   if (isLoading || !adminCheckDone) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background">
@@ -413,6 +392,7 @@ export function LaunchOverlay({
   if (!settings?.is_prelaunch_mode) {
     return <>{children}</>;
   }
+
   const rewardAmount = settings.waitlist_reward_amount || 100000;
   const bannerImage = settings.banner_image_url || '/placeholder.svg';
   const headline = settings.headline_text || 'Exclusive fragrances at BETTER PRICES always.';
@@ -422,7 +402,9 @@ export function LaunchOverlay({
   const badge1Icon = settings.badge_1_icon || 'gift';
   const badge2Text = settings.badge_2_text || '24hr Early Access';
   const badge2Icon = settings.badge_2_icon || 'clock';
-  return <div className="min-h-screen bg-background">
+
+  return (
+    <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="py-6 md:py-8">
         <div className="container mx-auto px-4 text-center">
@@ -438,40 +420,33 @@ export function LaunchOverlay({
         <div className="flex flex-col lg:grid lg:grid-cols-2 gap-8 lg:gap-12 items-center max-w-6xl mx-auto">
           
           {/* Product Image - First on mobile */}
-          <motion.div initial={{
-          opacity: 0,
-          x: -20
-        }} animate={{
-          opacity: 1,
-          x: 0
-        }} transition={{
-          duration: 0.6
-        }} className="relative flex justify-center order-1 lg:order-1 w-full">
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.6 }}
+            className="relative flex justify-center order-1 lg:order-1 w-full"
+          >
             <div className="relative w-full max-w-md lg:max-w-none">
               {/* Decorative circle behind image */}
               <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-primary/5 rounded-full blur-3xl scale-110" />
               
-              <motion.img src={bannerImage} alt="Featured Fragrance" className="relative w-full h-auto object-contain drop-shadow-2xl mx-auto lg:w-96" animate={{
-              y: [0, -10, 0]
-            }} transition={{
-              duration: 4,
-              repeat: Infinity,
-              ease: "easeInOut"
-            }} />
+              <motion.img
+                src={bannerImage}
+                alt="Featured Fragrance"
+                className="relative w-full h-auto object-contain drop-shadow-2xl mx-auto lg:w-96"
+                animate={{ y: [0, -10, 0] }}
+                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+              />
             </div>
           </motion.div>
 
           {/* Content Column - Second on mobile */}
-          <motion.div initial={{
-          opacity: 0,
-          x: 20
-        }} animate={{
-          opacity: 1,
-          x: 0
-        }} transition={{
-          duration: 0.6,
-          delay: 0.2
-        }} className="text-center lg:text-left order-2 lg:order-2">
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="text-center lg:text-left order-2 lg:order-2"
+          >
             {/* Headline */}
             <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-4 leading-tight">
               {renderHeadlineWithAccent(headline, headlineAccent)}
@@ -483,53 +458,60 @@ export function LaunchOverlay({
             </p>
 
             {/* Countdown Timer */}
-            {settings.launch_date && <motion.div initial={{
-            opacity: 0,
-            y: 10
-          }} animate={{
-            opacity: 1,
-            y: 0
-          }} transition={{
-            delay: 0.4,
-            duration: 0.5
-          }} className="mb-8">
+            {settings.launch_date && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, duration: 0.5 }}
+                className="mb-8"
+              >
                 <p className="text-sm text-muted-foreground mb-3 font-medium uppercase tracking-wider">
                   Launching In
                 </p>
                 <CountdownTimer launchDate={settings.launch_date} />
-              </motion.div>}
+              </motion.div>
+            )}
 
             {/* Feature Badges */}
             <div className="flex flex-wrap gap-3 justify-center lg:justify-start mb-8">
-              {badge1Text && <div className="flex items-center gap-2 bg-muted/50 px-4 py-2 rounded-full">
+              {badge1Text && (
+                <div className="flex items-center gap-2 bg-muted/50 px-4 py-2 rounded-full">
                   <BadgeIcon icon={badge1Icon} className="h-4 w-4 text-primary" />
                   <span className="text-sm font-medium">{badge1Text}</span>
-                </div>}
-              {badge2Text && <div className="flex items-center gap-2 bg-muted/50 px-4 py-2 rounded-full">
+                </div>
+              )}
+              {badge2Text && (
+                <div className="flex items-center gap-2 bg-muted/50 px-4 py-2 rounded-full">
                   <BadgeIcon icon={badge2Icon} className="h-4 w-4 text-primary" />
                   <span className="text-sm font-medium">{badge2Text}</span>
-                </div>}
+                </div>
+              )}
             </div>
 
             {/* CTA Button */}
             <AnimatePresence mode="wait">
-              {!submitted ? <motion.div key="cta" initial={{
-              opacity: 0
-            }} animate={{
-              opacity: 1
-            }} exit={{
-              opacity: 0
-            }}>
-                  <Button onClick={() => setIsModalOpen(true)} size="lg" className="bg-foreground hover:bg-foreground/90 text-background font-semibold px-8 py-6 text-base w-full sm:w-auto">
+              {!submitted ? (
+                <motion.div
+                  key="cta"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <Button
+                    onClick={() => setIsModalOpen(true)}
+                    size="lg"
+                    className="bg-foreground hover:bg-foreground/90 text-background font-semibold px-8 py-6 text-base w-full sm:w-auto"
+                  >
                     Join the Waiting List
                   </Button>
-                </motion.div> : <motion.div key="success" initial={{
-              opacity: 0,
-              scale: 0.95
-            }} animate={{
-              opacity: 1,
-              scale: 1
-            }} className="bg-primary/10 border border-primary/20 rounded-xl p-6 text-center lg:text-left">
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="success"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="bg-primary/10 border border-primary/20 rounded-xl p-6 text-center lg:text-left"
+                >
                   <div className="flex items-center gap-3 justify-center lg:justify-start mb-2">
                     <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
                       <Gift className="h-5 w-5 text-primary" />
@@ -539,7 +521,8 @@ export function LaunchOverlay({
                   <p className="text-muted-foreground text-sm">
                     You're on the list! We'll verify your social handles and credit your ₦{rewardAmount.toLocaleString()} launch bonus.
                   </p>
-                </motion.div>}
+                </motion.div>
+              )}
             </AnimatePresence>
           </motion.div>
         </div>
@@ -555,9 +538,32 @@ export function LaunchOverlay({
       </footer>
 
       {/* Waitlist Modal */}
-      <WaitlistFormModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} rewardAmount={rewardAmount} onSuccess={() => {
-      setIsModalOpen(false);
-      setSubmitted(true);
-    }} />
-    </div>;
+      <WaitlistFormModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        rewardAmount={rewardAmount}
+        onSuccess={() => {
+          setIsModalOpen(false);
+          setSubmitted(true);
+        }}
+      />
+    </div>
+  );
+}
+
+// Main wrapper component - handles route exclusion BEFORE any hooks
+export function LaunchOverlay({ children }: LaunchOverlayProps) {
+  const location = useLocation();
+  
+  // CRITICAL: Check excluded routes FIRST
+  // Admin and auth routes bypass ALL waitlist/prelaunch logic completely
+  const isExcludedRoute = location.pathname.startsWith('/admin') || location.pathname.startsWith('/auth');
+  
+  // For excluded routes, render children immediately - no loading, no checks
+  if (isExcludedRoute) {
+    return <>{children}</>;
+  }
+  
+  // For all other routes, use the PrelaunchGate which handles all the logic
+  return <PrelaunchGate>{children}</PrelaunchGate>;
 }

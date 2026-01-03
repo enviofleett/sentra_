@@ -15,6 +15,7 @@ import {
   Wallet,
   FileText
 } from 'lucide-react';
+import sentraLogo from '@/assets/sentra-logo.png';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useState } from 'react';
@@ -49,8 +50,14 @@ export function AdminHeader() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h1 className="text-lg sm:text-xl font-bold">Admin Panel</h1>
+          <div className="flex items-center gap-3">
+            <Link to="/" className="flex-shrink-0">
+              <img 
+                src={sentraLogo} 
+                alt="Sentra" 
+                className="h-6 md:h-7 w-auto object-contain"
+              />
+            </Link>
             <span className="hidden sm:inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
               Admin
             </span>

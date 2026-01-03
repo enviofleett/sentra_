@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Sparkles, Crown } from 'lucide-react';
 import { CountdownBadge } from '@/components/groupbuy/CountdownBadge';
 import { motion } from 'framer-motion';
+import { ProductImage } from '@/components/product/ProductImage';
 
 interface Product {
   id: string;
@@ -143,25 +144,23 @@ export function ProductGrid({
 
                     {/* Product Image - Floating with showroom shadow */}
                     <div className="aspect-[4/5] flex items-center justify-center p-4 md:p-6 lg:p-8">
-                      {displayImage ? (
-                        <div 
-                          className="relative w-full h-full flex items-center justify-center transition-transform duration-500 ease-out group-hover:scale-[1.02]"
-                        >
-                          {/* Showroom-style shadow - appears under the product */}
-                          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[70%] h-4 bg-black/[0.06] blur-xl rounded-full transition-all duration-500 ease-out group-hover:w-[75%] group-hover:bg-black/[0.08]" />
-                          
-                          <img 
+                      <div 
+                        className="relative w-full h-full flex items-center justify-center transition-transform duration-500 ease-out group-hover:scale-[1.02]"
+                      >
+                        {/* Showroom-style shadow - appears under the product */}
+                        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[70%] h-4 bg-black/[0.06] blur-xl rounded-full transition-all duration-500 ease-out group-hover:w-[75%] group-hover:bg-black/[0.08]" />
+                        
+                        {displayImage ? (
+                          <ProductImage 
                             src={displayImage} 
                             alt={product.name}
-                            className="relative max-w-full max-h-full object-contain drop-shadow-sm"
-                            loading="lazy"
+                            className="relative max-w-full max-h-full"
+                            enableBackgroundRemoval={true}
                           />
-                        </div>
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
+                        ) : (
                           <Sparkles className="h-8 w-8 text-muted-foreground/15" />
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
                   

@@ -13,6 +13,7 @@ import { Sparkles, SlidersHorizontal, Search, Crown } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { CountdownBadge } from '@/components/groupbuy/CountdownBadge';
 import { motion } from 'framer-motion';
+import { ProductImage } from '@/components/product/ProductImage';
 
 interface GroupBuyCampaign {
   id: string;
@@ -345,11 +346,11 @@ export default function Products() {
                             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[70%] h-6 bg-black/[0.06] blur-xl rounded-full transition-all duration-500 group-hover:w-[75%] group-hover:bg-black/[0.08]" />
                             
                             {displayImage ? (
-                              <img
+                              <ProductImage
                                 src={displayImage}
                                 alt={product.name}
-                                className="relative z-[1] max-w-full max-h-full object-contain"
-                                loading="lazy"
+                                className="relative z-[1] max-w-full max-h-full"
+                                enableBackgroundRemoval={true}
                               />
                             ) : (
                               <div className="relative z-[1] flex items-center justify-center">

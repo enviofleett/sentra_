@@ -308,8 +308,17 @@ export default function CheckoutSuccess() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                {!isGroupBuy && orderId && (
+                  <Button
+                    onClick={() => navigate(`/orders/${orderId}/track`)}
+                    className="flex-1"
+                  >
+                    Track Order
+                  </Button>
+                )}
                 <Button
                   onClick={() => navigate(isGroupBuy ? '/profile/groupbuys' : '/profile/orders')}
+                  variant={isGroupBuy ? 'default' : 'outline'}
                   className="flex-1"
                 >
                   {isGroupBuy ? 'View My Commitments' : 'View My Orders'}

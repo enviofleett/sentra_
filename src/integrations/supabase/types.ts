@@ -1300,6 +1300,10 @@ export type Database = {
         }[]
       }
       cleanup_expired_campaigns: { Args: never; Returns: undefined }
+      credit_waitlist_reward: {
+        Args: { p_amount: number; p_user_id: string }
+        Returns: boolean
+      }
       ensure_user_wallet: { Args: { p_user_id: string }; Returns: string }
       generate_affiliate_code: { Args: { p_user_id: string }; Returns: string }
       has_role: {

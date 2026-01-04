@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { CheckCircle, ExternalLink, Users, Gift, Loader2, Settings } from 'lucide-react';
+import { CheckCircle, ExternalLink, Users, Gift, Loader2, Settings, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface WaitlistEntry {
@@ -35,6 +35,7 @@ export default function WaitlistManagement() {
   const [loading, setLoading] = useState(true);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [migrating, setMigrating] = useState(false);
   const [rewardAmount, setRewardAmount] = useState('100000');
 
   useEffect(() => {
@@ -87,7 +88,7 @@ export default function WaitlistManagement() {
       } else if (data?.error) {
         toast.error(data.error);
       } else {
-        toast.success(data.message || 'Social handle verified and reward credited!');
+        toast.success(data.message || 'User created and wallet credited!');
         fetchData();
       }
     } catch (err) {
@@ -96,6 +97,39 @@ export default function WaitlistManagement() {
     }
     
     setVerifyingId(null);
+  };
+
+  const migrateAllVerified = async () => {
+    if (!confirm('This will create user accounts for all verified waitlist entries and credit their wallets. Continue?')) {
+      return;
+    }
+    
+    setMigrating(true);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('verify-waitlist-social', {
+        body: { migrateAll: true }
+      });
+
+      if (error) {
+        console.error('Migration error:', error);
+        toast.error('Migration failed: ' + error.message);
+      } else if (data?.error) {
+        toast.error(data.error);
+      } else {
+        toast.success(data.message || 'Migration complete!');
+        if (data.errors && data.errors.length > 0) {
+          console.warn('Migration errors:', data.errors);
+          toast.warning(`${data.errors.length} entries had errors - check console`);
+        }
+        fetchData();
+      }
+    } catch (err) {
+      console.error('Migration error:', err);
+      toast.error('Migration failed');
+    }
+    
+    setMigrating(false);
   };
 
   const saveSettings = async () => {
@@ -145,7 +179,7 @@ export default function WaitlistManagement() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="bg-card/50 backdrop-blur-sm border-border/50">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Signups</CardTitle>
@@ -173,6 +207,24 @@ export default function WaitlistManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-amber-500">{stats.pending}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card/50 backdrop-blur-sm border-border/50">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Migrate All Verified</CardTitle>
+            <UserPlus className="h-4 w-4 text-primary" />
+          </CardHeader>
+          <CardContent>
+            <Button 
+              onClick={migrateAllVerified} 
+              disabled={migrating || stats.verified === 0}
+              size="sm"
+              className="w-full"
+            >
+              {migrating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserPlus className="h-4 w-4 mr-2" />}
+              Create Users & Credit
+            </Button>
           </CardContent>
         </Card>
       </div>

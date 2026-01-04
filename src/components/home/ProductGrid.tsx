@@ -1,7 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Sparkles, Crown } from 'lucide-react';
-import { CountdownBadge } from '@/components/groupbuy/CountdownBadge';
+import { Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface Product {
@@ -45,28 +43,26 @@ export function ProductGrid({
     return expiry > now && ['active', 'goal_reached', 'goal_met_pending_payment'].includes(campaign.status);
   };
 
-  // Mobile-first: 2 cols, then scale up
   const gridCols = columns === 3 
     ? 'grid-cols-2 md:grid-cols-3' 
     : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4';
 
   if (loading) {
     return (
-      <section className="py-12 md:py-20 lg:py-28 bg-[#fafafa]">
-        <div className="container mx-auto px-4 md:px-6 lg:px-8">
+      <section className="py-12 md:py-16 bg-background">
+        <div className="container mx-auto px-4 md:px-6">
           {title && (
-            <div className="text-center mb-10 md:mb-16">
-              {subtitle && <p className="text-[10px] md:text-xs uppercase tracking-[0.25em] text-muted-foreground/70 mb-2">{subtitle}</p>}
-              <h2 className="text-2xl md:text-3xl lg:text-4xl font-serif font-normal tracking-tight">{title}</h2>
+            <div className="mb-8 md:mb-10">
+              {subtitle && <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground mb-1">{subtitle}</p>}
+              <h2 className="text-xl md:text-2xl font-serif font-normal">{title}</h2>
             </div>
           )}
-          <div className={`grid ${gridCols} gap-x-4 gap-y-10 md:gap-x-6 md:gap-y-14 lg:gap-x-8 lg:gap-y-16`}>
+          <div className={`grid ${gridCols} gap-3 md:gap-4`}>
             {[...Array(columns)].map((_, i) => (
-              <div key={i} className="animate-pulse">
-                <div className="aspect-[4/5] bg-muted/30 rounded-sm mb-4" />
-                <div className="h-2.5 bg-muted/30 rounded w-1/3 mb-2.5" />
-                <div className="h-3 bg-muted/30 rounded w-2/3 mb-2" />
-                <div className="h-3 bg-muted/30 rounded w-1/4" />
+              <div key={i} className="animate-pulse border border-border bg-card p-3">
+                <div className="h-4 bg-muted/40 rounded w-3/4 mx-auto mb-3" />
+                <div className="aspect-square bg-muted/30 mb-3" />
+                <div className="h-3 bg-muted/40 rounded w-1/2 mx-auto" />
               </div>
             ))}
           </div>
@@ -76,22 +72,22 @@ export function ProductGrid({
   }
 
   return (
-    <section className="py-12 md:py-20 lg:py-28 bg-[#fafafa]">
-      <div className="container mx-auto px-4 md:px-6 lg:px-8">
+    <section className="py-12 md:py-16 bg-background">
+      <div className="container mx-auto px-4 md:px-6">
         {title && (
           <motion.div 
-            className="text-center mb-10 md:mb-16"
-            initial={{ opacity: 0, y: 16 }}
+            className="mb-8 md:mb-10"
+            initial={{ opacity: 0, y: 12 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
+            transition={{ duration: 0.4 }}
           >
-            {subtitle && <p className="text-[10px] md:text-xs uppercase tracking-[0.25em] text-muted-foreground/70 mb-2">{subtitle}</p>}
-            <h2 className="text-2xl md:text-3xl lg:text-4xl font-serif font-normal tracking-tight">{title}</h2>
+            {subtitle && <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground mb-1">{subtitle}</p>}
+            <h2 className="text-xl md:text-2xl font-serif font-normal">{title}</h2>
           </motion.div>
         )}
 
-        <div className={`grid ${gridCols} gap-x-4 gap-y-10 md:gap-x-6 md:gap-y-14 lg:gap-x-8 lg:gap-y-16`}>
+        <div className={`grid ${gridCols} gap-3 md:gap-4`}>
           {products.map((product, index) => {
             const displayImage = product.images && Array.isArray(product.images) && product.images.length > 0
               ? product.images[0]
@@ -99,105 +95,65 @@ export function ProductGrid({
             
             const campaign = product.group_buy_campaigns;
             const hasActiveGroupBuy = isGroupBuyActive(campaign);
-            const isOnSale = product.original_price && product.original_price > product.price;
-            const isInStock = product.stock_quantity === undefined || product.stock_quantity > 0;
+            const isOnSale = hasActiveGroupBuy || (product.original_price && product.original_price > product.price);
+            
+            // Determine prices to display
+            const currentPrice = hasActiveGroupBuy && campaign 
+              ? campaign.discount_price 
+              : product.price;
+            const originalPrice = hasActiveGroupBuy && campaign 
+              ? product.price 
+              : product.original_price;
 
             return (
               <motion.div
                 key={product.id}
-                initial={{ opacity: 0, y: 24 }}
+                initial={{ opacity: 0, y: 16 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: index * 0.04, ease: "easeOut" }}
+                transition={{ duration: 0.4, delay: index * 0.03 }}
               >
-                <Link to={`/products/${product.id}`} className="group block">
-                  {/* Floating Product Container - No background, no border */}
-                  <div className="relative">
-                    {/* Badges - Refined pills */}
-                    <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
-                      {isInStock && (
-                        <span className="inline-flex items-center px-2 py-0.5 text-[9px] md:text-[10px] font-medium tracking-wide uppercase bg-emerald-50 text-emerald-700 rounded-full">
-                          In Stock
-                        </span>
-                      )}
-                      {(isOnSale || hasActiveGroupBuy) && (
-                        <span className="inline-flex items-center px-2 py-0.5 text-[9px] md:text-[10px] font-medium tracking-wide uppercase bg-rose-50 text-rose-600 rounded-full">
-                          Sale
-                        </span>
-                      )}
-                      {hasActiveGroupBuy && (
-                        <span className="inline-flex items-center gap-0.5 px-2 py-0.5 text-[9px] md:text-[10px] font-medium tracking-wide uppercase bg-neutral-100 text-neutral-700 rounded-full">
-                          <Crown className="w-2.5 h-2.5" />
-                          Circle
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Countdown - Subtle positioning */}
-                    {hasActiveGroupBuy && campaign && (
-                      <CountdownBadge 
-                        expiryAt={campaign.expiry_at} 
-                        className="absolute top-2 right-2 z-10"
-                      />
-                    )}
-
-                    {/* Product Image - Floating with showroom shadow */}
-                    <div className="aspect-[4/5] flex items-center justify-center p-4 md:p-6 lg:p-8">
-                      {displayImage ? (
-                        <div 
-                          className="relative w-full h-full flex items-center justify-center transition-transform duration-500 ease-out group-hover:scale-[1.02]"
-                        >
-                          {/* Showroom-style shadow - appears under the product */}
-                          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[70%] h-4 bg-black/[0.06] blur-xl rounded-full transition-all duration-500 ease-out group-hover:w-[75%] group-hover:bg-black/[0.08]" />
-                          
-                          <img 
-                            src={displayImage} 
-                            alt={product.name}
-                            className="relative max-w-full max-h-full object-contain drop-shadow-sm"
-                            loading="lazy"
-                          />
-                        </div>
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Sparkles className="h-8 w-8 text-muted-foreground/15" />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {/* Product Info - Minimal typography */}
-                  <div className="mt-4 md:mt-5 space-y-1 text-center">
-                    {product.vendors?.rep_full_name && (
-                      <p className="text-[10px] md:text-[11px] uppercase tracking-[0.2em] text-muted-foreground/60 font-light">
-                        {product.vendors.rep_full_name}
-                      </p>
-                    )}
-                    <h3 className="text-sm md:text-[15px] font-normal text-foreground/90 line-clamp-2 leading-relaxed tracking-tight">
+                <Link 
+                  to={`/products/${product.id}`} 
+                  className="group block border border-border bg-card hover:border-l-4 hover:border-l-coral transition-all duration-200"
+                >
+                  {/* Product Name - TOP */}
+                  <div className="py-3 px-2 border-b border-border/50">
+                    <h3 className="text-xs md:text-sm text-center text-foreground line-clamp-2 leading-relaxed">
                       {product.name}
                     </h3>
-                    <div className="flex items-baseline justify-center gap-2 pt-0.5">
-                      {hasActiveGroupBuy && campaign ? (
-                        <>
-                          <span className="text-sm md:text-base font-medium text-foreground tracking-tight">
-                            ₦{campaign.discount_price?.toLocaleString()}
-                          </span>
-                          <span className="text-xs text-muted-foreground/50 line-through font-light">
-                            ₦{product.price?.toLocaleString()}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="text-sm md:text-base font-medium text-foreground tracking-tight">
-                            ₦{product.price?.toLocaleString()}
-                          </span>
-                          {product.original_price && product.original_price > product.price && (
-                            <span className="text-xs text-muted-foreground/50 line-through font-light">
-                              ₦{product.original_price?.toLocaleString()}
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </div>
+                  </div>
+                  
+                  {/* Product Image - MIDDLE */}
+                  <div className="aspect-square p-4 md:p-6 flex items-center justify-center bg-background">
+                    {displayImage ? (
+                      <img 
+                        src={displayImage} 
+                        alt={product.name}
+                        className="max-w-full max-h-full object-contain transition-transform duration-300 group-hover:scale-[1.02]"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <Sparkles className="h-8 w-8 text-muted-foreground/20" />
+                    )}
+                  </div>
+                  
+                  {/* Price - BOTTOM */}
+                  <div className="py-3 px-2 border-t border-border/50 flex items-center justify-center gap-2">
+                    {isOnSale && originalPrice ? (
+                      <>
+                        <span className="text-xs md:text-sm text-muted-foreground line-through">
+                          ₦{originalPrice.toLocaleString()}
+                        </span>
+                        <span className="text-xs md:text-sm font-medium text-coral">
+                          ₦{currentPrice.toLocaleString()}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-xs md:text-sm font-medium text-foreground">
+                        ₦{currentPrice.toLocaleString()}
+                      </span>
+                    )}
                   </div>
                 </Link>
               </motion.div>
@@ -207,19 +163,18 @@ export function ProductGrid({
 
         {showViewAll && (
           <motion.div 
-            className="text-center mt-14 md:mt-20"
+            className="text-center mt-8 md:mt-10"
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.2 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
           >
-            <Button 
-              asChild 
-              variant="outline" 
-              className="px-8 md:px-12 h-11 md:h-12 rounded-none text-xs md:text-sm tracking-[0.15em] uppercase font-light border-foreground/20 text-foreground/80 hover:bg-foreground hover:text-background hover:border-foreground transition-all duration-300"
+            <Link 
+              to="/products" 
+              className="text-sm text-coral hover:text-coral/80 transition-colors underline underline-offset-4"
             >
-              <Link to="/products">View All</Link>
-            </Button>
+              View all Products
+            </Link>
           </motion.div>
         )}
       </div>

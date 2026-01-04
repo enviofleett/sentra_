@@ -72,15 +72,8 @@ export function HeroSection() {
             </p>
           </motion.div>
 
-          {/* Mobile Image with Organic Blob */}
+          {/* Mobile Image */}
           <div className="relative mx-auto w-full max-w-[320px]">
-            {/* Organic blob shape */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div 
-                className="w-[110%] h-[110%] bg-cream rounded-[60%_40%_50%_50%/50%_50%_40%_60%]"
-                style={{ transform: 'rotate(-5deg)' }}
-              />
-            </div>
             
             <div className="overflow-hidden relative z-10" ref={emblaRef}>
               <div className="flex">
@@ -153,13 +146,6 @@ export function HeroSection() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.8 }}
           >
-            {/* Organic blob background */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div 
-                className="w-[90%] h-[90%] bg-cream rounded-[60%_40%_50%_50%/50%_50%_40%_60%]"
-                style={{ transform: 'rotate(-8deg)' }}
-              />
-            </div>
             
             {/* Carousel */}
             <div className="relative w-full max-w-md overflow-hidden z-10" ref={emblaRef}>

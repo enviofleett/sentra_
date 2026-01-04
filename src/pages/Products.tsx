@@ -9,9 +9,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
-import { Sparkles, SlidersHorizontal, Search } from 'lucide-react';
+import { Sparkles, SlidersHorizontal, Search, ShoppingBag } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { motion } from 'framer-motion';
+import { useCart } from '@/contexts/CartContext';
 
 interface GroupBuyCampaign {
   id: string;
@@ -34,6 +35,13 @@ export default function Products() {
   const [minPrice, setMinPrice] = useState(0);
   const [maxPrice, setMaxPrice] = useState(1000000);
   const [searchQuery, setSearchQuery] = useState('');
+  const { addToCart } = useCart();
+
+  const handleQuickAdd = (e: React.MouseEvent, productId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    addToCart(productId, 1);
+  };
 
   useEffect(() => {
     const urlQuery = searchParams.get('q') || '';
@@ -326,7 +334,7 @@ export default function Products() {
                         </div>
                         
                         {/* Product Image - MIDDLE */}
-                        <div className="aspect-square p-4 md:p-6 flex items-center justify-center bg-background">
+                        <div className="aspect-square p-4 md:p-6 flex items-center justify-center bg-background relative">
                           {displayImage ? (
                             <img 
                               src={displayImage} 
@@ -337,6 +345,16 @@ export default function Products() {
                           ) : (
                             <Sparkles className="h-8 w-8 text-muted-foreground/20" />
                           )}
+                          
+                          {/* Quick Add Button */}
+                          <Button
+                            size="sm"
+                            onClick={(e) => handleQuickAdd(e, product.id)}
+                            className="absolute bottom-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-foreground text-background hover:bg-foreground/90 text-xs px-3 py-1 h-auto gap-1"
+                          >
+                            <ShoppingBag className="h-3 w-3" />
+                            Quick Add
+                          </Button>
                         </div>
                         
                         {/* Price - BOTTOM */}

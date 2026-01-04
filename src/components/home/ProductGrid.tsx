@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, ShoppingBag } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useCart } from '@/contexts/CartContext';
+import { Button } from '@/components/ui/button';
 
 interface Product {
   id: string;
@@ -36,11 +38,19 @@ export function ProductGrid({
   showViewAll = true,
   columns = 4 
 }: ProductGridProps) {
+  const { addToCart } = useCart();
+
   const isGroupBuyActive = (campaign: any): boolean => {
     if (!campaign) return false;
     const now = new Date();
     const expiry = new Date(campaign.expiry_at);
     return expiry > now && ['active', 'goal_reached', 'goal_met_pending_payment'].includes(campaign.status);
+  };
+
+  const handleQuickAdd = (e: React.MouseEvent, productId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    addToCart(productId, 1);
   };
 
   const gridCols = columns === 3 
@@ -125,7 +135,7 @@ export function ProductGrid({
                   </div>
                   
                   {/* Product Image - MIDDLE */}
-                  <div className="aspect-square p-4 md:p-6 flex items-center justify-center bg-background">
+                  <div className="aspect-square p-4 md:p-6 flex items-center justify-center bg-background relative">
                     {displayImage ? (
                       <img 
                         src={displayImage} 
@@ -136,6 +146,16 @@ export function ProductGrid({
                     ) : (
                       <Sparkles className="h-8 w-8 text-muted-foreground/20" />
                     )}
+                    
+                    {/* Quick Add Button */}
+                    <Button
+                      size="sm"
+                      onClick={(e) => handleQuickAdd(e, product.id)}
+                      className="absolute bottom-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-foreground text-background hover:bg-foreground/90 text-xs px-3 py-1 h-auto gap-1"
+                    >
+                      <ShoppingBag className="h-3 w-3" />
+                      Quick Add
+                    </Button>
                   </div>
                   
                   {/* Price - BOTTOM */}

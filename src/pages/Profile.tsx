@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Package, User as UserIcon, ShoppingBag, MapPin, Shield, Edit, Save, X, Wallet } from 'lucide-react';
+import { Package, User as UserIcon, ShoppingBag, MapPin, Shield, Edit, Save, X, Wallet, Truck } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -214,12 +214,14 @@ function Orders() {
       ) : (
         <div className="space-y-4">
           {orders.map((order) => (
-            <Link to={`/profile/orders/${order.id}`} key={order.id}>
-              <Card className="cursor-pointer hover:shadow-lg transition-shadow">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
+            <Card key={order.id} className="hover:shadow-lg transition-shadow">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <Link to={`/profile/orders/${order.id}`}>
                     <div>
-                      <CardTitle className="text-lg">Order #{order.id.slice(0, 8)}</CardTitle>
+                      <CardTitle className="text-lg hover:text-primary transition-colors">
+                        Order #{order.id.slice(0, 8)}
+                      </CardTitle>
                       <p className="text-sm text-muted-foreground">
                         {new Date(order.created_at).toLocaleDateString('en-US', {
                           year: 'numeric',
@@ -228,25 +230,39 @@ function Orders() {
                         })}
                       </p>
                     </div>
-                    <Badge className={getStatusColor(order.status)}>
-                      {order.status}
-                    </Badge>
+                  </Link>
+                  <Badge className={getStatusColor(order.status)}>
+                    {order.status}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Items</span>
+                    <span>{Array.isArray(order.items) ? order.items.length : 0}</span>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Items</span>
-                      <span>{Array.isArray(order.items) ? order.items.length : 0}</span>
-                    </div>
-                    <div className="flex justify-between font-bold">
-                      <span>Total</span>
-                      <span className="text-secondary">₦{order.total_amount.toLocaleString()}</span>
-                    </div>
+                  <div className="flex justify-between font-bold">
+                    <span>Total</span>
+                    <span className="text-secondary">₦{order.total_amount.toLocaleString()}</span>
                   </div>
-                </CardContent>
-              </Card>
-            </Link>
+                  <div className="flex gap-2 pt-2">
+                    <Button asChild size="sm" variant="outline" className="flex-1">
+                      <Link to={`/profile/orders/${order.id}`}>
+                        <Package className="h-4 w-4 mr-1" />
+                        Details
+                      </Link>
+                    </Button>
+                    <Button asChild size="sm" className="flex-1">
+                      <Link to={`/orders/${order.id}/track`}>
+                        <Truck className="h-4 w-4 mr-1" />
+                        Track
+                      </Link>
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}

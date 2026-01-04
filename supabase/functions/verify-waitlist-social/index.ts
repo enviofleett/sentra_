@@ -159,6 +159,7 @@ async function processWaitlistEntry(
     const existingUser = existingUsers?.users?.find((u: any) => u.email === entry.email);
     
     let userId: string;
+    let isNewUser = false;
     
     if (existingUser) {
       console.log('[Process Entry] User already exists:', existingUser.id);
@@ -183,6 +184,7 @@ async function processWaitlistEntry(
       }
       
       userId = newUser.user.id;
+      isNewUser = true;
       console.log('[Process Entry] Created new user:', userId);
       
       // Create profile for the new user
@@ -230,6 +232,60 @@ async function processWaitlistEntry(
     if (updateError) {
       console.error('[Process Entry] Failed to update waitlist entry:', updateError);
       return { success: false, error: `Failed to update waitlist: ${updateError.message}` };
+    }
+    
+    // Send welcome email with password reset link for new users
+    if (isNewUser) {
+      try {
+        // Generate password reset link
+        const { data: resetData, error: resetError } = await supabase.auth.admin.generateLink({
+          type: 'recovery',
+          email: entry.email,
+          options: {
+            redirectTo: `${Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '.lovableproject.com') || 'https://sentra.lovableproject.com'}/auth`
+          }
+        });
+        
+        if (resetError) {
+          console.error('[Process Entry] Failed to generate reset link:', resetError);
+        } else {
+          const resetUrl = resetData?.properties?.action_link || `${Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '.lovableproject.com')}/auth`;
+          
+          // Send welcome email
+          const emailPayload = {
+            to: entry.email,
+            templateId: 'WAITLIST_WELCOME',
+            data: {
+              name: entry.full_name || 'Valued Customer',
+              reward_amount: rewardAmount.toLocaleString(),
+              reset_url: resetUrl
+            }
+          };
+          
+          // Call the send-email function internally
+          const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+          const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+          
+          const emailResponse = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseServiceKey}`
+            },
+            body: JSON.stringify(emailPayload)
+          });
+          
+          if (emailResponse.ok) {
+            console.log('[Process Entry] Welcome email sent to:', entry.email);
+          } else {
+            const emailError = await emailResponse.text();
+            console.error('[Process Entry] Failed to send welcome email:', emailError);
+          }
+        }
+      } catch (emailErr) {
+        console.error('[Process Entry] Email sending error:', emailErr);
+        // Non-fatal, user is still created
+      }
     }
     
     console.log('[Process Entry] Successfully processed entry for:', entry.email);

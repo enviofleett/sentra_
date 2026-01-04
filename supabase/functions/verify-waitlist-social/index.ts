@@ -64,7 +64,15 @@ serve(async (req) => {
 
     console.log('[Verify Waitlist] Admin verified');
     
-    const { entryId } = await req.json();
+    const body = await req.json();
+    const { entryId, migrateAll } = body;
+
+    // Handle bulk migration of all verified users
+    if (migrateAll) {
+      console.log('[Verify Waitlist] Starting bulk migration of verified users');
+      return await handleBulkMigration(supabase, corsHeaders);
+    }
+
     if (!entryId) {
       return new Response(JSON.stringify({ error: 'Entry ID required' }), { 
         status: 400, 
@@ -89,9 +97,9 @@ serve(async (req) => {
       });
     }
 
-    if (entry.is_social_verified) {
-      console.log('[Verify Waitlist] Entry already verified');
-      return new Response(JSON.stringify({ error: 'Already verified' }), { 
+    if (entry.is_social_verified && entry.reward_credited) {
+      console.log('[Verify Waitlist] Entry already verified and rewarded');
+      return new Response(JSON.stringify({ error: 'Already verified and rewarded' }), { 
         status: 400, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       });
@@ -106,26 +114,23 @@ serve(async (req) => {
     const rewardAmount = settings?.waitlist_reward_amount || 100000;
     console.log('[Verify Waitlist] Reward amount:', rewardAmount);
 
-    // Call the atomic verify function
-    const { data: success, error: rpcError } = await supabase.rpc('verify_and_reward_user', {
-      entry_id: entryId,
-      admin_id: user.id
-    });
-
-    if (rpcError) {
-      console.error('[Verify Waitlist] RPC error:', rpcError);
-      return new Response(JSON.stringify({ error: 'Failed to verify entry' }), { 
+    // Process the single entry
+    const result = await processWaitlistEntry(supabase, entry, rewardAmount, user.id);
+    
+    if (!result.success) {
+      return new Response(JSON.stringify({ error: result.error }), { 
         status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       });
     }
 
-    console.log('[Verify Waitlist] Successfully verified entry:', entryId);
+    console.log('[Verify Waitlist] Successfully verified and rewarded entry:', entryId);
 
     return new Response(JSON.stringify({ 
       success: true, 
       rewardAmount,
-      message: `Entry verified and ₦${rewardAmount.toLocaleString()} reward credited` 
+      userId: result.userId,
+      message: `User created, verified, and ₦${rewardAmount.toLocaleString()} credited to wallet!` 
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
@@ -139,3 +144,190 @@ serve(async (req) => {
     });
   }
 });
+
+async function processWaitlistEntry(
+  supabase: any, 
+  entry: any, 
+  rewardAmount: number, 
+  adminId: string
+): Promise<{ success: boolean; userId?: string; error?: string }> {
+  try {
+    console.log('[Process Entry] Processing:', entry.email);
+    
+    // Check if user already exists
+    const { data: existingUsers } = await supabase.auth.admin.listUsers();
+    const existingUser = existingUsers?.users?.find((u: any) => u.email === entry.email);
+    
+    let userId: string;
+    
+    if (existingUser) {
+      console.log('[Process Entry] User already exists:', existingUser.id);
+      userId = existingUser.id;
+    } else {
+      // Create new user with a random password (they'll need to reset it)
+      const tempPassword = crypto.randomUUID() + 'Aa1!';
+      
+      const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
+        email: entry.email,
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: {
+          full_name: entry.full_name || '',
+          source: 'waitlist'
+        }
+      });
+      
+      if (createError) {
+        console.error('[Process Entry] Failed to create user:', createError);
+        return { success: false, error: `Failed to create user: ${createError.message}` };
+      }
+      
+      userId = newUser.user.id;
+      console.log('[Process Entry] Created new user:', userId);
+      
+      // Create profile for the new user
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: userId,
+          email: entry.email,
+          full_name: entry.full_name || null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
+      
+      if (profileError) {
+        console.error('[Process Entry] Failed to create profile:', profileError);
+        // Non-fatal, continue
+      }
+    }
+    
+    // Credit the wallet using the database function
+    const { error: creditError } = await supabase.rpc('credit_waitlist_reward', {
+      p_user_id: userId,
+      p_amount: rewardAmount
+    });
+    
+    if (creditError) {
+      console.error('[Process Entry] Failed to credit wallet:', creditError);
+      return { success: false, error: `Failed to credit wallet: ${creditError.message}` };
+    }
+    
+    console.log('[Process Entry] Wallet credited with:', rewardAmount);
+    
+    // Update the waitlist entry
+    const { error: updateError } = await supabase
+      .from('waiting_list')
+      .update({
+        is_social_verified: true,
+        reward_credited: true,
+        verified_at: new Date().toISOString(),
+        verified_by: adminId,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', entry.id);
+    
+    if (updateError) {
+      console.error('[Process Entry] Failed to update waitlist entry:', updateError);
+      return { success: false, error: `Failed to update waitlist: ${updateError.message}` };
+    }
+    
+    console.log('[Process Entry] Successfully processed entry for:', entry.email);
+    return { success: true, userId };
+    
+  } catch (error) {
+    console.error('[Process Entry] Error:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+async function handleBulkMigration(supabase: any, corsHeaders: Record<string, string>) {
+  try {
+    // Get all verified waitlist entries that haven't been fully processed
+    const { data: entries, error: fetchError } = await supabase
+      .from('waiting_list')
+      .select('*')
+      .eq('is_social_verified', true);
+    
+    if (fetchError) {
+      console.error('[Bulk Migration] Failed to fetch entries:', fetchError);
+      return new Response(JSON.stringify({ error: 'Failed to fetch waitlist entries' }), { 
+        status: 500, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+    
+    if (!entries || entries.length === 0) {
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: 'No verified entries to migrate',
+        processed: 0
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+    
+    console.log('[Bulk Migration] Found', entries.length, 'verified entries to process');
+    
+    // Get reward amount
+    const { data: settings } = await supabase
+      .from('pre_launch_settings')
+      .select('waitlist_reward_amount')
+      .maybeSingle();
+    
+    const rewardAmount = settings?.waitlist_reward_amount || 100000;
+    
+    let successCount = 0;
+    let skipCount = 0;
+    const errors: string[] = [];
+    
+    for (const entry of entries) {
+      // Check if user already has a wallet with promo balance (already migrated)
+      const { data: existingUsers } = await supabase.auth.admin.listUsers();
+      const existingUser = existingUsers?.users?.find((u: any) => u.email === entry.email);
+      
+      if (existingUser) {
+        // Check if wallet already has this reward
+        const { data: wallet } = await supabase
+          .from('user_wallets')
+          .select('balance_promo')
+          .eq('user_id', existingUser.id)
+          .maybeSingle();
+        
+        if (wallet && wallet.balance_promo >= rewardAmount) {
+          console.log('[Bulk Migration] Skipping already migrated user:', entry.email);
+          skipCount++;
+          continue;
+        }
+      }
+      
+      // Process the entry (will create user if needed and credit wallet)
+      const result = await processWaitlistEntry(supabase, entry, rewardAmount, 'system-migration');
+      
+      if (result.success) {
+        successCount++;
+      } else {
+        errors.push(`${entry.email}: ${result.error}`);
+      }
+    }
+    
+    console.log('[Bulk Migration] Completed. Success:', successCount, 'Skipped:', skipCount, 'Errors:', errors.length);
+    
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: `Migration complete! ${successCount} users created/credited, ${skipCount} already migrated`,
+      processed: successCount,
+      skipped: skipCount,
+      errors: errors.length > 0 ? errors : undefined
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+    
+  } catch (error) {
+    console.error('[Bulk Migration] Error:', error);
+    return new Response(JSON.stringify({ error: 'Bulk migration failed' }), { 
+      status: 500, 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  }
+}

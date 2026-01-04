@@ -9,9 +9,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
-import { Sparkles, SlidersHorizontal, Search, Crown } from 'lucide-react';
+import { Sparkles, SlidersHorizontal, Search } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { CountdownBadge } from '@/components/groupbuy/CountdownBadge';
 import { motion } from 'framer-motion';
 
 interface GroupBuyCampaign {
@@ -290,7 +289,7 @@ export default function Products() {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-10 md:gap-x-6 md:gap-y-14 lg:gap-x-8 lg:gap-y-16 bg-[#fafafa] rounded-sm p-4 md:p-6 lg:p-8">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
                 {products.map((product, index) => {
                   const displayImage = product.images && Array.isArray(product.images) && product.images.length > 0
                     ? product.images[0]
@@ -298,100 +297,64 @@ export default function Products() {
                   
                   const campaign = product.group_buy_campaigns as GroupBuyCampaign | null;
                   const hasActiveGroupBuy = isGroupBuyActive(campaign);
-                  const hasSale = !hasActiveGroupBuy && product.original_price && product.original_price > product.price;
-                  const inStock = product.stock_quantity > 0;
+                  const isOnSale = hasActiveGroupBuy || (product.original_price && product.original_price > product.price);
+                  
+                  // Determine prices to display
+                  const currentPrice = hasActiveGroupBuy && campaign 
+                    ? campaign.discount_price 
+                    : product.price;
+                  const originalPrice = hasActiveGroupBuy && campaign 
+                    ? product.price 
+                    : product.original_price;
 
                   return (
                     <motion.div
                       key={product.id}
-                      initial={{ opacity: 0, y: 24 }}
+                      initial={{ opacity: 0, y: 16 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5, delay: index * 0.04, ease: [0.25, 0.1, 0.25, 1] }}
+                      transition={{ duration: 0.4, delay: index * 0.03 }}
                     >
-                      <Link to={`/products/${product.id}`} className="group block">
-                        {/* Floating Product Container */}
-                        <div className="relative">
-                          {/* Badges - Positioned top-left */}
-                          <div className="absolute top-2 left-2 z-10 flex flex-col gap-1.5">
-                            {hasActiveGroupBuy && (
-                              <span className="inline-flex items-center px-2 py-0.5 text-[9px] md:text-[10px] font-medium uppercase tracking-wide rounded-full bg-foreground/90 text-background">
-                                <Crown className="w-2.5 h-2.5 mr-1" />
-                                Circle
-                              </span>
-                            )}
-                            {inStock && !hasActiveGroupBuy && (
-                              <span className="inline-flex px-2 py-0.5 text-[9px] md:text-[10px] font-medium uppercase tracking-wide rounded-full bg-emerald-500/10 text-emerald-700">
-                                In Stock
-                              </span>
-                            )}
-                            {hasSale && (
-                              <span className="inline-flex px-2 py-0.5 text-[9px] md:text-[10px] font-medium uppercase tracking-wide rounded-full bg-rose-500/10 text-rose-600">
-                                Sale
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Countdown badge for group buy */}
-                          {hasActiveGroupBuy && campaign && (
-                            <CountdownBadge 
-                              expiryAt={campaign.expiry_at} 
-                              className="absolute top-2 right-2 z-10"
-                            />
-                          )}
-
-                          {/* Image Container with Floating Shadow */}
-                          <div className="relative aspect-[4/5] flex items-center justify-center p-4 md:p-6 transition-transform duration-500 ease-out group-hover:scale-[1.02]">
-                            {/* Showroom Shadow - sits behind the image */}
-                            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[70%] h-6 bg-black/[0.06] blur-xl rounded-full transition-all duration-500 group-hover:w-[75%] group-hover:bg-black/[0.08]" />
-                            
-                            {displayImage ? (
-                              <img
-                                src={displayImage}
-                                alt={product.name}
-                                className="relative z-[1] max-w-full max-h-full object-contain"
-                                loading="lazy"
-                              />
-                            ) : (
-                              <div className="relative z-[1] flex items-center justify-center">
-                                <Sparkles className="h-10 w-10 text-muted-foreground/20" />
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Product Info - Minimal Typography */}
-                        <div className="mt-4 space-y-1 text-center">
-                          {product.vendors?.rep_full_name && (
-                            <p className="text-[10px] md:text-[11px] uppercase tracking-[0.2em] text-muted-foreground/70">
-                              {product.vendors.rep_full_name}
-                            </p>
-                          )}
-                          <h3 className="text-sm md:text-[15px] font-normal text-foreground line-clamp-2 leading-relaxed">
+                      <Link 
+                        to={`/products/${product.id}`} 
+                        className="group block border border-border bg-card hover:border-l-4 hover:border-l-coral transition-all duration-200"
+                      >
+                        {/* Product Name - TOP */}
+                        <div className="py-3 px-2 border-b border-border/50">
+                          <h3 className="text-xs md:text-sm text-center text-foreground line-clamp-2 leading-relaxed">
                             {product.name}
                           </h3>
-                          <div className="flex items-baseline justify-center gap-2 pt-0.5">
-                            {hasActiveGroupBuy && campaign ? (
-                              <>
-                                <span className="text-sm md:text-base font-medium text-foreground">
-                                  ₦{campaign.discount_price?.toLocaleString()}
-                                </span>
-                                <span className="text-xs text-muted-foreground/60 line-through">
-                                  ₦{product.price?.toLocaleString()}
-                                </span>
-                              </>
-                            ) : (
-                              <>
-                                <span className="text-sm md:text-base font-medium text-foreground">
-                                  ₦{product.price?.toLocaleString()}
-                                </span>
-                                {hasSale && (
-                                  <span className="text-xs text-muted-foreground/60 line-through">
-                                    ₦{product.original_price?.toLocaleString()}
-                                  </span>
-                                )}
-                              </>
-                            )}
-                          </div>
+                        </div>
+                        
+                        {/* Product Image - MIDDLE */}
+                        <div className="aspect-square p-4 md:p-6 flex items-center justify-center bg-background">
+                          {displayImage ? (
+                            <img 
+                              src={displayImage} 
+                              alt={product.name}
+                              className="max-w-full max-h-full object-contain transition-transform duration-300 group-hover:scale-[1.02]"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <Sparkles className="h-8 w-8 text-muted-foreground/20" />
+                          )}
+                        </div>
+                        
+                        {/* Price - BOTTOM */}
+                        <div className="py-3 px-2 border-t border-border/50 flex items-center justify-center gap-2">
+                          {isOnSale && originalPrice ? (
+                            <>
+                              <span className="text-xs md:text-sm text-muted-foreground line-through">
+                                ₦{originalPrice.toLocaleString()}
+                              </span>
+                              <span className="text-xs md:text-sm font-medium text-coral">
+                                ₦{currentPrice.toLocaleString()}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-xs md:text-sm font-medium text-foreground">
+                              ₦{currentPrice.toLocaleString()}
+                            </span>
+                          )}
                         </div>
                       </Link>
                     </motion.div>

@@ -1451,6 +1451,7 @@ export type Database = {
         }
         Returns: string
       }
+      sanitize_html: { Args: { p_html: string }; Returns: string }
       update_product_cost_price: {
         Args: { p_cost_price: number; p_product_id: string }
         Returns: boolean

@@ -31,14 +31,16 @@ export default function AdminDashboard() {
       return;
     }
 
-    const { data } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id);
-
-    const roles = data?.map(r => r.role) || [];
-    const isAdmin = roles.includes('admin');
-    setHasAccess(isAdmin);
+    // Use server-side is_admin() function for secure role verification
+    const { data, error } = await supabase.rpc('is_admin');
+    
+    if (error) {
+      console.error('Error checking admin status:', error);
+      setHasAccess(false);
+      return;
+    }
+    
+    setHasAccess(data === true);
   };
 
   if (hasAccess === null) {

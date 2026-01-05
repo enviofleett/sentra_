@@ -16,23 +16,19 @@ import { getTopProductsByViews, getTopProductsByPurchases } from '@/utils/analyt
 interface Product {
   id: string;
   name: string;
-  description: string;
+  description: string | null;
   price: number;
   original_price: number | null;
-  cost_price: number | null;
-  target_margin_percentage: number;
-  stock_quantity: number;
+  stock_quantity: number | null;
   category_id: string | null;
   vendor_id: string | null;
   image_url: string | null;
   images: any;
   is_featured: boolean;
-  is_active: boolean;
+  is_active: boolean | null;
   scent_profile: string | null;
   brand: string | null;
   size: string | null;
-  margin_override_allowed: boolean;
-  margin_override_reason: string | null;
 }
 interface Category {
   id: string;
@@ -58,40 +54,12 @@ export function ProductsManagement() {
   const [topByViews, setTopByViews] = useState<any[]>([]);
   const [topByPurchases, setTopByPurchases] = useState<any[]>([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
-  const [formPrice, setFormPrice] = useState<number>(0);
-  const [formCostPrice, setFormCostPrice] = useState<number | null>(null);
-  const [formTargetMargin, setFormTargetMargin] = useState<number>(30);
-
-  // Calculate margin percentage
-  const calculateMargin = (price: number, cost: number | null): number | null => {
-    if (!cost || cost === 0 || price === 0) return null;
-    return ((price - cost) / price) * 100;
-  };
-
-  const currentMargin = calculateMargin(formPrice, formCostPrice);
-
-  const getMarginStatus = (margin: number | null): {
-    status: 'NO_DATA' | 'LOSS' | 'CRITICAL' | 'LOW' | 'BELOW_TARGET' | 'HEALTHY';
-    color: string;
-    icon: string;
-  } => {
-    if (margin === null) return { status: 'NO_DATA', color: 'text-gray-500', icon: '⚪' };
-    if (margin <= 0) return { status: 'LOSS', color: 'text-red-600', icon: '🔴' };
-    if (margin < 10) return { status: 'CRITICAL', color: 'text-red-500', icon: '⚠️' };
-    if (margin < 20) return { status: 'LOW', color: 'text-yellow-600', icon: '🟡' };
-    if (margin < formTargetMargin) return { status: 'BELOW_TARGET', color: 'text-yellow-500', icon: '📊' };
-    return { status: 'HEALTHY', color: 'text-green-600', icon: '🟢' };
-  };
-
-  const marginStatus = getMarginStatus(currentMargin);
 
   const emptyProduct: Omit<Product, 'id'> = {
     name: '',
     description: '',
     price: 0,
     original_price: null,
-    cost_price: null,
-    target_margin_percentage: 30,
     stock_quantity: 0,
     category_id: null,
     vendor_id: null,
@@ -101,9 +69,7 @@ export function ProductsManagement() {
     is_active: true,
     scent_profile: null,
     brand: null,
-    size: null,
-    margin_override_allowed: false,
-    margin_override_reason: null
+    size: null
   };
   useEffect(() => {
     fetchProducts();
@@ -251,8 +217,6 @@ export function ProductsManagement() {
       description: description,
       price: parseFloat(formData.get('price') as string),
       original_price: formData.get('original_price') ? parseFloat(formData.get('original_price') as string) : null,
-      cost_price: formData.get('cost_price') ? parseFloat(formData.get('cost_price') as string) : null,
-      target_margin_percentage: formData.get('target_margin_percentage') ? parseFloat(formData.get('target_margin_percentage') as string) : 30,
       stock_quantity: parseInt(formData.get('stock_quantity') as string),
       category_id: formData.get('category_id') as string || null,
       vendor_id: formData.get('vendor_id') as string || null,
@@ -262,9 +226,7 @@ export function ProductsManagement() {
       is_active: formData.get('is_active') === 'true',
       scent_profile: (scentValue && validScents.includes(scentValue) ? scentValue : null) as any,
       brand: formData.get('brand') as string || null,
-      size: formData.get('size') as string || null,
-      margin_override_allowed: formData.get('margin_override_allowed') === 'true',
-      margin_override_reason: formData.get('margin_override_reason') as string || null
+      size: formData.get('size') as string || null
     };
     if (editingProduct) {
       const {
@@ -310,9 +272,6 @@ export function ProductsManagement() {
   const openDialog = (product?: Product) => {
     setEditingProduct(product || null);
     setDescription(product?.description || '');
-    setFormPrice(product?.price || 0);
-    setFormCostPrice(product?.cost_price || null);
-    setFormTargetMargin(product?.target_margin_percentage || 30);
     clearImages();
     if (product?.images && Array.isArray(product.images)) {
       setImagePreviews(product.images as string[]);
@@ -396,7 +355,6 @@ export function ProductsManagement() {
                     type="number"
                     step="0.01"
                     defaultValue={editingProduct?.price}
-                    onChange={(e) => setFormPrice(parseFloat(e.target.value) || 0)}
                     required
                   />
                 </div>
@@ -411,90 +369,6 @@ export function ProductsManagement() {
                   />
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="cost_price">Cost Price (₦)</Label>
-                  <Input
-                    id="cost_price"
-                    name="cost_price"
-                    type="number"
-                    step="0.01"
-                    defaultValue={editingProduct?.cost_price || ''}
-                    onChange={(e) => setFormCostPrice(parseFloat(e.target.value) || null)}
-                    placeholder="Enter product cost"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Purchase/manufacturing cost per unit
-                  </p>
-                </div>
-                <div>
-                  <Label htmlFor="target_margin_percentage">Target Margin (%)</Label>
-                  <Input
-                    id="target_margin_percentage"
-                    name="target_margin_percentage"
-                    type="number"
-                    step="0.01"
-                    defaultValue={editingProduct?.target_margin_percentage || 30}
-                    onChange={(e) => setFormTargetMargin(parseFloat(e.target.value) || 30)}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Default: 30%
-                  </p>
-                </div>
-              </div>
-
-              {/* Margin Calculator Display */}
-              {formCostPrice !== null && formCostPrice > 0 && (
-                <div className="p-4 border rounded-lg bg-muted/50">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-semibold text-sm">Margin Analysis</h4>
-                    <span className={`text-lg ${marginStatus.color}`}>
-                      {marginStatus.icon}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">Gross Profit</p>
-                      <p className="font-semibold">
-                        ₦{(formPrice - (formCostPrice || 0)).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Margin %</p>
-                      <p className={`font-semibold ${marginStatus.color}`}>
-                        {currentMargin !== null ? currentMargin.toFixed(2) : '0.00'}%
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Status</p>
-                      <p className={`font-semibold ${marginStatus.color}`}>
-                        {marginStatus.status.replace('_', ' ')}
-                      </p>
-                    </div>
-                  </div>
-                  {currentMargin !== null && currentMargin < 10 && (
-                    <div className="mt-3 p-2 bg-red-100 border border-red-300 rounded text-red-800 text-xs">
-                      ⚠️ <strong>WARNING:</strong> Margin below 10% minimum. {currentMargin <= 0 ? 'Selling at a loss!' : 'Consider increasing price or lowering cost.'}
-                    </div>
-                  )}
-                  {currentMargin !== null && currentMargin >= 10 && currentMargin < 20 && (
-                    <div className="mt-3 p-2 bg-yellow-100 border border-yellow-300 rounded text-yellow-800 text-xs">
-                      💡 Margin is below recommended 20%. Room for improvement.
-                    </div>
-                  )}
-                  {currentMargin !== null && currentMargin >= 20 && currentMargin < formTargetMargin && (
-                    <div className="mt-3 p-2 bg-blue-100 border border-blue-300 rounded text-blue-800 text-xs">
-                      📊 Margin is below target of {formTargetMargin}%. Currently at {currentMargin.toFixed(2)}%.
-                    </div>
-                  )}
-                  {currentMargin !== null && currentMargin >= formTargetMargin && (
-                    <div className="mt-3 p-2 bg-green-100 border border-green-300 rounded text-green-800 text-xs">
-                      ✅ Healthy margin! Exceeds target of {formTargetMargin}%.
-                    </div>
-                  )}
-                </div>
-              )}
               <div>
                 <Label htmlFor="description">Description</Label>
                 <RichTextEditor content={description} onChange={setDescription} placeholder="Enter product description..." />
@@ -640,8 +514,6 @@ export function ProductsManagement() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Price</TableHead>
-                <TableHead>Cost</TableHead>
-                <TableHead>Margin</TableHead>
                 <TableHead>Stock</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Status</TableHead>
@@ -649,34 +521,10 @@ export function ProductsManagement() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {products.map(product => {
-                const productMargin = calculateMargin(product.price, product.cost_price);
-                const productMarginStatus = getMarginStatus(productMargin);
-
-                return <TableRow key={product.id}>
+              {products.map(product => (
+                <TableRow key={product.id}>
                   <TableCell className="font-medium">{product.name}</TableCell>
                   <TableCell>₦{product.price.toLocaleString()}</TableCell>
-                  <TableCell>
-                    {product.cost_price !== null ? (
-                      `₦${product.cost_price.toLocaleString()}`
-                    ) : (
-                      <span className="text-muted-foreground text-xs">Not set</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {productMargin !== null ? (
-                      <div className="flex items-center gap-2">
-                        <span className={productMarginStatus.color}>
-                          {productMarginStatus.icon}
-                        </span>
-                        <span className={`font-semibold ${productMarginStatus.color}`}>
-                          {productMargin.toFixed(1)}%
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground text-xs">N/A</span>
-                    )}
-                  </TableCell>
                   <TableCell>{product.stock_quantity}</TableCell>
                   <TableCell>{categories.find(c => c.id === product.category_id)?.name || '-'}</TableCell>
                   <TableCell>
@@ -694,8 +542,8 @@ export function ProductsManagement() {
                       </Button>
                     </div>
                   </TableCell>
-                </TableRow>;
-              })}
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </CardContent>

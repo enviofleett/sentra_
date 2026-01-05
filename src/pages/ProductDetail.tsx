@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import DOMPurify from 'dompurify';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { Button } from '@/components/ui/button';
@@ -210,7 +211,7 @@ export default function ProductDetail() {
                   {product.description.includes('<') ? (
                     <div 
                       className="prose prose-sm max-w-none"
-                      dangerouslySetInnerHTML={{ __html: product.description }}
+                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(product.description) }}
                     />
                   ) : (
                     product.description.split(/\n\n|\n/).filter(Boolean).map((paragraph: string, index: number) => (

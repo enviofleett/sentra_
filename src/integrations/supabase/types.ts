@@ -1332,6 +1332,56 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles_masked: {
+        Row: {
+          affiliate_code: string | null
+          created_at: string | null
+          current_rank_id: string | null
+          default_billing_address: Json | null
+          default_shipping_address: Json | null
+          email: string | null
+          full_name: string | null
+          id: string | null
+          phone: string | null
+          referred_by: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          affiliate_code?: string | null
+          created_at?: string | null
+          current_rank_id?: string | null
+          default_billing_address?: never
+          default_shipping_address?: never
+          email?: string | null
+          full_name?: string | null
+          id?: string | null
+          phone?: never
+          referred_by?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          affiliate_code?: string | null
+          created_at?: string | null
+          current_rank_id?: string | null
+          default_billing_address?: never
+          default_shipping_address?: never
+          email?: string | null
+          full_name?: string | null
+          id?: string | null
+          phone?: never
+          referred_by?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_current_rank_id_fkey"
+            columns: ["current_rank_id"]
+            isOneToOne: false
+            referencedRelation: "reseller_ranks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profit_bucket_totals: {
         Row: {
           total_admin: number | null

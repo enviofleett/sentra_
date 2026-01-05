@@ -1401,6 +1401,10 @@ export type Database = {
         }
         Returns: string
       }
+      update_product_cost_price: {
+        Args: { p_cost_price: number; p_product_id: string }
+        Returns: boolean
+      }
       verify_and_reward_user: {
         Args: { admin_id: string; entry_id: string }
         Returns: boolean

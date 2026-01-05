@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useLocation, useSearchParams, Link } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Gift, Clock, Instagram, Star, Percent, Truck, Shield, Sparkles, Heart, Eye, X, Settings } from 'lucide-react';
+import { Loader2, Gift, Clock, Instagram, Star, Percent, Truck, Shield, Sparkles, Heart, Eye, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -255,8 +255,8 @@ function renderHeadlineWithAccent(headline: string, accent: string) {
       {parts[1]}
     </>;
 }
-// Admin Preview Bar Component
-function AdminPreviewBar({ onExit }: { onExit: () => void }) {
+// Admin Preview Bar Component - shows when admin views store during lockdown
+function AdminPreviewBar() {
   return (
     <motion.div
       initial={{ y: -50, opacity: 0 }}
@@ -265,24 +265,15 @@ function AdminPreviewBar({ onExit }: { onExit: () => void }) {
     >
       <div className="flex items-center gap-2">
         <Eye className="h-4 w-4" />
-        <span className="text-sm font-medium">Admin Preview Mode</span>
+        <span className="text-sm font-medium">Admin Mode — Store Preview</span>
       </div>
       <div className="flex items-center gap-2">
         <Link to="/admin/settings">
           <Button variant="ghost" size="sm" className="text-primary-foreground hover:bg-primary-foreground/20 h-8">
             <Settings className="h-4 w-4 mr-1" />
-            Admin
+            Admin Panel
           </Button>
         </Link>
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={onExit}
-          className="text-primary-foreground hover:bg-primary-foreground/20 h-8"
-        >
-          <X className="h-4 w-4 mr-1" />
-          Exit Preview
-        </Button>
       </div>
     </motion.div>
   );
@@ -291,31 +282,24 @@ function AdminPreviewBar({ onExit }: { onExit: () => void }) {
 // Inner component that handles all the waitlist/prelaunch logic
 // This is only rendered when we're NOT on an excluded route
 function PrelaunchGate({ children }: { children: React.ReactNode }) {
-  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const [settings, setSettings] = useState<PreLaunchSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [adminCheckDone, setAdminCheckDone] = useState(false);
 
-  // Check for admin status and preview mode together
+  // Server-side admin verification - no localStorage for security
   useEffect(() => {
-    const checkAdminAndPreview = async () => {
-      const previewParam = searchParams.get('preview');
-      const storedPreview = localStorage.getItem('admin_preview_mode');
-      const wantsPreview = previewParam === 'admin' || storedPreview === 'true';
-
+    const checkAdminStatus = async () => {
       if (!user) {
         setIsAdmin(false);
-        setIsPreviewMode(false);
         setAdminCheckDone(true);
         return;
       }
 
-      // Check admin role
+      // Verify admin role from database only (not localStorage)
       const { data } = await supabase
         .from('user_roles')
         .select('role')
@@ -323,24 +307,12 @@ function PrelaunchGate({ children }: { children: React.ReactNode }) {
         .eq('role', 'admin')
         .maybeSingle();
 
-      const userIsAdmin = !!data;
-      setIsAdmin(userIsAdmin);
-
-      // Only allow preview mode if user is actually an admin
-      if (userIsAdmin && wantsPreview) {
-        localStorage.setItem('admin_preview_mode', 'true');
-        setIsPreviewMode(true);
-      } else if (!userIsAdmin) {
-        // Clear preview mode if not admin
-        localStorage.removeItem('admin_preview_mode');
-        setIsPreviewMode(false);
-      }
-      
+      setIsAdmin(!!data);
       setAdminCheckDone(true);
     };
 
-    checkAdminAndPreview();
-  }, [user, searchParams]);
+    checkAdminStatus();
+  }, [user]);
 
   useEffect(() => {
     const checkPrelaunchMode = async () => {
@@ -362,11 +334,6 @@ function PrelaunchGate({ children }: { children: React.ReactNode }) {
     checkPrelaunchMode();
   }, []);
 
-  const exitPreviewMode = () => {
-    localStorage.removeItem('admin_preview_mode');
-    setIsPreviewMode(false);
-  };
-
   // Still checking settings or admin status
   if (isLoading || !adminCheckDone) {
     return (
@@ -378,11 +345,11 @@ function PrelaunchGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Admin in preview mode - show store with preview bar
-  if (settings?.is_prelaunch_mode && isAdmin && isPreviewMode) {
+  // Verified admin - automatically bypass lockdown with preview bar
+  if (settings?.is_prelaunch_mode && isAdmin) {
     return (
       <>
-        <AdminPreviewBar onExit={exitPreviewMode} />
+        <AdminPreviewBar />
         <div className="pt-10">{children}</div>
       </>
     );

@@ -140,6 +140,13 @@ export type Database = {
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "cart_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_at_risk"
+            referencedColumns: ["id"]
+          },
         ]
       }
       categories: {
@@ -346,6 +353,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_buy_campaigns_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_at_risk"
             referencedColumns: ["id"]
           },
         ]
@@ -588,6 +602,7 @@ export type Database = {
           active_group_buy_id: string | null
           brand: string | null
           category_id: string | null
+          cost_price: number | null
           created_at: string | null
           description: string | null
           id: string
@@ -610,6 +625,7 @@ export type Database = {
           active_group_buy_id?: string | null
           brand?: string | null
           category_id?: string | null
+          cost_price?: number | null
           created_at?: string | null
           description?: string | null
           id?: string
@@ -632,6 +648,7 @@ export type Database = {
           active_group_buy_id?: string | null
           brand?: string | null
           category_id?: string | null
+          cost_price?: number | null
           created_at?: string | null
           description?: string | null
           id?: string
@@ -1264,6 +1281,57 @@ export type Database = {
       }
     }
     Views: {
+      product_profitability: {
+        Row: {
+          avg_margin_percentage: number | null
+          cost_data_coverage_pct: number | null
+          low_margin_products: number | null
+          products_with_cost_data: number | null
+          profitable_products: number | null
+          total_inventory_cost: number | null
+          total_inventory_value: number | null
+          total_potential_margin: number | null
+          total_products: number | null
+          unprofitable_products: number | null
+        }
+        Relationships: []
+      }
+      products_at_risk: {
+        Row: {
+          cost_price: number | null
+          id: string | null
+          is_active: boolean | null
+          margin_amount: number | null
+          margin_percentage: number | null
+          name: string | null
+          price: number | null
+          risk_status: string | null
+          stock_quantity: number | null
+        }
+        Insert: {
+          cost_price?: number | null
+          id?: string | null
+          is_active?: boolean | null
+          margin_amount?: never
+          margin_percentage?: never
+          name?: string | null
+          price?: number | null
+          risk_status?: never
+          stock_quantity?: number | null
+        }
+        Update: {
+          cost_price?: number | null
+          id?: string | null
+          is_active?: boolean | null
+          margin_amount?: never
+          margin_percentage?: never
+          name?: string | null
+          price?: number | null
+          risk_status?: never
+          stock_quantity?: number | null
+        }
+        Relationships: []
+      }
       profit_bucket_totals: {
         Row: {
           total_admin: number | null

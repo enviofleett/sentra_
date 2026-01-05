@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,15 +9,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Pencil, Trash2, Plus, Upload, X } from 'lucide-react';
+import { Pencil, Trash2, Plus, Upload, X, AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react';
 import { ProductPerformanceChart } from '@/components/admin/ProductPerformanceChart';
 import { TopProductsWidget } from '@/components/admin/TopProductsWidget';
 import { getTopProductsByViews, getTopProductsByPurchases } from '@/utils/analytics';
+
 interface Product {
   id: string;
   name: string;
   description: string | null;
   price: number;
+  cost_price: number | null;
   original_price: number | null;
   stock_quantity: number | null;
   category_id: string | null;
@@ -30,15 +32,68 @@ interface Product {
   brand: string | null;
   size: string | null;
 }
+
 interface Category {
   id: string;
   name: string;
 }
+
 interface Vendor {
   id: string;
   rep_full_name: string;
   email: string;
 }
+
+// Margin calculator component
+function MarginCalculator({ price, costPrice }: { price: number; costPrice: number | null }) {
+  if (costPrice === null || costPrice === 0 || isNaN(costPrice)) {
+    return (
+      <div className="p-3 rounded-lg bg-muted/50 border border-dashed">
+        <p className="text-sm text-muted-foreground">Enter cost price to see margin</p>
+      </div>
+    );
+  }
+
+  const marginAmount = price - costPrice;
+  const marginPercentage = price > 0 ? (marginAmount / price) * 100 : 0;
+  
+  const isNegative = marginAmount < 0;
+  const isLow = marginPercentage >= 0 && marginPercentage < 20;
+  const isHealthy = marginPercentage >= 20;
+
+  return (
+    <div className={`p-3 rounded-lg border ${
+      isNegative ? 'bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800' : 
+      isLow ? 'bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800' : 
+      'bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800'
+    }`}>
+      <div className="flex items-center gap-2 mb-1">
+        {isNegative ? (
+          <><TrendingDown className="h-4 w-4 text-red-600" /><span className="text-sm font-medium text-red-600">Negative Margin</span></>
+        ) : isLow ? (
+          <><AlertTriangle className="h-4 w-4 text-yellow-600" /><span className="text-sm font-medium text-yellow-600">Low Margin Warning</span></>
+        ) : (
+          <><TrendingUp className="h-4 w-4 text-green-600" /><span className="text-sm font-medium text-green-600">Healthy Margin</span></>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-sm">
+        <div>
+          <span className="text-muted-foreground">Amount:</span>
+          <span className={`ml-1 font-medium ${isNegative ? 'text-red-600' : isLow ? 'text-yellow-600' : 'text-green-600'}`}>
+            ₦{marginAmount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
+          </span>
+        </div>
+        <div>
+          <span className="text-muted-foreground">Percentage:</span>
+          <span className={`ml-1 font-medium ${isNegative ? 'text-red-600' : isLow ? 'text-yellow-600' : 'text-green-600'}`}>
+            {marginPercentage.toFixed(1)}%
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ProductsManagement() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -54,11 +109,16 @@ export function ProductsManagement() {
   const [topByViews, setTopByViews] = useState<any[]>([]);
   const [topByPurchases, setTopByPurchases] = useState<any[]>([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  
+  // Live margin calculation state
+  const [livePrice, setLivePrice] = useState<number>(0);
+  const [liveCostPrice, setLiveCostPrice] = useState<number | null>(null);
 
   const emptyProduct: Omit<Product, 'id'> = {
     name: '',
     description: '',
     price: 0,
+    cost_price: null,
     original_price: null,
     stock_quantity: 0,
     category_id: null,
@@ -212,10 +272,12 @@ export function ProductsManagement() {
       : (editingProduct?.images as string[] || []);
     const scentValue = formData.get('scent_profile') as string;
     const validScents = ['aquatic', 'citrus', 'floral', 'fresh', 'gourmand', 'oriental', 'spicy', 'woody'];
+    const costPriceValue = formData.get('cost_price') as string;
     const productData = {
       name: formData.get('name') as string,
       description: description,
       price: parseFloat(formData.get('price') as string),
+      cost_price: costPriceValue ? parseFloat(costPriceValue) : null,
       original_price: formData.get('original_price') ? parseFloat(formData.get('original_price') as string) : null,
       stock_quantity: parseInt(formData.get('stock_quantity') as string),
       category_id: formData.get('category_id') as string || null,
@@ -272,6 +334,8 @@ export function ProductsManagement() {
   const openDialog = (product?: Product) => {
     setEditingProduct(product || null);
     setDescription(product?.description || '');
+    setLivePrice(product?.price || 0);
+    setLiveCostPrice(product?.cost_price || null);
     clearImages();
     if (product?.images && Array.isArray(product.images)) {
       setImagePreviews(product.images as string[]);
@@ -346,7 +410,7 @@ export function ProductsManagement() {
                 <Label htmlFor="size">Bottle Size</Label>
                 <Input id="size" name="size" defaultValue={editingProduct?.size || ''} placeholder="e.g., 100ml" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <Label htmlFor="price">Selling Price (₦)</Label>
                   <Input
@@ -355,7 +419,20 @@ export function ProductsManagement() {
                     type="number"
                     step="0.01"
                     defaultValue={editingProduct?.price}
+                    onChange={(e) => setLivePrice(parseFloat(e.target.value) || 0)}
                     required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="cost_price">Cost Price (₦)</Label>
+                  <Input
+                    id="cost_price"
+                    name="cost_price"
+                    type="number"
+                    step="0.01"
+                    defaultValue={editingProduct?.cost_price || ''}
+                    onChange={(e) => setLiveCostPrice(e.target.value ? parseFloat(e.target.value) : null)}
+                    placeholder="Enter cost"
                   />
                 </div>
                 <div>
@@ -369,6 +446,9 @@ export function ProductsManagement() {
                   />
                 </div>
               </div>
+              
+              {/* Real-time Margin Calculator */}
+              <MarginCalculator price={livePrice} costPrice={liveCostPrice} />
               <div>
                 <Label htmlFor="description">Description</Label>
                 <RichTextEditor content={description} onChange={setDescription} placeholder="Enter product description..." />

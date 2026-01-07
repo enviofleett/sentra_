@@ -290,7 +290,7 @@ function PrelaunchGate({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminCheckDone, setAdminCheckDone] = useState(false);
 
-  // Server-side admin verification - no localStorage for security
+  // Server-side admin verification using secure is_admin() RPC function
   useEffect(() => {
     const checkAdminStatus = async () => {
       if (!user) {
@@ -299,15 +299,15 @@ function PrelaunchGate({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // Verify admin role from database only (not localStorage)
-      const { data } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id)
-        .eq('role', 'admin')
-        .maybeSingle();
-
-      setIsAdmin(!!data);
+      // Use server-side is_admin() function for secure role verification
+      const { data, error } = await supabase.rpc('is_admin');
+      
+      if (error) {
+        console.error('Error checking admin status:', error);
+        setIsAdmin(false);
+      } else {
+        setIsAdmin(data === true);
+      }
       setAdminCheckDone(true);
     };
 

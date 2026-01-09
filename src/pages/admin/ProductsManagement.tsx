@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Pencil, Trash2, Plus, Upload, X, AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react';
+import { Pencil, Trash2, Plus, Upload, X, AlertTriangle, TrendingUp, TrendingDown, Search } from 'lucide-react';
 import { ProductPerformanceChart } from '@/components/admin/ProductPerformanceChart';
 import { TopProductsWidget } from '@/components/admin/TopProductsWidget';
 import { getTopProductsByViews, getTopProductsByPurchases } from '@/utils/analytics';
@@ -109,6 +109,7 @@ export function ProductsManagement() {
   const [topByViews, setTopByViews] = useState<any[]>([]);
   const [topByPurchases, setTopByPurchases] = useState<any[]>([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   
   // Live margin calculation state
   const [livePrice, setLivePrice] = useState<number>(0);
@@ -382,14 +383,24 @@ export function ProductsManagement() {
       </div>
 
       {/* Products Table Section */}
-      <div className="flex items-center justify-between pt-6 border-t">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-6 border-t">
         <h3 className="text-xl font-semibold">All Products</h3>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => openDialog()}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Product
-            </Button>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search products..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 w-full sm:w-64"
+            />
+          </div>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => openDialog()}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Product
+              </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
@@ -582,11 +593,21 @@ export function ProductsManagement() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>All Products ({products.length})</CardTitle>
+          <CardTitle>
+            {searchQuery 
+              ? `Search Results (${products.filter(p => 
+                  p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  p.brand?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  p.scent_profile?.toLowerCase().includes(searchQuery.toLowerCase())
+                ).length})`
+              : `All Products (${products.length})`
+            }
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
@@ -601,7 +622,18 @@ export function ProductsManagement() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {products.map(product => (
+              {products
+                .filter(product => {
+                  if (!searchQuery) return true;
+                  const query = searchQuery.toLowerCase();
+                  return (
+                    product.name.toLowerCase().includes(query) ||
+                    product.brand?.toLowerCase().includes(query) ||
+                    product.scent_profile?.toLowerCase().includes(query) ||
+                    categories.find(c => c.id === product.category_id)?.name.toLowerCase().includes(query)
+                  );
+                })
+                .map(product => (
                 <TableRow key={product.id}>
                   <TableCell className="font-medium">{product.name}</TableCell>
                   <TableCell>₦{product.price.toLocaleString()}</TableCell>
@@ -624,6 +656,18 @@ export function ProductsManagement() {
                   </TableCell>
                 </TableRow>
               ))}
+              {searchQuery && products.filter(p => 
+                p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                p.brand?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                p.scent_profile?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                categories.find(c => c.id === p.category_id)?.name.toLowerCase().includes(searchQuery.toLowerCase())
+              ).length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    No products found matching "{searchQuery}"
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import { Navbar } from '@/components/layout/Navbar';
@@ -15,6 +15,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ScentPyramid } from '@/components/product/ScentPyramid';
 import { MobileBuyBar } from '@/components/product/MobileBuyBar';
 import { motion } from 'framer-motion';
+import { useMetaTags } from '@/hooks/useMetaTags';
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -25,6 +26,29 @@ export default function ProductDetail() {
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  // Generate meta tags config
+  const metaConfig = useMemo(() => {
+    if (!product) return {};
+    
+    // Strip HTML from description for meta
+    const plainDescription = product.description
+      ? product.description.replace(/<[^>]*>/g, '').substring(0, 155) + '...'
+      : `Shop ${product.name} at Sentra - Luxury Perfumes`;
+    
+    const productImage = product.images?.[0] || product.image_url || 'https://sentra.lovable.app/og-image.png';
+    
+    return {
+      title: `${product.name}${product.brand ? ` by ${product.brand}` : ''} | Sentra`,
+      description: plainDescription,
+      image: productImage,
+      url: `https://sentra.lovable.app/product/${product.id}`,
+      type: 'product'
+    };
+  }, [product]);
+
+  // Apply dynamic meta tags
+  useMetaTags(metaConfig);
 
   useEffect(() => {
     if (id) {

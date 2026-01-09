@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Pencil, Trash2, Plus, Upload, X, AlertTriangle, TrendingUp, TrendingDown, Search } from 'lucide-react';
+import { Pencil, Trash2, Plus, Upload, X, AlertTriangle, TrendingUp, TrendingDown, Search, CheckSquare, Square, Power, PowerOff } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ProductPerformanceChart } from '@/components/admin/ProductPerformanceChart';
 import { TopProductsWidget } from '@/components/admin/TopProductsWidget';
 import { getTopProductsByViews, getTopProductsByPurchases } from '@/utils/analytics';
@@ -110,6 +111,8 @@ export function ProductsManagement() {
   const [topByPurchases, setTopByPurchases] = useState<any[]>([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
   
   // Live margin calculation state
   const [livePrice, setLivePrice] = useState<number>(0);
@@ -332,6 +335,75 @@ export function ProductsManagement() {
       fetchProducts();
     }
   };
+
+  // Bulk action handlers
+  const filteredProducts = products.filter(product => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      product.name.toLowerCase().includes(query) ||
+      product.brand?.toLowerCase().includes(query) ||
+      product.scent_profile?.toLowerCase().includes(query) ||
+      categories.find(c => c.id === product.category_id)?.name.toLowerCase().includes(query)
+    );
+  });
+
+  const toggleSelectAll = () => {
+    if (selectedProducts.size === filteredProducts.length) {
+      setSelectedProducts(new Set());
+    } else {
+      setSelectedProducts(new Set(filteredProducts.map(p => p.id)));
+    }
+  };
+
+  const toggleSelectProduct = (productId: string) => {
+    const newSelected = new Set(selectedProducts);
+    if (newSelected.has(productId)) {
+      newSelected.delete(productId);
+    } else {
+      newSelected.add(productId);
+    }
+    setSelectedProducts(newSelected);
+  };
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`Are you sure you want to delete ${selectedProducts.size} products?`)) return;
+    
+    setBulkLoading(true);
+    const { error } = await supabase
+      .from('products')
+      .delete()
+      .in('id', Array.from(selectedProducts));
+    
+    if (error) {
+      toast.error('Failed to delete products');
+      console.error(error);
+    } else {
+      toast.success(`${selectedProducts.size} products deleted successfully`);
+      setSelectedProducts(new Set());
+      fetchProducts();
+    }
+    setBulkLoading(false);
+  };
+
+  const handleBulkStatusUpdate = async (isActive: boolean) => {
+    setBulkLoading(true);
+    const { error } = await supabase
+      .from('products')
+      .update({ is_active: isActive })
+      .in('id', Array.from(selectedProducts));
+    
+    if (error) {
+      toast.error('Failed to update products');
+      console.error(error);
+    } else {
+      toast.success(`${selectedProducts.size} products ${isActive ? 'activated' : 'deactivated'}`);
+      setSelectedProducts(new Set());
+      fetchProducts();
+    }
+    setBulkLoading(false);
+  };
+
   const openDialog = (product?: Product) => {
     setEditingProduct(product || null);
     setDescription(product?.description || '');
@@ -597,22 +669,73 @@ export function ProductsManagement() {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>
-            {searchQuery 
-              ? `Search Results (${products.filter(p => 
-                  p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                  p.brand?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                  p.scent_profile?.toLowerCase().includes(searchQuery.toLowerCase())
-                ).length})`
-              : `All Products (${products.length})`
-            }
-          </CardTitle>
+        <CardHeader className="space-y-4">
+          <div className="flex items-center justify-between">
+            <CardTitle>
+              {searchQuery 
+                ? `Search Results (${filteredProducts.length})`
+                : `All Products (${products.length})`
+              }
+            </CardTitle>
+          </div>
+          
+          {/* Bulk Actions Bar */}
+          {selectedProducts.size > 0 && (
+            <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+              <span className="text-sm font-medium">
+                {selectedProducts.size} product{selectedProducts.size > 1 ? 's' : ''} selected
+              </span>
+              <div className="flex gap-2 ml-auto">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleBulkStatusUpdate(true)}
+                  disabled={bulkLoading}
+                >
+                  <Power className="h-4 w-4 mr-1" />
+                  Activate
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleBulkStatusUpdate(false)}
+                  disabled={bulkLoading}
+                >
+                  <PowerOff className="h-4 w-4 mr-1" />
+                  Deactivate
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={handleBulkDelete}
+                  disabled={bulkLoading}
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Delete
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSelectedProducts(new Set())}
+                  disabled={bulkLoading}
+                >
+                  Clear
+                </Button>
+              </div>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">
+                  <Checkbox
+                    checked={filteredProducts.length > 0 && selectedProducts.size === filteredProducts.length}
+                    onCheckedChange={toggleSelectAll}
+                    aria-label="Select all"
+                  />
+                </TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Price</TableHead>
                 <TableHead>Stock</TableHead>
@@ -622,19 +745,15 @@ export function ProductsManagement() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {products
-                .filter(product => {
-                  if (!searchQuery) return true;
-                  const query = searchQuery.toLowerCase();
-                  return (
-                    product.name.toLowerCase().includes(query) ||
-                    product.brand?.toLowerCase().includes(query) ||
-                    product.scent_profile?.toLowerCase().includes(query) ||
-                    categories.find(c => c.id === product.category_id)?.name.toLowerCase().includes(query)
-                  );
-                })
-                .map(product => (
-                <TableRow key={product.id}>
+              {filteredProducts.map(product => (
+                <TableRow key={product.id} className={selectedProducts.has(product.id) ? 'bg-muted/50' : ''}>
+                  <TableCell>
+                    <Checkbox
+                      checked={selectedProducts.has(product.id)}
+                      onCheckedChange={() => toggleSelectProduct(product.id)}
+                      aria-label={`Select ${product.name}`}
+                    />
+                  </TableCell>
                   <TableCell className="font-medium">{product.name}</TableCell>
                   <TableCell>₦{product.price.toLocaleString()}</TableCell>
                   <TableCell>{product.stock_quantity}</TableCell>
@@ -656,15 +775,10 @@ export function ProductsManagement() {
                   </TableCell>
                 </TableRow>
               ))}
-              {searchQuery && products.filter(p => 
-                p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                p.brand?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                p.scent_profile?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                categories.find(c => c.id === p.category_id)?.name.toLowerCase().includes(searchQuery.toLowerCase())
-              ).length === 0 && (
+              {filteredProducts.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                    No products found matching "{searchQuery}"
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    {searchQuery ? `No products found matching "${searchQuery}"` : 'No products found'}
                   </TableCell>
                 </TableRow>
               )}

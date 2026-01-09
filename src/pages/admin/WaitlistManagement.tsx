@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { CheckCircle, ExternalLink, Users, Gift, Loader2, Settings, UserPlus } from 'lucide-react';
+import { CheckCircle, ExternalLink, Users, Gift, Loader2, Settings, UserPlus, Download } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface WaitlistEntry {
@@ -153,6 +153,41 @@ export default function WaitlistManagement() {
     setSavingSettings(false);
   };
 
+  const exportToCSV = () => {
+    if (list.length === 0) {
+      toast.error('No data to export');
+      return;
+    }
+
+    const headers = ['Name', 'Email', 'Instagram', 'Facebook', 'TikTok', 'Status', 'Joined Date', 'Verified Date'];
+    const csvRows = [
+      headers.join(','),
+      ...list.map(entry => [
+        `"${(entry.full_name || '').replace(/"/g, '""')}"`,
+        `"${entry.email.replace(/"/g, '""')}"`,
+        `"${(entry.social_handle || '').replace(/"/g, '""')}"`,
+        `"${(entry.facebook_handle || '').replace(/"/g, '""')}"`,
+        `"${(entry.tiktok_handle || '').replace(/"/g, '""')}"`,
+        entry.is_social_verified ? 'Verified' : 'Pending',
+        new Date(entry.created_at).toLocaleDateString(),
+        entry.verified_at ? new Date(entry.verified_at).toLocaleDateString() : ''
+      ].join(','))
+    ];
+
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `waitlist-export-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    toast.success(`Exported ${list.length} entries`);
+  };
+
   const hasSocialHandle = (entry: WaitlistEntry) => {
     return entry.social_handle || entry.facebook_handle || entry.tiktok_handle;
   };
@@ -173,9 +208,15 @@ export default function WaitlistManagement() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Waitlist Management</h1>
-        <p className="text-muted-foreground mt-1">Verify social handles and credit launch rewards</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Waitlist Management</h1>
+          <p className="text-muted-foreground mt-1">Verify social handles and credit launch rewards</p>
+        </div>
+        <Button onClick={exportToCSV} variant="outline" className="gap-2">
+          <Download className="h-4 w-4" />
+          Export CSV
+        </Button>
       </div>
 
       {/* Stats Cards */}

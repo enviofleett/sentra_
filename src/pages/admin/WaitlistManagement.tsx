@@ -6,7 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { CheckCircle, ExternalLink, Users, Gift, Loader2, Settings, UserPlus, Download } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { CheckCircle, ExternalLink, Users, Gift, Loader2, Settings, UserPlus, Download, Mail, Send } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface WaitlistEntry {
@@ -29,6 +32,8 @@ interface PreLaunchSettings {
   launch_date: string | null;
 }
 
+type RecipientFilter = 'all' | 'verified' | 'pending';
+
 export default function WaitlistManagement() {
   const [list, setList] = useState<WaitlistEntry[]>([]);
   const [settings, setSettings] = useState<PreLaunchSettings | null>(null);
@@ -37,6 +42,13 @@ export default function WaitlistManagement() {
   const [savingSettings, setSavingSettings] = useState(false);
   const [migrating, setMigrating] = useState(false);
   const [rewardAmount, setRewardAmount] = useState('100000');
+  
+  // Bulk email state
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailContent, setEmailContent] = useState('');
+  const [recipientFilter, setRecipientFilter] = useState<RecipientFilter>('all');
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -188,6 +200,183 @@ export default function WaitlistManagement() {
     toast.success(`Exported ${list.length} entries`);
   };
 
+  const getRecipientCount = () => {
+    if (recipientFilter === 'verified') return stats.verified;
+    if (recipientFilter === 'pending') return stats.pending;
+    return stats.total;
+  };
+
+  const handleSendBulkEmail = async () => {
+    if (!emailSubject.trim() || !emailContent.trim()) {
+      toast.error('Please fill in subject and content');
+      return;
+    }
+
+    const recipientCount = getRecipientCount();
+    if (recipientCount === 0) {
+      toast.error('No recipients match the selected filter');
+      return;
+    }
+
+    if (!confirm(`This will send emails to ${recipientCount} waitlist users. Continue?`)) {
+      return;
+    }
+
+    setSendingEmail(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('send-bulk-email', {
+        body: {
+          subject: emailSubject,
+          htmlContent: emailContent,
+          recipientFilter
+        }
+      });
+
+      if (error) {
+        console.error('Bulk email error:', error);
+        toast.error('Failed to send emails: ' + error.message);
+      } else if (data?.success) {
+        toast.success(`Sent ${data.sent} emails successfully${data.failed > 0 ? `, ${data.failed} failed` : ''}`);
+        setEmailDialogOpen(false);
+        setEmailSubject('');
+        setEmailContent('');
+      } else {
+        toast.error(data?.error || 'Failed to send emails');
+      }
+    } catch (err) {
+      console.error('Bulk email error:', err);
+      toast.error('Failed to send emails');
+    }
+
+    setSendingEmail(false);
+  };
+
+  const loadEmailTemplate = (template: string) => {
+    if (template === 'announcement') {
+      setEmailSubject('Exciting News from Sentra! 🎉');
+      setEmailContent(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f9f9f9; }
+    .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+    .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 40px 30px; text-align: center; }
+    .header h1 { color: #d4af37; margin: 0; font-size: 28px; letter-spacing: 2px; }
+    .content { padding: 40px 30px; }
+    .content h2 { color: #1a1a2e; margin-top: 0; }
+    .content p { margin: 16px 0; color: #555; }
+    .cta-button { display: inline-block; background: #d4af37; color: #1a1a2e; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 20px 0; }
+    .footer { background: #f5f5f5; padding: 20px 30px; text-align: center; font-size: 12px; color: #888; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>SENTRA</h1>
+    </div>
+    <div class="content">
+      <h2>Hello {{name}},</h2>
+      <p>We have some exciting news to share with you!</p>
+      <p>Thank you for being part of our waitlist. We're working hard to bring you an exceptional fragrance experience.</p>
+      <p>Stay tuned for more updates coming soon!</p>
+      <a href="https://sentra.com" class="cta-button">Visit Sentra</a>
+    </div>
+    <div class="footer">
+      <p>© 2025 Sentra. All rights reserved.</p>
+      <p>You're receiving this because you signed up for our waitlist.</p>
+    </div>
+  </div>
+</body>
+</html>`);
+    } else if (template === 'launch') {
+      setEmailSubject('We\'re Live! 🚀 Welcome to Sentra');
+      setEmailContent(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f9f9f9; }
+    .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+    .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 40px 30px; text-align: center; }
+    .header h1 { color: #d4af37; margin: 0; font-size: 28px; letter-spacing: 2px; }
+    .content { padding: 40px 30px; }
+    .content h2 { color: #1a1a2e; margin-top: 0; }
+    .content p { margin: 16px 0; color: #555; }
+    .highlight { background: #fff8e7; border-left: 4px solid #d4af37; padding: 15px 20px; margin: 20px 0; border-radius: 0 6px 6px 0; }
+    .cta-button { display: inline-block; background: #d4af37; color: #1a1a2e; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 20px 0; }
+    .footer { background: #f5f5f5; padding: 20px 30px; text-align: center; font-size: 12px; color: #888; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>SENTRA</h1>
+    </div>
+    <div class="content">
+      <h2>{{name}}, The Wait is Over!</h2>
+      <p>We're thrilled to announce that Sentra is now officially live!</p>
+      <div class="highlight">
+        <strong>🎁 Your Waitlist Reward:</strong> As a thank you for your patience, you have a special reward waiting in your wallet!
+      </div>
+      <p>Explore our curated collection of premium fragrances and discover your signature scent.</p>
+      <a href="https://sentra.com" class="cta-button">Start Shopping</a>
+      <p>Thank you for being an early supporter!</p>
+    </div>
+    <div class="footer">
+      <p>© 2025 Sentra. All rights reserved.</p>
+      <p>You're receiving this because you signed up for our waitlist.</p>
+    </div>
+  </div>
+</body>
+</html>`);
+    } else if (template === 'promo') {
+      setEmailSubject('Special Offer Just for You! 💎');
+      setEmailContent(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f9f9f9; }
+    .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+    .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 40px 30px; text-align: center; }
+    .header h1 { color: #d4af37; margin: 0; font-size: 28px; letter-spacing: 2px; }
+    .content { padding: 40px 30px; }
+    .content h2 { color: #1a1a2e; margin-top: 0; }
+    .content p { margin: 16px 0; color: #555; }
+    .promo-box { background: linear-gradient(135deg, #d4af37 0%, #f0d780 100%); padding: 30px; text-align: center; border-radius: 8px; margin: 20px 0; }
+    .promo-box h3 { color: #1a1a2e; margin: 0 0 10px 0; font-size: 24px; }
+    .promo-box p { color: #1a1a2e; margin: 0; }
+    .cta-button { display: inline-block; background: #1a1a2e; color: #d4af37; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 20px 0; }
+    .footer { background: #f5f5f5; padding: 20px 30px; text-align: center; font-size: 12px; color: #888; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>SENTRA</h1>
+    </div>
+    <div class="content">
+      <h2>Hey {{name}}!</h2>
+      <p>We have a special offer just for our waitlist members!</p>
+      <div class="promo-box">
+        <h3>EXCLUSIVE OFFER</h3>
+        <p>Get 20% off your first order</p>
+      </div>
+      <p>Don't miss this limited-time opportunity to try our premium fragrances.</p>
+      <a href="https://sentra.com" class="cta-button">Shop Now</a>
+    </div>
+    <div class="footer">
+      <p>© 2025 Sentra. All rights reserved.</p>
+      <p>You're receiving this because you signed up for our waitlist.</p>
+    </div>
+  </div>
+</body>
+</html>`);
+    }
+  };
+
   const hasSocialHandle = (entry: WaitlistEntry) => {
     return entry.social_handle || entry.facebook_handle || entry.tiktok_handle;
   };
@@ -213,10 +402,120 @@ export default function WaitlistManagement() {
           <h1 className="text-2xl md:text-3xl font-serif font-bold text-foreground">Waitlist Management</h1>
           <p className="text-muted-foreground mt-1">Verify social handles and credit launch rewards</p>
         </div>
-        <Button onClick={exportToCSV} variant="outline" className="gap-2">
-          <Download className="h-4 w-4" />
-          Export CSV
-        </Button>
+        <div className="flex gap-2">
+          <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="default" className="gap-2">
+                <Mail className="h-4 w-4" />
+                Send Bulk Email
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Mail className="h-5 w-5" />
+                  Send Bulk Email to Waitlist
+                </DialogTitle>
+                <DialogDescription>
+                  Compose and send an email to all waitlist users. Use {"{{name}}"} to personalize with recipient's name.
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="space-y-4 py-4">
+                {/* Template Selection */}
+                <div className="space-y-2">
+                  <Label>Quick Templates</Label>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" onClick={() => loadEmailTemplate('announcement')}>
+                      📢 Announcement
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => loadEmailTemplate('launch')}>
+                      🚀 Launch
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => loadEmailTemplate('promo')}>
+                      💎 Promo
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Recipient Filter */}
+                <div className="space-y-2">
+                  <Label htmlFor="recipientFilter">Recipients</Label>
+                  <Select value={recipientFilter} onValueChange={(v) => setRecipientFilter(v as RecipientFilter)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Waitlist Users ({stats.total})</SelectItem>
+                      <SelectItem value="verified">Verified Only ({stats.verified})</SelectItem>
+                      <SelectItem value="pending">Pending Only ({stats.pending})</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Subject */}
+                <div className="space-y-2">
+                  <Label htmlFor="emailSubject">Subject</Label>
+                  <Input
+                    id="emailSubject"
+                    value={emailSubject}
+                    onChange={(e) => setEmailSubject(e.target.value)}
+                    placeholder="Enter email subject..."
+                    className="bg-background/50"
+                  />
+                </div>
+
+                {/* Content */}
+                <div className="space-y-2">
+                  <Label htmlFor="emailContent">Email Content (HTML)</Label>
+                  <Textarea
+                    id="emailContent"
+                    value={emailContent}
+                    onChange={(e) => setEmailContent(e.target.value)}
+                    placeholder="Enter HTML email content..."
+                    className="min-h-[300px] font-mono text-sm bg-background/50"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Tip: Use {"{{name}}"} for recipient's name and {"{{email}}"} for their email address.
+                  </p>
+                </div>
+
+                {/* Preview */}
+                {emailContent && (
+                  <div className="space-y-2">
+                    <Label>Preview</Label>
+                    <div className="border rounded-lg p-4 bg-white max-h-[300px] overflow-auto">
+                      <div dangerouslySetInnerHTML={{ __html: emailContent.replace(/{{name}}/g, 'John Doe').replace(/{{email}}/g, 'john@example.com') }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setEmailDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleSendBulkEmail} 
+                  disabled={sendingEmail || !emailSubject || !emailContent}
+                  className="gap-2"
+                >
+                  {sendingEmail ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                  Send to {getRecipientCount()} Recipients
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          
+          <Button onClick={exportToCSV} variant="outline" className="gap-2">
+            <Download className="h-4 w-4" />
+            Export CSV
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}

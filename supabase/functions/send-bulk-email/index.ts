@@ -12,6 +12,7 @@ interface BulkEmailRequest {
   htmlContent: string;
   textContent?: string;
   recipientFilter: 'all' | 'verified' | 'pending';
+  campaignId?: string;
 }
 
 interface WaitlistEntry {
@@ -27,9 +28,9 @@ serve(async (req) => {
   }
 
   try {
-    const { subject, htmlContent, textContent, recipientFilter }: BulkEmailRequest = await req.json();
+    const { subject, htmlContent, textContent, recipientFilter, campaignId }: BulkEmailRequest = await req.json();
 
-    console.log('📧 Processing bulk email request:', { subject, recipientFilter });
+    console.log('📧 Processing bulk email request:', { subject, recipientFilter, campaignId });
 
     // Validate inputs
     if (!subject || !htmlContent) {
@@ -40,6 +41,9 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    // Create tracking base URL
+    const trackingBaseUrl = `${supabaseUrl}/functions/v1/track-email`;
 
     // Build query based on filter
     let query = supabase.from('waiting_list').select('id, email, full_name');
@@ -63,7 +67,8 @@ serve(async (req) => {
           success: true, 
           message: 'No recipients found matching the filter',
           sent: 0,
-          failed: 0 
+          failed: 0,
+          campaignId: campaignId || null
         }),
         {
           status: 200,
@@ -73,6 +78,14 @@ serve(async (req) => {
     }
 
     console.log(`✅ Found ${recipients.length} recipients`);
+
+    // Update campaign with recipient count if campaignId provided
+    if (campaignId) {
+      await supabase
+        .from('email_campaigns')
+        .update({ total_recipients: recipients.length })
+        .eq('id', campaignId);
+    }
 
     // Configure SMTP client
     const gmailEmail = Deno.env.get('GMAIL_EMAIL');
@@ -110,9 +123,31 @@ serve(async (req) => {
       const batchPromises = batch.map(async (recipient: WaitlistEntry) => {
         try {
           // Personalize email content
-          const personalizedHtml = htmlContent
+          let personalizedHtml = htmlContent
             .replace(/{{name}}/g, recipient.full_name || 'Valued Customer')
             .replace(/{{email}}/g, recipient.email);
+          
+          // Add tracking pixel if campaign is being tracked
+          if (campaignId) {
+            const encodedEmail = encodeURIComponent(recipient.email);
+            const trackingPixel = `<img src="${trackingBaseUrl}?c=${campaignId}&e=${encodedEmail}&t=opened" width="1" height="1" style="display:none;" alt="" />`;
+            
+            // Insert tracking pixel before closing body tag
+            if (personalizedHtml.includes('</body>')) {
+              personalizedHtml = personalizedHtml.replace('</body>', `${trackingPixel}</body>`);
+            } else {
+              personalizedHtml += trackingPixel;
+            }
+
+            // Wrap links with click tracking
+            personalizedHtml = personalizedHtml.replace(
+              /href="(https?:\/\/[^"]+)"/g,
+              (match, url) => {
+                const encodedUrl = encodeURIComponent(url);
+                return `href="${trackingBaseUrl}?c=${campaignId}&e=${encodedEmail}&t=clicked&r=${encodedUrl}"`;
+              }
+            );
+          }
           
           const personalizedText = textContent
             ? textContent
@@ -127,6 +162,17 @@ serve(async (req) => {
             content: personalizedText,
             html: personalizedHtml,
           });
+
+          // Record sent event
+          if (campaignId) {
+            await supabase
+              .from('email_tracking_events')
+              .insert({
+                campaign_id: campaignId,
+                recipient_email: recipient.email,
+                event_type: 'sent'
+              });
+          }
 
           console.log(`✅ Email sent to ${recipient.email}`);
           return { success: true, email: recipient.email };
@@ -155,6 +201,18 @@ serve(async (req) => {
 
     await client.close();
 
+    // Update campaign with final counts
+    if (campaignId) {
+      await supabase
+        .from('email_campaigns')
+        .update({ 
+          sent_count: sent, 
+          failed_count: failed,
+          sent_at: new Date().toISOString()
+        })
+        .eq('id', campaignId);
+    }
+
     console.log(`✅ Bulk email complete: ${sent} sent, ${failed} failed`);
 
     return new Response(
@@ -163,7 +221,8 @@ serve(async (req) => {
         message: `Emails sent successfully`,
         sent,
         failed,
-        errors: errors.length > 0 ? errors.slice(0, 10) : undefined // Limit error details
+        campaignId: campaignId || null,
+        errors: errors.length > 0 ? errors.slice(0, 10) : undefined
       }),
       {
         status: 200,

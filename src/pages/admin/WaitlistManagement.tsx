@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { CheckCircle, ExternalLink, Users, Gift, Loader2, Settings, UserPlus, Download, Mail, Send } from 'lucide-react';
+import { CheckCircle, ExternalLink, Users, Gift, Loader2, Settings, UserPlus, Download, Mail, Send, BarChart3, Eye, MousePointerClick } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface WaitlistEntry {
@@ -34,6 +34,19 @@ interface PreLaunchSettings {
 
 type RecipientFilter = 'all' | 'verified' | 'pending';
 
+interface EmailCampaign {
+  id: string;
+  subject: string;
+  recipient_filter: string;
+  total_recipients: number;
+  sent_count: number;
+  failed_count: number;
+  opened_count: number;
+  clicked_count: number;
+  created_at: string;
+  sent_at: string | null;
+}
+
 export default function WaitlistManagement() {
   const [list, setList] = useState<WaitlistEntry[]>([]);
   const [settings, setSettings] = useState<PreLaunchSettings | null>(null);
@@ -49,6 +62,10 @@ export default function WaitlistManagement() {
   const [emailContent, setEmailContent] = useState('');
   const [recipientFilter, setRecipientFilter] = useState<RecipientFilter>('all');
   const [sendingEmail, setSendingEmail] = useState(false);
+  
+  // Email analytics state
+  const [campaigns, setCampaigns] = useState<EmailCampaign[]>([]);
+  const [showAnalytics, setShowAnalytics] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -81,6 +98,19 @@ export default function WaitlistManagement() {
     } else if (settingsData) {
       setSettings(settingsData);
       setRewardAmount(settingsData.waitlist_reward_amount?.toString() || '100000');
+    }
+    
+    // Fetch email campaigns
+    const { data: campaignData, error: campaignError } = await supabase
+      .from('email_campaigns')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(10);
+    
+    if (campaignError) {
+      console.error('Error fetching campaigns:', campaignError);
+    } else {
+      setCampaigns(campaignData || []);
     }
     
     setLoading(false);
@@ -225,11 +255,30 @@ export default function WaitlistManagement() {
     setSendingEmail(true);
 
     try {
+      // First create a campaign record
+      const { data: campaignData, error: campaignError } = await supabase
+        .from('email_campaigns')
+        .insert({
+          subject: emailSubject,
+          recipient_filter: recipientFilter,
+          total_recipients: recipientCount
+        })
+        .select()
+        .single();
+
+      if (campaignError) {
+        console.error('Campaign creation error:', campaignError);
+        toast.error('Failed to create campaign record');
+        setSendingEmail(false);
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('send-bulk-email', {
         body: {
           subject: emailSubject,
           htmlContent: emailContent,
-          recipientFilter
+          recipientFilter,
+          campaignId: campaignData.id
         }
       });
 
@@ -241,6 +290,7 @@ export default function WaitlistManagement() {
         setEmailDialogOpen(false);
         setEmailSubject('');
         setEmailContent('');
+        fetchData(); // Refresh campaigns list
       } else {
         toast.error(data?.error || 'Failed to send emails');
       }
@@ -568,6 +618,113 @@ export default function WaitlistManagement() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Email Analytics */}
+      {campaigns.length > 0 && (
+        <Card className="bg-card/50 backdrop-blur-sm border-border/50">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Email Analytics
+                </CardTitle>
+                <CardDescription>Track open rates and click-through rates for your campaigns</CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowAnalytics(!showAnalytics)}
+              >
+                {showAnalytics ? 'Hide' : 'Show'} Details
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {campaigns.slice(0, showAnalytics ? 10 : 3).map((campaign) => {
+                const openRate = campaign.sent_count > 0 
+                  ? ((campaign.opened_count / campaign.sent_count) * 100).toFixed(1) 
+                  : '0';
+                const clickRate = campaign.opened_count > 0 
+                  ? ((campaign.clicked_count / campaign.opened_count) * 100).toFixed(1) 
+                  : '0';
+                
+                return (
+                  <div key={campaign.id} className="border rounded-lg p-4 space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h4 className="font-medium text-foreground">{campaign.subject}</h4>
+                        <p className="text-xs text-muted-foreground">
+                          {campaign.sent_at 
+                            ? `Sent ${new Date(campaign.sent_at).toLocaleDateString()} at ${new Date(campaign.sent_at).toLocaleTimeString()}`
+                            : 'Sending in progress...'}
+                        </p>
+                      </div>
+                      <Badge variant="secondary" className="text-xs">
+                        {campaign.recipient_filter}
+                      </Badge>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="text-center p-2 bg-muted/30 rounded">
+                        <div className="text-lg font-bold text-foreground">{campaign.sent_count}</div>
+                        <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+                          <Send className="h-3 w-3" /> Sent
+                        </div>
+                      </div>
+                      <div className="text-center p-2 bg-muted/30 rounded">
+                        <div className="text-lg font-bold text-blue-500">{campaign.opened_count}</div>
+                        <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+                          <Eye className="h-3 w-3" /> Opens ({openRate}%)
+                        </div>
+                      </div>
+                      <div className="text-center p-2 bg-muted/30 rounded">
+                        <div className="text-lg font-bold text-green-500">{campaign.clicked_count}</div>
+                        <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+                          <MousePointerClick className="h-3 w-3" /> Clicks ({clickRate}%)
+                        </div>
+                      </div>
+                      <div className="text-center p-2 bg-muted/30 rounded">
+                        <div className="text-lg font-bold text-red-500">{campaign.failed_count}</div>
+                        <div className="text-xs text-muted-foreground">Failed</div>
+                      </div>
+                    </div>
+                    
+                    {/* Progress bars */}
+                    <div className="space-y-2">
+                      <div>
+                        <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                          <span>Open Rate</span>
+                          <span>{openRate}%</span>
+                        </div>
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-blue-500 transition-all duration-300"
+                            style={{ width: `${Math.min(parseFloat(openRate), 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                          <span>Click Rate (of opens)</span>
+                          <span>{clickRate}%</span>
+                        </div>
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-green-500 transition-all duration-300"
+                            style={{ width: `${Math.min(parseFloat(clickRate), 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Reward Settings */}
       <Card className="bg-card/50 backdrop-blur-sm border-border/50">

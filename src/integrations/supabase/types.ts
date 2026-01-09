@@ -235,6 +235,48 @@ export type Database = {
         }
         Relationships: []
       }
+      email_campaigns: {
+        Row: {
+          clicked_count: number
+          created_at: string
+          created_by: string | null
+          failed_count: number
+          id: string
+          opened_count: number
+          recipient_filter: string
+          sent_at: string | null
+          sent_count: number
+          subject: string
+          total_recipients: number
+        }
+        Insert: {
+          clicked_count?: number
+          created_at?: string
+          created_by?: string | null
+          failed_count?: number
+          id?: string
+          opened_count?: number
+          recipient_filter?: string
+          sent_at?: string | null
+          sent_count?: number
+          subject: string
+          total_recipients?: number
+        }
+        Update: {
+          clicked_count?: number
+          created_at?: string
+          created_by?: string | null
+          failed_count?: number
+          id?: string
+          opened_count?: number
+          recipient_filter?: string
+          sent_at?: string | null
+          sent_count?: number
+          subject?: string
+          total_recipients?: number
+        }
+        Relationships: []
+      }
       email_templates: {
         Row: {
           created_at: string | null
@@ -267,6 +309,47 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      email_tracking_events: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          event_type: string
+          id: string
+          ip_address: string | null
+          link_url: string | null
+          recipient_email: string
+          user_agent: string | null
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          event_type: string
+          id?: string
+          ip_address?: string | null
+          link_url?: string | null
+          recipient_email: string
+          user_agent?: string | null
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          ip_address?: string | null
+          link_url?: string | null
+          recipient_email?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_tracking_events_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       featured_brands: {
         Row: {

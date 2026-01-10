@@ -32,6 +32,7 @@ interface Product {
   scent_profile: string | null;
   brand: string | null;
   size: string | null;
+  margin_override_allowed: boolean | null;
 }
 
 interface Category {
@@ -46,7 +47,17 @@ interface Vendor {
 }
 
 // Margin calculator component
-function MarginCalculator({ price, costPrice }: { price: number; costPrice: number | null }) {
+function MarginCalculator({ 
+  price, 
+  costPrice, 
+  marginOverride, 
+  onMarginOverrideChange 
+}: { 
+  price: number; 
+  costPrice: number | null;
+  marginOverride: boolean;
+  onMarginOverrideChange: (checked: boolean) => void;
+}) {
   if (costPrice === null || costPrice === 0 || isNaN(costPrice)) {
     return (
       <div className="p-3 rounded-lg bg-muted/50 border border-dashed">
@@ -60,6 +71,7 @@ function MarginCalculator({ price, costPrice }: { price: number; costPrice: numb
   
   const isNegative = marginAmount < 0;
   const isLow = marginPercentage >= 0 && marginPercentage < 20;
+  const isCriticallyLow = marginPercentage >= 0 && marginPercentage < 10;
   const isHealthy = marginPercentage >= 20;
 
   return (
@@ -91,6 +103,28 @@ function MarginCalculator({ price, costPrice }: { price: number; costPrice: numb
           </span>
         </div>
       </div>
+      
+      {/* Margin Override Checkbox - only show when margin is critically low */}
+      {isCriticallyLow && !isNegative && (
+        <div className="mt-3 pt-3 border-t border-yellow-300 dark:border-yellow-700">
+          <div className="flex items-center gap-2">
+            <Checkbox 
+              id="margin-override"
+              checked={marginOverride}
+              onCheckedChange={(checked) => onMarginOverrideChange(checked as boolean)}
+            />
+            <label 
+              htmlFor="margin-override" 
+              className="text-sm text-yellow-700 dark:text-yellow-400 cursor-pointer"
+            >
+              Allow saving with low margin (override safety check)
+            </label>
+          </div>
+          <p className="text-xs text-yellow-600 dark:text-yellow-500 mt-1">
+            Check this to save the product despite the margin being below 10%
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -117,6 +151,7 @@ export function ProductsManagement() {
   // Live margin calculation state
   const [livePrice, setLivePrice] = useState<number>(0);
   const [liveCostPrice, setLiveCostPrice] = useState<number | null>(null);
+  const [marginOverride, setMarginOverride] = useState<boolean>(false);
 
   const emptyProduct: Omit<Product, 'id'> = {
     name: '',
@@ -133,7 +168,8 @@ export function ProductsManagement() {
     is_active: true,
     scent_profile: null,
     brand: null,
-    size: null
+    size: null,
+    margin_override_allowed: false
   };
   useEffect(() => {
     fetchProducts();
@@ -292,7 +328,8 @@ export function ProductsManagement() {
       is_active: formData.get('is_active') === 'true',
       scent_profile: (scentValue && validScents.includes(scentValue) ? scentValue : null) as any,
       brand: formData.get('brand') as string || null,
-      size: formData.get('size') as string || null
+      size: formData.get('size') as string || null,
+      margin_override_allowed: marginOverride
     };
     if (editingProduct) {
       const {
@@ -409,6 +446,7 @@ export function ProductsManagement() {
     setDescription(product?.description || '');
     setLivePrice(product?.price || 0);
     setLiveCostPrice(product?.cost_price || null);
+    setMarginOverride(product?.margin_override_allowed || false);
     clearImages();
     if (product?.images && Array.isArray(product.images)) {
       setImagePreviews(product.images as string[]);
@@ -531,7 +569,7 @@ export function ProductsManagement() {
               </div>
               
               {/* Real-time Margin Calculator */}
-              <MarginCalculator price={livePrice} costPrice={liveCostPrice} />
+              <MarginCalculator price={livePrice} costPrice={liveCostPrice} marginOverride={marginOverride} onMarginOverrideChange={setMarginOverride} />
               <div>
                 <Label htmlFor="description">Description</Label>
                 <RichTextEditor content={description} onChange={setDescription} placeholder="Enter product description..." />

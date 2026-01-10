@@ -218,14 +218,19 @@ export default function ProductDetail() {
               </div>
             </div>
 
-            <div className="flex items-baseline gap-3">
+            <div className="flex items-baseline gap-3 flex-wrap">
               <span className="text-3xl md:text-4xl font-serif">
                 ₦{product.price.toLocaleString()}
               </span>
               {product.original_price && product.original_price > product.price && (
-                <span className="text-lg text-muted-foreground line-through">
-                  ₦{product.original_price.toLocaleString()}
-                </span>
+                <>
+                  <span className="text-lg text-muted-foreground line-through">
+                    ₦{product.original_price.toLocaleString()}
+                  </span>
+                  <span className="px-2 py-1 text-xs font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-full">
+                    You Save ₦{(product.original_price - product.price).toLocaleString()} ({Math.round(((product.original_price - product.price) / product.original_price) * 100)}% OFF)
+                  </span>
+                </>
               )}
             </div>
 

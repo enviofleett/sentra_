@@ -693,6 +693,7 @@ export type Database = {
           images: Json | null
           is_active: boolean | null
           is_featured: boolean
+          margin_override_allowed: boolean | null
           metadata: Json | null
           name: string
           original_price: number | null
@@ -716,6 +717,7 @@ export type Database = {
           images?: Json | null
           is_active?: boolean | null
           is_featured?: boolean
+          margin_override_allowed?: boolean | null
           metadata?: Json | null
           name: string
           original_price?: number | null
@@ -739,6 +741,7 @@ export type Database = {
           images?: Json | null
           is_active?: boolean | null
           is_featured?: boolean
+          margin_override_allowed?: boolean | null
           metadata?: Json | null
           name?: string
           original_price?: number | null
@@ -894,34 +897,46 @@ export type Database = {
       profit_split_config: {
         Row: {
           admin_percentage: number
+          admin_subaccount_code: string | null
           capital_percentage: number
+          capital_subaccount_code: string | null
           created_at: string
           growth_percentage: number
+          growth_subaccount_code: string | null
           id: string
           is_active: boolean
           marketing_percentage: number
+          marketing_subaccount_code: string | null
           name: string
           updated_at: string
         }
         Insert: {
           admin_percentage?: number
+          admin_subaccount_code?: string | null
           capital_percentage?: number
+          capital_subaccount_code?: string | null
           created_at?: string
           growth_percentage?: number
+          growth_subaccount_code?: string | null
           id?: string
           is_active?: boolean
           marketing_percentage?: number
+          marketing_subaccount_code?: string | null
           name: string
           updated_at?: string
         }
         Update: {
           admin_percentage?: number
+          admin_subaccount_code?: string | null
           capital_percentage?: number
+          capital_subaccount_code?: string | null
           created_at?: string
           growth_percentage?: number
+          growth_subaccount_code?: string | null
           id?: string
           is_active?: boolean
           marketing_percentage?: number
+          marketing_subaccount_code?: string | null
           name?: string
           updated_at?: string
         }
@@ -1498,6 +1513,14 @@ export type Database = {
           new_quantity: number
           remaining_spots: number
           success: boolean
+        }[]
+      }
+      calculate_budget_limits: {
+        Args: { p_product_id: string }
+        Returns: {
+          gross_profit: number
+          growth_budget_amount: number
+          marketing_budget_amount: number
         }[]
       }
       cleanup_expired_campaigns: { Args: never; Returns: undefined }

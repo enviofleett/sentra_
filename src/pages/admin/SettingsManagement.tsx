@@ -1281,7 +1281,11 @@ function ProfitSplitManager() {
     capital_percentage: 40,
     admin_percentage: 20,
     growth_percentage: 25,
-    marketing_percentage: 15
+    marketing_percentage: 15,
+    capital_subaccount_code: '',
+    admin_subaccount_code: '',
+    growth_subaccount_code: '',
+    marketing_subaccount_code: ''
   });
   const [totals, setTotals] = useState({
     total_capital: 0,
@@ -1315,7 +1319,11 @@ function ProfitSplitManager() {
         capital_percentage: Number(configData.capital_percentage),
         admin_percentage: Number(configData.admin_percentage),
         growth_percentage: Number(configData.growth_percentage),
-        marketing_percentage: Number(configData.marketing_percentage)
+        marketing_percentage: Number(configData.marketing_percentage),
+        capital_subaccount_code: (configData as any).capital_subaccount_code || '',
+        admin_subaccount_code: (configData as any).admin_subaccount_code || '',
+        growth_subaccount_code: (configData as any).growth_subaccount_code || '',
+        marketing_subaccount_code: (configData as any).marketing_subaccount_code || ''
       });
     }
 
@@ -1362,6 +1370,10 @@ function ProfitSplitManager() {
           admin_percentage: config.admin_percentage,
           growth_percentage: config.growth_percentage,
           marketing_percentage: config.marketing_percentage,
+          capital_subaccount_code: config.capital_subaccount_code || null,
+          admin_subaccount_code: config.admin_subaccount_code || null,
+          growth_subaccount_code: config.growth_subaccount_code || null,
+          marketing_subaccount_code: config.marketing_subaccount_code || null,
           updated_at: new Date().toISOString()
         })
         .eq('id', config.id);
@@ -1380,6 +1392,10 @@ function ProfitSplitManager() {
           admin_percentage: config.admin_percentage,
           growth_percentage: config.growth_percentage,
           marketing_percentage: config.marketing_percentage,
+          capital_subaccount_code: config.capital_subaccount_code || null,
+          admin_subaccount_code: config.admin_subaccount_code || null,
+          growth_subaccount_code: config.growth_subaccount_code || null,
+          marketing_subaccount_code: config.marketing_subaccount_code || null,
           is_active: true
         }])
         .select()
@@ -1543,6 +1559,86 @@ function ProfitSplitManager() {
               'Save Configuration'
             )}
           </Button>
+        </div>
+      </div>
+
+      {/* Paystack Subaccount Codes */}
+      <div className="border-t pt-6">
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <Link className="h-5 w-5 text-primary" />
+          Paystack Subaccount Codes
+        </h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Configure Paystack subaccount codes for automatic payment splitting. Leave empty to disable automatic splits.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="capital-subaccount" className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-blue-500" />
+              Capital Subaccount
+            </Label>
+            <Input
+              id="capital-subaccount"
+              value={config.capital_subaccount_code}
+              onChange={(e) => setConfig({ ...config, capital_subaccount_code: e.target.value })}
+              placeholder="ACCT_xxxxxxxxx"
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">For restocking and inventory</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="admin-subaccount" className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-purple-500" />
+              Admin Subaccount
+            </Label>
+            <Input
+              id="admin-subaccount"
+              value={config.admin_subaccount_code}
+              onChange={(e) => setConfig({ ...config, admin_subaccount_code: e.target.value })}
+              placeholder="ACCT_xxxxxxxxx"
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">For operations and overhead</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="growth-subaccount" className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-green-500" />
+              Growth Subaccount
+            </Label>
+            <Input
+              id="growth-subaccount"
+              value={config.growth_subaccount_code}
+              onChange={(e) => setConfig({ ...config, growth_subaccount_code: e.target.value })}
+              placeholder="ACCT_xxxxxxxxx"
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">For expansion and discounts</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="marketing-subaccount" className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-orange-500" />
+              Marketing Subaccount
+            </Label>
+            <Input
+              id="marketing-subaccount"
+              value={config.marketing_subaccount_code}
+              onChange={(e) => setConfig({ ...config, marketing_subaccount_code: e.target.value })}
+              placeholder="ACCT_xxxxxxxxx"
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">For ads and commissions</p>
+          </div>
+        </div>
+
+        <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+          <p className="text-sm text-muted-foreground">
+            <strong>Note:</strong> Subaccount codes can be created in your Paystack dashboard. 
+            When configured, payments will automatically split between these accounts based on the profit percentages above.
+          </p>
         </div>
       </div>
     </div>

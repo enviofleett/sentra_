@@ -3,8 +3,10 @@ import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import { useCart } from '@/contexts/CartContext';
-import { Minus, Plus, Trash2, ShoppingBag } from 'lucide-react';
+import { useCartIncentive } from '@/hooks/useCartIncentive';
+import { Minus, Plus, Trash2, ShoppingBag, Gift } from 'lucide-react';
 
 export default function Cart() {
   const { items, updateQuantity, removeFromCart, subtotal, totalItems } = useCart();
@@ -28,12 +30,45 @@ export default function Cart() {
     );
   }
 
+  const { nextThreshold, amountToNext, itemsToNext, progressPercentage, unlockedThreshold } = useCartIncentive(subtotal, totalItems);
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
 
       <div className="container mx-auto px-4 py-6 md:py-12">
         <h1 className="text-3xl md:text-4xl font-bold mb-6 md:mb-8">Shopping Cart</h1>
+
+        {/* Cart Incentive Progress Bar */}
+        {nextThreshold && (
+          <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 rounded-xl border border-green-200 dark:border-green-800">
+            <div className="flex items-center gap-3 mb-2">
+              <Gift className="h-5 w-5 text-green-600" />
+              <p className="text-sm font-medium text-green-800 dark:text-green-300">
+                {nextThreshold.type === 'value' 
+                  ? `Add ₦${amountToNext.toLocaleString()} more to unlock ${nextThreshold.discount_type === 'percentage' ? `${nextThreshold.discount_value}% OFF` : `₦${nextThreshold.discount_value} OFF`}!`
+                  : `Add ${itemsToNext} more item${itemsToNext > 1 ? 's' : ''} to unlock ${nextThreshold.discount_type === 'percentage' ? `${nextThreshold.discount_value}% OFF` : `₦${nextThreshold.discount_value} OFF`}!`
+                }
+              </p>
+            </div>
+            <Progress value={progressPercentage} className="h-2" />
+            <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+              {Math.round(progressPercentage)}% to next reward
+            </p>
+          </div>
+        )}
+
+        {/* Show unlocked discount */}
+        {unlockedThreshold && !nextThreshold && (
+          <div className="mb-6 p-4 bg-gradient-to-r from-green-100 to-emerald-100 dark:from-green-900/30 dark:to-emerald-900/30 rounded-xl border border-green-300 dark:border-green-700">
+            <div className="flex items-center gap-3">
+              <Gift className="h-5 w-5 text-green-600" />
+              <p className="text-sm font-medium text-green-800 dark:text-green-300">
+                🎉 You've unlocked {unlockedThreshold.discount_type === 'percentage' ? `${unlockedThreshold.discount_value}% OFF` : `₦${unlockedThreshold.discount_value} OFF`}!
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
           {/* Cart Items */}

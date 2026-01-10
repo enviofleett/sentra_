@@ -12,6 +12,122 @@ interface PaymentRequest {
   customerName: string;
 }
 
+interface SplitConfig {
+  capital_percentage: number;
+  admin_percentage: number;
+  growth_percentage: number;
+  marketing_percentage: number;
+  capital_subaccount_code: string | null;
+  admin_subaccount_code: string | null;
+  growth_subaccount_code: string | null;
+  marketing_subaccount_code: string | null;
+}
+
+interface ProductWithCost {
+  id: string;
+  price: number;
+  cost_price: number | null;
+  stock_quantity: number;
+  name: string;
+}
+
+/**
+ * Calculate the gross amount needed so customer pays Paystack fees
+ * Fee structure: 1.5% + ₦100 (capped at ₦2,000)
+ */
+function calculateGrossAmount(netAmount: number): number {
+  // Paystack fee: 1.5% + ₦100, capped at ₦2,000
+  const percentFee = 0.015;
+  const flatFee = 100;
+  const feeCap = 2000;
+  
+  // Calculate what the gross needs to be so that net = gross - fees
+  // For amounts where fee doesn't hit cap: gross = (net + flatFee) / (1 - percentFee)
+  // Then verify if fee exceeds cap
+  
+  let grossAmount = (netAmount + flatFee) / (1 - percentFee);
+  let calculatedFee = (grossAmount * percentFee) + flatFee;
+  
+  // If fee exceeds cap, recalculate with capped fee
+  if (calculatedFee > feeCap) {
+    grossAmount = netAmount + feeCap;
+  }
+  
+  return Math.round(grossAmount * 100) / 100; // Round to 2 decimal places
+}
+
+/**
+ * Calculate profit-based split amounts for Paystack subaccounts
+ */
+function calculateProfitSplit(
+  orderItems: any[],
+  products: ProductWithCost[],
+  config: SplitConfig
+): { totalAmount: number; splits: any[] } {
+  let totalCapital = 0;
+  let totalProfit = 0;
+  
+  // Calculate total cost (capital) and total profit
+  for (const item of orderItems) {
+    const product = products.find(p => p.id === item.product_id);
+    if (!product) continue;
+    
+    const costPrice = product.cost_price || 0;
+    const sellingPrice = product.price;
+    const quantity = item.quantity;
+    
+    // Capital = Cost * Quantity
+    totalCapital += costPrice * quantity;
+    
+    // Profit = (Price - Cost) * Quantity
+    const profit = (sellingPrice - costPrice) * quantity;
+    totalProfit += profit;
+  }
+  
+  // Calculate bucket amounts from profit
+  const growthAmount = Math.round(totalProfit * (config.growth_percentage / 100) * 100) / 100;
+  const marketingAmount = Math.round(totalProfit * (config.marketing_percentage / 100) * 100) / 100;
+  const adminAmount = Math.round(totalProfit * (config.admin_percentage / 100) * 100) / 100;
+  // Capital gets cost + its percentage of profit
+  const capitalProfitShare = Math.round(totalProfit * (config.capital_percentage / 100) * 100) / 100;
+  const capitalAmount = Math.round((totalCapital + capitalProfitShare) * 100) / 100;
+  
+  const totalAmount = capitalAmount + growthAmount + marketingAmount + adminAmount;
+  
+  // Build splits array for Paystack (only include if subaccount codes exist)
+  const splits: any[] = [];
+  
+  if (config.capital_subaccount_code && capitalAmount > 0) {
+    splits.push({
+      subaccount: config.capital_subaccount_code,
+      share: Math.round(capitalAmount * 100) // Amount in kobo
+    });
+  }
+  
+  if (config.growth_subaccount_code && growthAmount > 0) {
+    splits.push({
+      subaccount: config.growth_subaccount_code,
+      share: Math.round(growthAmount * 100)
+    });
+  }
+  
+  if (config.marketing_subaccount_code && marketingAmount > 0) {
+    splits.push({
+      subaccount: config.marketing_subaccount_code,
+      share: Math.round(marketingAmount * 100)
+    });
+  }
+  
+  if (config.admin_subaccount_code && adminAmount > 0) {
+    splits.push({
+      subaccount: config.admin_subaccount_code,
+      share: Math.round(adminAmount * 100)
+    });
+  }
+  
+  return { totalAmount, splits };
+}
+
 serve(async (req) => {
   console.log('[Initialize Payment] Request received');
 
@@ -83,7 +199,7 @@ serve(async (req) => {
 
     const { data: products, error: productsError } = await supabase
       .from('products')
-      .select('id, price, stock_quantity, name')
+      .select('id, price, cost_price, stock_quantity, name')
       .in('id', productIds);
 
     if (productsError) {
@@ -175,6 +291,41 @@ serve(async (req) => {
       });
     }
 
+    // Fetch profit split configuration with subaccount codes
+    const { data: splitConfigData } = await supabase
+      .from('profit_split_config')
+      .select('*')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const splitConfig: SplitConfig = splitConfigData ? {
+      capital_percentage: Number(splitConfigData.capital_percentage) || 40,
+      admin_percentage: Number(splitConfigData.admin_percentage) || 20,
+      growth_percentage: Number(splitConfigData.growth_percentage) || 25,
+      marketing_percentage: Number(splitConfigData.marketing_percentage) || 15,
+      capital_subaccount_code: splitConfigData.capital_subaccount_code || null,
+      admin_subaccount_code: splitConfigData.admin_subaccount_code || null,
+      growth_subaccount_code: splitConfigData.growth_subaccount_code || null,
+      marketing_subaccount_code: splitConfigData.marketing_subaccount_code || null,
+    } : {
+      capital_percentage: 40,
+      admin_percentage: 20,
+      growth_percentage: 25,
+      marketing_percentage: 15,
+      capital_subaccount_code: null,
+      admin_subaccount_code: null,
+      growth_subaccount_code: null,
+      marketing_subaccount_code: null,
+    };
+
+    // Check if we have subaccount codes configured
+    const hasSubaccounts = splitConfig.capital_subaccount_code || 
+                          splitConfig.admin_subaccount_code || 
+                          splitConfig.growth_subaccount_code || 
+                          splitConfig.marketing_subaccount_code;
+
     // Initialize Paystack payment with SERVER-VERIFIED amount
     const paystackSecretKey = Deno.env.get('PAYSTACK_SECRET_KEY');
     if (!paystackSecretKey) {
@@ -185,8 +336,42 @@ serve(async (req) => {
       });
     }
 
-    const amountInKobo = Math.round(verifiedTotal * 100);
-    console.log(`[Initialize Payment] Initializing Paystack - Amount: ${amountInKobo} kobo`);
+    // Calculate gross amount (customer pays fees)
+    const grossAmount = calculateGrossAmount(verifiedTotal);
+    const amountInKobo = Math.round(grossAmount * 100);
+    
+    console.log(`[Initialize Payment] Net: ₦${verifiedTotal}, Gross (with fees): ₦${grossAmount}, Kobo: ${amountInKobo}`);
+
+    // Build Paystack payload
+    const paystackPayload: any = {
+      email: customerEmail,
+      amount: amountInKobo,
+      reference: paymentReference,
+      metadata: {
+        order_id: orderId,
+        user_id: user.id,
+        customer_name: customerName,
+        type: 'standard_order',
+        net_amount: verifiedTotal,
+        gross_amount: grossAmount
+      },
+      callback_url: `${appBaseUrl}/checkout/success?order_id=${orderId}&type=standard_order`
+    };
+
+    // Add split configuration if subaccounts are configured
+    if (hasSubaccounts) {
+      const { splits } = calculateProfitSplit(orderItems, products as ProductWithCost[], splitConfig);
+      
+      if (splits.length > 0) {
+        paystackPayload.split = {
+          type: "flat",
+          currency: "NGN",
+          subaccounts: splits,
+          bearer_type: "account" // Main account bears transaction charges
+        };
+        console.log(`[Initialize Payment] Split configured with ${splits.length} subaccounts`);
+      }
+    }
 
     const paystackResponse = await fetch('https://api.paystack.co/transaction/initialize', {
       method: 'POST',
@@ -194,25 +379,14 @@ serve(async (req) => {
         'Authorization': `Bearer ${paystackSecretKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        email: customerEmail,
-        amount: amountInKobo,
-        reference: paymentReference,
-        metadata: {
-          order_id: orderId,
-          user_id: user.id,
-          customer_name: customerName,
-          type: 'standard_order'
-        },
-        callback_url: `${appBaseUrl}/checkout/success?order_id=${orderId}&type=standard_order`
-      }),
+      body: JSON.stringify(paystackPayload),
     });
 
     const paystackData = await paystackResponse.json();
 
     if (!paystackData.status) {
       console.error('[Initialize Payment] Paystack error:', paystackData);
-      return new Response(JSON.stringify({ error: 'Payment initialization failed' }), {
+      return new Response(JSON.stringify({ error: 'Payment initialization failed', details: paystackData.message }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -223,7 +397,9 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       paymentUrl: paystackData.data.authorization_url,
       reference: paystackData.data.reference,
-      amount: verifiedTotal
+      amount: grossAmount,
+      netAmount: verifiedTotal,
+      feesIncluded: Math.round((grossAmount - verifiedTotal) * 100) / 100
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

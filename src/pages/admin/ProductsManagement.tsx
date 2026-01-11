@@ -241,12 +241,22 @@ export function ProductsManagement() {
       console.error(error);
     } else {
       // Map the nested price_intelligence to each product
-      const productsWithIntel = (data || []).map(p => ({
-        ...p,
-        price_intelligence: Array.isArray(p.price_intelligence) && p.price_intelligence.length > 0 
-          ? p.price_intelligence[0] 
-          : null
-      }));
+      // Handle both array (one-to-many) and object (one-to-one) responses
+      const productsWithIntel = (data || []).map(p => {
+        let intel = null;
+        if (p.price_intelligence) {
+          if (Array.isArray(p.price_intelligence)) {
+            intel = p.price_intelligence.length > 0 ? p.price_intelligence[0] : null;
+          } else {
+            // It's an object (one-to-one relation)
+            intel = p.price_intelligence;
+          }
+        }
+        return {
+          ...p,
+          price_intelligence: intel
+        };
+      });
       setProducts(productsWithIntel);
     }
     setLoading(false);
@@ -569,7 +579,7 @@ export function ProductsManagement() {
     }
   };
 
-  // Bulk Scan All Products
+  // Bulk Scan All Products with batch processing
   const handleBulkScan = async () => {
     const activeProducts = products.filter(p => p.is_active);
     if (activeProducts.length === 0) {
@@ -577,27 +587,53 @@ export function ProductsManagement() {
       return;
     }
 
-    if (!confirm(`Scan ${activeProducts.length} active products for competitor prices? This may take several minutes.`)) return;
+    if (!confirm(`Scan ${activeProducts.length} active products for competitor prices? This will process in batches and may take a few minutes.`)) return;
     
     setBulkScanning(true);
     setBulkScanProgress({ current: 0, total: activeProducts.length });
     
+    let offset = 0;
+    const batchSize = 15;
+    let totalScanned = 0;
+    let totalWithData = 0;
+    let totalFailed = 0;
+    let hasMore = true;
+
     try {
-      const { data, error } = await supabase.functions.invoke('bulk-scan-prices', {
-        body: {},
-      });
+      while (hasMore) {
+        const { data, error } = await supabase.functions.invoke('bulk-scan-prices', {
+          body: { batch_size: batchSize, offset },
+        });
 
-      if (error) throw error;
+        if (error) throw error;
 
-      if (data.success) {
-        const { summary } = data;
-        toast.success(
-          `Scan complete! ${summary.with_data} products with competitor data, ${summary.failed} failed`
-        );
-        fetchProducts();
-      } else {
-        toast.error(data.error || 'Bulk scan failed');
+        if (data.success) {
+          const { summary, pagination } = data;
+          totalScanned += summary.scanned;
+          totalWithData += summary.with_data;
+          totalFailed += summary.failed;
+          
+          setBulkScanProgress({ 
+            current: pagination.processed_so_far, 
+            total: pagination.total 
+          });
+          
+          hasMore = pagination.has_more;
+          offset = pagination.next_offset || 0;
+          
+          // Refresh products after each batch to show progress
+          if (hasMore) {
+            await fetchProducts();
+          }
+        } else {
+          throw new Error(data.error || 'Batch scan failed');
+        }
       }
+
+      toast.success(
+        `Scan complete! ${totalWithData} products with competitor data, ${totalFailed} failed`
+      );
+      fetchProducts();
     } catch (error: any) {
       console.error('Bulk scan error:', error);
       toast.error(error.message || 'Failed to run bulk scan');
@@ -1054,6 +1090,14 @@ export function ProductsManagement() {
             </CardTitle>
             <div className="flex flex-wrap gap-2">
               <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => fetchProducts()}
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh
+              </Button>
+              <Button 
                 variant="outline" 
                 size="sm"
                 onClick={handleBulkScan}
@@ -1084,15 +1128,26 @@ export function ProductsManagement() {
           
           {/* Bulk Scan Progress */}
           {bulkScanning && (
-            <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg space-y-2">
+            <div className="p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg space-y-3">
               <div className="flex items-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
                 <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                  Scanning competitor prices... This may take several minutes.
+                  Scanning competitor prices...
                 </span>
+                {bulkScanProgress.total > 0 && (
+                  <span className="text-sm text-blue-600 dark:text-blue-400 ml-auto">
+                    {bulkScanProgress.current} / {bulkScanProgress.total} products
+                  </span>
+                )}
               </div>
+              {bulkScanProgress.total > 0 && (
+                <Progress 
+                  value={(bulkScanProgress.current / bulkScanProgress.total) * 100} 
+                  className="h-2"
+                />
+              )}
               <p className="text-xs text-blue-600 dark:text-blue-400">
-                Please don't close this page. The scan is running in the background.
+                Please don't close this page. Processing in batches of 15 products.
               </p>
             </div>
           )}

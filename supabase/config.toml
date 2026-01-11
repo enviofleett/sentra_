@@ -17,3 +17,12 @@ verify_jwt = false
 
 [functions.track-email]
 verify_jwt = false
+
+[functions.scan-product-prices]
+verify_jwt = false
+
+[functions.bulk-match-competitors]
+verify_jwt = false
+
+[functions.auto-match-price]
+verify_jwt = false

@@ -650,6 +650,57 @@ export type Database = {
         }
         Relationships: []
       }
+      price_intelligence: {
+        Row: {
+          average_market_price: number | null
+          competitor_data: Json | null
+          created_at: string
+          highest_market_price: number | null
+          id: string
+          last_scraped_at: string | null
+          lowest_market_price: number | null
+          product_id: string
+          updated_at: string
+        }
+        Insert: {
+          average_market_price?: number | null
+          competitor_data?: Json | null
+          created_at?: string
+          highest_market_price?: number | null
+          id?: string
+          last_scraped_at?: string | null
+          lowest_market_price?: number | null
+          product_id: string
+          updated_at?: string
+        }
+        Update: {
+          average_market_price?: number | null
+          competitor_data?: Json | null
+          created_at?: string
+          highest_market_price?: number | null
+          id?: string
+          last_scraped_at?: string | null
+          lowest_market_price?: number | null
+          product_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "price_intelligence_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "price_intelligence_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "products_at_risk"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_analytics: {
         Row: {
           created_at: string | null
@@ -679,6 +730,57 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      product_pricing_audit: {
+        Row: {
+          change_reason: string | null
+          change_source: string | null
+          competitor_average: number | null
+          created_at: string
+          id: string
+          new_price: number | null
+          old_price: number | null
+          product_id: string
+          triggered_by: string | null
+        }
+        Insert: {
+          change_reason?: string | null
+          change_source?: string | null
+          competitor_average?: number | null
+          created_at?: string
+          id?: string
+          new_price?: number | null
+          old_price?: number | null
+          product_id: string
+          triggered_by?: string | null
+        }
+        Update: {
+          change_reason?: string | null
+          change_source?: string | null
+          competitor_average?: number | null
+          created_at?: string
+          id?: string
+          new_price?: number | null
+          old_price?: number | null
+          product_id?: string
+          triggered_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_pricing_audit_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_pricing_audit_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products_at_risk"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       products: {
         Row: {

@@ -9,11 +9,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Pencil, Trash2, Plus, Upload, X, AlertTriangle, TrendingUp, TrendingDown, Search, CheckSquare, Square, Power, PowerOff } from 'lucide-react';
+import { Pencil, Trash2, Plus, Upload, X, AlertTriangle, TrendingUp, TrendingDown, Search, CheckSquare, Square, Power, PowerOff, Radar, Zap, ArrowDown, Check, Loader2, RefreshCw } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ProductPerformanceChart } from '@/components/admin/ProductPerformanceChart';
 import { TopProductsWidget } from '@/components/admin/TopProductsWidget';
 import { getTopProductsByViews, getTopProductsByPurchases } from '@/utils/analytics';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useAuth } from '@/contexts/AuthContext';
+
+interface PriceIntelligence {
+  average_market_price: number | null;
+  lowest_market_price: number | null;
+  highest_market_price: number | null;
+  last_scraped_at: string | null;
+  competitor_data: { store: string; price: number; url: string }[];
+}
 
 interface Product {
   id: string;
@@ -33,6 +43,7 @@ interface Product {
   brand: string | null;
   size: string | null;
   margin_override_allowed: boolean | null;
+  price_intelligence?: PriceIntelligence | null;
 }
 
 interface Category {
@@ -130,6 +141,7 @@ function MarginCalculator({
 }
 
 export function ProductsManagement() {
+  const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -152,6 +164,11 @@ export function ProductsManagement() {
   const [livePrice, setLivePrice] = useState<number>(0);
   const [liveCostPrice, setLiveCostPrice] = useState<number | null>(null);
   const [marginOverride, setMarginOverride] = useState<boolean>(false);
+
+  // Price intelligence state
+  const [scanningProductId, setScanningProductId] = useState<string | null>(null);
+  const [matchingProductId, setMatchingProductId] = useState<string | null>(null);
+  const [bulkMatching, setBulkMatching] = useState(false);
 
   const emptyProduct: Omit<Product, 'id'> = {
     name: '',
@@ -197,14 +214,31 @@ export function ProductsManagement() {
     const {
       data,
       error
-    } = await supabase.from('products').select('*').order('created_at', {
-      ascending: false
-    });
+    } = await supabase
+      .from('products')
+      .select(`
+        *,
+        price_intelligence (
+          average_market_price,
+          lowest_market_price,
+          highest_market_price,
+          last_scraped_at,
+          competitor_data
+        )
+      `)
+      .order('created_at', { ascending: false });
     if (error) {
       toast.error('Failed to load products');
       console.error(error);
     } else {
-      setProducts(data || []);
+      // Map the nested price_intelligence to each product
+      const productsWithIntel = (data || []).map(p => ({
+        ...p,
+        price_intelligence: Array.isArray(p.price_intelligence) && p.price_intelligence.length > 0 
+          ? p.price_intelligence[0] 
+          : null
+      }));
+      setProducts(productsWithIntel);
     }
     setLoading(false);
   };
@@ -439,6 +473,143 @@ export function ProductsManagement() {
       fetchProducts();
     }
     setBulkLoading(false);
+  };
+
+  // Price Intelligence Functions
+  const handleScanPrice = async (product: Product) => {
+    setScanningProductId(product.id);
+    try {
+      const { data, error } = await supabase.functions.invoke('scan-product-prices', {
+        body: { product_id: product.id, product_name: product.name },
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        if (data.data.competitors_found > 0) {
+          toast.success(`Found ${data.data.competitors_found} competitor prices. Avg: ₦${data.data.average_price.toLocaleString()}`);
+        } else {
+          toast.info('No competitor prices found for this product');
+        }
+        fetchProducts();
+      } else {
+        toast.error(data.error || 'Failed to scan prices');
+      }
+    } catch (error: any) {
+      console.error('Scan error:', error);
+      toast.error(error.message || 'Failed to scan prices');
+    } finally {
+      setScanningProductId(null);
+    }
+  };
+
+  const handleAutoMatch = async (product: Product) => {
+    if (!product.price_intelligence?.average_market_price) {
+      toast.error('Please scan competitor prices first');
+      return;
+    }
+
+    setMatchingProductId(product.id);
+    try {
+      const { data, error } = await supabase.functions.invoke('auto-match-price', {
+        body: { product_id: product.id, user_id: user?.id },
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        if (data.data.no_change) {
+          toast.info('Price is already optimal');
+        } else {
+          toast.success(`Price updated: ₦${data.data.old_price.toLocaleString()} → ₦${data.data.new_price.toLocaleString()}`);
+          fetchProducts();
+        }
+      } else {
+        toast.error(data.error || 'Failed to auto-match price');
+      }
+    } catch (error: any) {
+      console.error('Auto-match error:', error);
+      toast.error(error.message || 'Failed to auto-match price');
+    } finally {
+      setMatchingProductId(null);
+    }
+  };
+
+  const handleBulkMatch = async () => {
+    if (!confirm('This will automatically adjust prices for all overpriced products. Continue?')) return;
+    
+    setBulkMatching(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('bulk-match-competitors', {
+        body: { user_id: user?.id },
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast.success(`Updated ${data.summary.updated} of ${data.summary.total} products`);
+        fetchProducts();
+      } else {
+        toast.error(data.error || 'Bulk match failed');
+      }
+    } catch (error: any) {
+      console.error('Bulk match error:', error);
+      toast.error(error.message || 'Failed to run bulk match');
+    } finally {
+      setBulkMatching(false);
+    }
+  };
+
+  // Render competitor price cell with status indicator
+  const renderCompetitorPrice = (product: Product) => {
+    const intel = product.price_intelligence;
+    
+    if (!intel || !intel.average_market_price) {
+      return (
+        <span className="text-xs text-muted-foreground italic">Not scanned</span>
+      );
+    }
+
+    const isOverpriced = product.price > intel.average_market_price;
+    const priceDiff = product.price - intel.average_market_price;
+    const priceDiffPercent = Math.abs((priceDiff / intel.average_market_price) * 100).toFixed(0);
+
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex items-center gap-1.5">
+              <span className="font-medium">₦{intel.average_market_price.toLocaleString()}</span>
+              {isOverpriced ? (
+                <span className="flex items-center text-red-500">
+                  <ArrowDown className="h-3 w-3 rotate-180" />
+                  <span className="text-xs">{priceDiffPercent}%</span>
+                </span>
+              ) : (
+                <Check className="h-4 w-4 text-green-500" />
+              )}
+            </div>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs">
+            <div className="space-y-1 text-xs">
+              <p>Low: ₦{intel.lowest_market_price?.toLocaleString()}</p>
+              <p>High: ₦{intel.highest_market_price?.toLocaleString()}</p>
+              <p className="text-muted-foreground">
+                Last scan: {intel.last_scraped_at ? new Date(intel.last_scraped_at).toLocaleDateString() : 'Never'}
+              </p>
+              {intel.competitor_data && intel.competitor_data.length > 0 && (
+                <div className="pt-1 border-t">
+                  <p className="font-medium mb-1">Sources ({intel.competitor_data.length}):</p>
+                  {intel.competitor_data.slice(0, 3).map((c, i) => (
+                    <p key={i}>{c.store}: ₦{c.price.toLocaleString()}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
   };
 
   const openDialog = (product?: Product) => {
@@ -715,6 +886,19 @@ export function ProductsManagement() {
                 : `All Products (${products.length})`
               }
             </CardTitle>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleBulkMatch}
+              disabled={bulkMatching}
+            >
+              {bulkMatching ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Bulk Auto-Match
+            </Button>
           </div>
           
           {/* Bulk Actions Bar */}
@@ -775,9 +959,9 @@ export function ProductsManagement() {
                   />
                 </TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Price</TableHead>
+                <TableHead>Our Price</TableHead>
+                <TableHead>Competitor Avg</TableHead>
                 <TableHead>Stock</TableHead>
-                <TableHead>Category</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -792,17 +976,57 @@ export function ProductsManagement() {
                       aria-label={`Select ${product.name}`}
                     />
                   </TableCell>
-                  <TableCell className="font-medium">{product.name}</TableCell>
+                  <TableCell className="font-medium max-w-[200px] truncate" title={product.name}>
+                    {product.name}
+                  </TableCell>
                   <TableCell>₦{product.price.toLocaleString()}</TableCell>
+                  <TableCell>{renderCompetitorPrice(product)}</TableCell>
                   <TableCell>{product.stock_quantity}</TableCell>
-                  <TableCell>{categories.find(c => c.id === product.category_id)?.name || '-'}</TableCell>
                   <TableCell>
                     <span className={product.is_active ? 'text-green-600' : 'text-red-600'}>
                       {product.is_active ? 'Active' : 'Inactive'}
                     </span>
                   </TableCell>
                   <TableCell>
-                    <div className="flex gap-2">
+                    <div className="flex gap-1">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={() => handleScanPrice(product)}
+                              disabled={scanningProductId === product.id}
+                            >
+                              {scanningProductId === product.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Radar className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Scan competitor prices</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={() => handleAutoMatch(product)}
+                              disabled={matchingProductId === product.id || !product.price_intelligence?.average_market_price}
+                            >
+                              {matchingProductId === product.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Zap className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Auto-match price</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                       <Button size="sm" variant="outline" onClick={() => openDialog(product)}>
                         <Pencil className="h-4 w-4" />
                       </Button>

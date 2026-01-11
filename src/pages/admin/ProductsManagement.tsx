@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,13 +9,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Pencil, Trash2, Plus, Upload, X, AlertTriangle, TrendingUp, TrendingDown, Search, CheckSquare, Square, Power, PowerOff, Radar, Zap, ArrowDown, Check, Loader2, RefreshCw } from 'lucide-react';
+import { Pencil, Trash2, Plus, Upload, X, AlertTriangle, TrendingUp, TrendingDown, Search, CheckSquare, Square, Power, PowerOff, Radar, Zap, ArrowDown, Check, Loader2, RefreshCw, XCircle, CheckCircle, Edit3, Save } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ProductPerformanceChart } from '@/components/admin/ProductPerformanceChart';
 import { TopProductsWidget } from '@/components/admin/TopProductsWidget';
 import { getTopProductsByViews, getTopProductsByPurchases } from '@/utils/analytics';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/contexts/AuthContext';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
 
 interface PriceIntelligence {
   average_market_price: number | null;
@@ -169,6 +171,13 @@ export function ProductsManagement() {
   const [scanningProductId, setScanningProductId] = useState<string | null>(null);
   const [matchingProductId, setMatchingProductId] = useState<string | null>(null);
   const [bulkMatching, setBulkMatching] = useState(false);
+  const [bulkScanning, setBulkScanning] = useState(false);
+  const [bulkScanProgress, setBulkScanProgress] = useState({ current: 0, total: 0 });
+  
+  // Inline price editing state
+  const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
+  const [editingPriceValue, setEditingPriceValue] = useState<string>('');
+  const [savingPriceId, setSavingPriceId] = useState<string | null>(null);
 
   const emptyProduct: Omit<Product, 'id'> = {
     name: '',
@@ -560,6 +569,163 @@ export function ProductsManagement() {
     }
   };
 
+  // Bulk Scan All Products
+  const handleBulkScan = async () => {
+    const activeProducts = products.filter(p => p.is_active);
+    if (activeProducts.length === 0) {
+      toast.error('No active products to scan');
+      return;
+    }
+
+    if (!confirm(`Scan ${activeProducts.length} active products for competitor prices? This may take several minutes.`)) return;
+    
+    setBulkScanning(true);
+    setBulkScanProgress({ current: 0, total: activeProducts.length });
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('bulk-scan-prices', {
+        body: {},
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        const { summary } = data;
+        toast.success(
+          `Scan complete! ${summary.with_data} products with competitor data, ${summary.failed} failed`
+        );
+        fetchProducts();
+      } else {
+        toast.error(data.error || 'Bulk scan failed');
+      }
+    } catch (error: any) {
+      console.error('Bulk scan error:', error);
+      toast.error(error.message || 'Failed to run bulk scan');
+    } finally {
+      setBulkScanning(false);
+      setBulkScanProgress({ current: 0, total: 0 });
+    }
+  };
+
+  // Inline Price Editing
+  const startEditingPrice = (product: Product) => {
+    setEditingPriceId(product.id);
+    setEditingPriceValue(product.price.toString());
+  };
+
+  const cancelEditingPrice = () => {
+    setEditingPriceId(null);
+    setEditingPriceValue('');
+  };
+
+  const saveInlinePrice = async (productId: string) => {
+    const newPrice = parseFloat(editingPriceValue);
+    if (isNaN(newPrice) || newPrice <= 0) {
+      toast.error('Please enter a valid price');
+      return;
+    }
+
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+
+    // Safety check: Ensure price is not below cost
+    if (product.cost_price && newPrice < product.cost_price) {
+      toast.error(`Price cannot be below cost (₦${product.cost_price.toLocaleString()})`);
+      return;
+    }
+
+    setSavingPriceId(productId);
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({ price: newPrice, updated_at: new Date().toISOString() })
+        .eq('id', productId);
+
+      if (error) throw error;
+
+      // Log the change
+      await supabase.from('product_pricing_audit').insert({
+        product_id: productId,
+        old_price: product.price,
+        new_price: newPrice,
+        change_reason: 'Manual inline price adjustment',
+        change_source: 'admin_inline',
+        triggered_by: user?.id || null,
+        competitor_average: product.price_intelligence?.average_market_price || null,
+      });
+
+      toast.success('Price updated successfully');
+      setEditingPriceId(null);
+      setEditingPriceValue('');
+      fetchProducts();
+    } catch (error: any) {
+      console.error('Price update error:', error);
+      toast.error(error.message || 'Failed to update price');
+    } finally {
+      setSavingPriceId(null);
+    }
+  };
+
+  // Quick Apply Competitor Price
+  const applyCompetitorPrice = async (product: Product) => {
+    if (!product.price_intelligence?.average_market_price) {
+      toast.error('No competitor price available');
+      return;
+    }
+
+    const avgPrice = product.price_intelligence.average_market_price;
+    const costPrice = product.cost_price || 0;
+    const minSafePrice = Math.round(costPrice * 1.10 * 100) / 100;
+    
+    // Determine the price to apply
+    let newPrice = avgPrice;
+    let reason = 'Matched competitor average';
+    
+    if (avgPrice < minSafePrice) {
+      newPrice = minSafePrice;
+      reason = 'Set to minimum safe price (10% margin)';
+    }
+
+    if (Math.abs(newPrice - product.price) < 1) {
+      toast.info('Price is already optimal');
+      return;
+    }
+
+    setMatchingProductId(product.id);
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({ price: newPrice, updated_at: new Date().toISOString() })
+        .eq('id', product.id);
+
+      if (error) throw error;
+
+      // Log the change
+      await supabase.from('product_pricing_audit').insert({
+        product_id: product.id,
+        old_price: product.price,
+        new_price: newPrice,
+        change_reason: reason,
+        change_source: 'admin_apply_competitor',
+        triggered_by: user?.id || null,
+        competitor_average: avgPrice,
+      });
+
+      toast.success(`Price updated: ₦${product.price.toLocaleString()} → ₦${newPrice.toLocaleString()}`);
+      fetchProducts();
+    } catch (error: any) {
+      console.error('Apply competitor price error:', error);
+      toast.error(error.message || 'Failed to apply price');
+    } finally {
+      setMatchingProductId(null);
+    }
+  };
+
+  // Ignore Competitor Suggestion (just dismiss the visual indicator by scanning again or leave as is)
+  const ignoreCompetitorSuggestion = (product: Product) => {
+    toast.info(`Keeping current price of ₦${product.price.toLocaleString()} for ${product.name}`);
+  };
+
   // Render competitor price cell with status indicator
   const renderCompetitorPrice = (product: Product) => {
     const intel = product.price_intelligence;
@@ -879,27 +1045,57 @@ export function ProductsManagement() {
 
       <Card>
         <CardHeader className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <CardTitle>
               {searchQuery 
                 ? `Search Results (${filteredProducts.length})`
                 : `All Products (${products.length})`
               }
             </CardTitle>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={handleBulkMatch}
-              disabled={bulkMatching}
-            >
-              {bulkMatching ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-2" />
-              )}
-              Bulk Auto-Match
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleBulkScan}
+                disabled={bulkScanning}
+              >
+                {bulkScanning ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Radar className="h-4 w-4 mr-2" />
+                )}
+                {bulkScanning ? 'Scanning...' : 'Bulk Scan All'}
+              </Button>
+              <Button 
+                variant="default" 
+                size="sm"
+                onClick={handleBulkMatch}
+                disabled={bulkMatching}
+              >
+                {bulkMatching ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Zap className="h-4 w-4 mr-2" />
+                )}
+                Bulk Auto-Match
+              </Button>
+            </div>
           </div>
+          
+          {/* Bulk Scan Progress */}
+          {bulkScanning && (
+            <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg space-y-2">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                  Scanning competitor prices... This may take several minutes.
+                </span>
+              </div>
+              <p className="text-xs text-blue-600 dark:text-blue-400">
+                Please don't close this page. The scan is running in the background.
+              </p>
+            </div>
+          )}
           
           {/* Bulk Actions Bar */}
           {selectedProducts.size > 0 && (
@@ -967,76 +1163,158 @@ export function ProductsManagement() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredProducts.map(product => (
-                <TableRow key={product.id} className={selectedProducts.has(product.id) ? 'bg-muted/50' : ''}>
-                  <TableCell>
-                    <Checkbox
-                      checked={selectedProducts.has(product.id)}
-                      onCheckedChange={() => toggleSelectProduct(product.id)}
-                      aria-label={`Select ${product.name}`}
-                    />
-                  </TableCell>
-                  <TableCell className="font-medium max-w-[200px] truncate" title={product.name}>
-                    {product.name}
-                  </TableCell>
-                  <TableCell>₦{product.price.toLocaleString()}</TableCell>
-                  <TableCell>{renderCompetitorPrice(product)}</TableCell>
-                  <TableCell>{product.stock_quantity}</TableCell>
-                  <TableCell>
-                    <span className={product.is_active ? 'text-green-600' : 'text-red-600'}>
-                      {product.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
-                              onClick={() => handleScanPrice(product)}
-                              disabled={scanningProductId === product.id}
-                            >
-                              {scanningProductId === product.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Radar className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Scan competitor prices</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
-                              onClick={() => handleAutoMatch(product)}
-                              disabled={matchingProductId === product.id || !product.price_intelligence?.average_market_price}
-                            >
-                              {matchingProductId === product.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Zap className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Auto-match price</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                      <Button size="sm" variant="outline" onClick={() => openDialog(product)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button size="sm" variant="destructive" onClick={() => handleDelete(product.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {filteredProducts.map(product => {
+                const intel = product.price_intelligence;
+                const hasCompetitorData = intel?.average_market_price != null;
+                const isOverpriced = hasCompetitorData && product.price > intel.average_market_price!;
+                const isEditing = editingPriceId === product.id;
+                
+                return (
+                  <TableRow key={product.id} className={`${selectedProducts.has(product.id) ? 'bg-muted/50' : ''} ${isOverpriced ? 'bg-red-50/50 dark:bg-red-950/10' : ''}`}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedProducts.has(product.id)}
+                        onCheckedChange={() => toggleSelectProduct(product.id)}
+                        aria-label={`Select ${product.name}`}
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium max-w-[200px] truncate" title={product.name}>
+                      {product.name}
+                    </TableCell>
+                    <TableCell>
+                      {isEditing ? (
+                        <div className="flex items-center gap-1">
+                          <span className="text-muted-foreground">₦</span>
+                          <Input
+                            type="number"
+                            value={editingPriceValue}
+                            onChange={(e) => setEditingPriceValue(e.target.value)}
+                            className="w-24 h-8 text-sm"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') saveInlinePrice(product.id);
+                              if (e.key === 'Escape') cancelEditingPrice();
+                            }}
+                          />
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => saveInlinePrice(product.id)}
+                            disabled={savingPriceId === product.id}
+                          >
+                            {savingPriceId === product.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Save className="h-4 w-4 text-green-600" />
+                            )}
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="h-8 w-8 p-0"
+                            onClick={cancelEditingPrice}
+                          >
+                            <X className="h-4 w-4 text-red-600" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 group">
+                          <span>₦{product.price.toLocaleString()}</span>
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => startEditingPrice(product)}
+                          >
+                            <Edit3 className="h-3 w-3 text-muted-foreground" />
+                          </Button>
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {renderCompetitorPrice(product)}
+                        {/* Implement/Ignore buttons for overpriced products */}
+                        {hasCompetitorData && isOverpriced && (
+                          <div className="flex items-center gap-0.5">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 w-6 p-0 text-green-600 hover:text-green-700 hover:bg-green-100"
+                                    onClick={() => applyCompetitorPrice(product)}
+                                    disabled={matchingProductId === product.id}
+                                  >
+                                    {matchingProductId === product.id ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    ) : (
+                                      <CheckCircle className="h-3.5 w-3.5" />
+                                    )}
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Apply competitor price</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                                    onClick={() => ignoreCompetitorSuggestion(product)}
+                                  >
+                                    <XCircle className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Ignore suggestion</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>{product.stock_quantity}</TableCell>
+                    <TableCell>
+                      <Badge variant={product.is_active ? 'default' : 'secondary'} className={product.is_active ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : ''}>
+                        {product.is_active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                onClick={() => handleScanPrice(product)}
+                                disabled={scanningProductId === product.id}
+                              >
+                                {scanningProductId === product.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Radar className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Scan competitor prices</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <Button size="sm" variant="outline" onClick={() => openDialog(product)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button size="sm" variant="destructive" onClick={() => handleDelete(product.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
               {filteredProducts.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">

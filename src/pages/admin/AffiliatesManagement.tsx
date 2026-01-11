@@ -9,8 +9,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
-import { Users, Wallet, TrendingUp, Award, DollarSign, ArrowDownCircle, Loader2, Check, X, Clock } from 'lucide-react';
+import { Users, Wallet, TrendingUp, Award, DollarSign, ArrowDownCircle, Loader2, Check, X, Clock, AlertTriangle } from 'lucide-react';
 
 interface WithdrawalRequest {
   id: string;
@@ -55,6 +56,11 @@ export default function AffiliatesManagement() {
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [editingRank, setEditingRank] = useState<ResellerRank | null>(null);
+  const [budgetValidation, setBudgetValidation] = useState<{
+    maxGrowthBudget: number | null;
+    isValidating: boolean;
+    error: string | null;
+  }>({ maxGrowthBudget: null, isValidating: false, error: null });
 
   useEffect(() => {
     loadData();
@@ -113,7 +119,70 @@ export default function AffiliatesManagement() {
     setProcessingId(null);
   };
 
+  // Validate discount against budget limits
+  const validateBudgetLimits = async (discountPercentage: number): Promise<{ valid: boolean; maxBudget: number | null; error: string | null }> => {
+    setBudgetValidation({ maxGrowthBudget: null, isValidating: true, error: null });
+    
+    try {
+      // Fetch a sample of active products to calculate average budget
+      const { data: products } = await supabase
+        .from('products')
+        .select('id, price, cost_price')
+        .eq('is_active', true)
+        .not('cost_price', 'is', null)
+        .limit(10);
+
+      if (!products || products.length === 0) {
+        setBudgetValidation({ maxGrowthBudget: null, isValidating: false, error: null });
+        return { valid: true, maxBudget: null, error: null };
+      }
+
+      // Calculate budget limits for each product
+      const budgetPromises = products.map(async (product) => {
+        const { data } = await supabase.rpc('calculate_budget_limits', { p_product_id: product.id });
+        return data?.[0];
+      });
+
+      const budgets = await Promise.all(budgetPromises);
+      const validBudgets = budgets.filter(b => b && b.gross_profit > 0);
+      
+      if (validBudgets.length === 0) {
+        setBudgetValidation({ maxGrowthBudget: null, isValidating: false, error: null });
+        return { valid: true, maxBudget: null, error: null };
+      }
+
+      // Calculate average growth budget percentage across products
+      const avgGrowthBudgetPct = validBudgets.reduce((sum, b) => {
+        const pct = (b.growth_budget_amount / b.gross_profit) * 100;
+        return sum + pct;
+      }, 0) / validBudgets.length;
+
+      const maxBudget = Math.round(avgGrowthBudgetPct * 100) / 100;
+
+      if (discountPercentage > maxBudget) {
+        const error = `Discount ${discountPercentage}% exceeds Growth Budget limit of ${maxBudget}%`;
+        setBudgetValidation({ maxGrowthBudget: maxBudget, isValidating: false, error });
+        return { valid: false, maxBudget, error };
+      }
+
+      setBudgetValidation({ maxGrowthBudget: maxBudget, isValidating: false, error: null });
+      return { valid: true, maxBudget, error: null };
+    } catch (err) {
+      console.error('Budget validation error:', err);
+      setBudgetValidation({ maxGrowthBudget: null, isValidating: false, error: null });
+      return { valid: true, maxBudget: null, error: null }; // Allow save on error
+    }
+  };
+
   const updateRank = async (rank: ResellerRank) => {
+    // Validate budget limits before saving
+    const validation = await validateBudgetLimits(rank.discount_percentage);
+    
+    if (!validation.valid) {
+      toast.error(validation.error || 'Discount exceeds budget limits');
+      return;
+    }
+
     const { error } = await supabase
       .from('reseller_ranks')
       .update({
@@ -131,6 +200,7 @@ export default function AffiliatesManagement() {
     } else {
       toast.success('Rank updated');
       setEditingRank(null);
+      setBudgetValidation({ maxGrowthBudget: null, isValidating: false, error: null });
       loadData();
     }
   };
@@ -445,8 +515,36 @@ export default function AffiliatesManagement() {
                                     className="h-10"
                                   />
                                 </div>
-                                <Button onClick={() => updateRank(editingRank)} className="w-full">
-                                  Save Changes
+                                
+                                {/* Budget Validation Warning */}
+                                {budgetValidation.error && (
+                                  <Alert variant="destructive">
+                                    <AlertTriangle className="h-4 w-4" />
+                                    <AlertDescription>
+                                      {budgetValidation.error}
+                                    </AlertDescription>
+                                  </Alert>
+                                )}
+                                
+                                {budgetValidation.maxGrowthBudget !== null && !budgetValidation.error && (
+                                  <p className="text-sm text-muted-foreground">
+                                    Max allowed discount based on Growth Budget: <strong>{budgetValidation.maxGrowthBudget}%</strong>
+                                  </p>
+                                )}
+
+                                <Button 
+                                  onClick={() => updateRank(editingRank)} 
+                                  className="w-full"
+                                  disabled={budgetValidation.isValidating}
+                                >
+                                  {budgetValidation.isValidating ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                      Validating Budget...
+                                    </>
+                                  ) : (
+                                    'Save Changes'
+                                  )}
                                 </Button>
                               </div>
                             )}

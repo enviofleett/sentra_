@@ -176,7 +176,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { category_id, product_ids } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const { category_id, product_ids, batch_size = 15, offset = 0 } = body;
 
     const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY');
     if (!firecrawlApiKey) {
@@ -194,7 +195,7 @@ Deno.serve(async (req) => {
     console.log('Starting bulk price scan...');
 
     // Build query to fetch products
-    let query = supabase.from('products').select('id, name').eq('is_active', true);
+    let query = supabase.from('products').select('id, name', { count: 'exact' }).eq('is_active', true);
     
     if (product_ids && product_ids.length > 0) {
       query = query.in('id', product_ids);
@@ -202,7 +203,10 @@ Deno.serve(async (req) => {
       query = query.eq('category_id', category_id);
     }
 
-    const { data: products, error: fetchError } = await query;
+    // Apply pagination for batch processing
+    query = query.range(offset, offset + batch_size - 1);
+
+    const { data: products, error: fetchError, count: totalCount } = await query;
 
     if (fetchError) {
       console.error('Fetch error:', fetchError);
@@ -216,15 +220,16 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: true,
-          message: 'No products found to scan',
-          summary: { total: 0, scanned: 0, with_data: 0, failed: 0 },
+          message: offset > 0 ? 'Batch complete' : 'No products found to scan',
+          summary: { total: totalCount || 0, scanned: 0, with_data: 0, failed: 0 },
           results: [],
+          pagination: { offset, batch_size, has_more: false, total: totalCount || 0 }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`Scanning ${products.length} products...`);
+    console.log(`Scanning batch of ${products.length} products (offset: ${offset}, total: ${totalCount})...`);
 
     const results: { 
       success: boolean; 
@@ -234,35 +239,45 @@ Deno.serve(async (req) => {
       error?: string 
     }[] = [];
 
-    // Process products with rate limiting (2 second delay between requests)
+    // Process products with rate limiting (1.5 second delay between requests)
     for (let i = 0; i < products.length; i++) {
       const product = products[i];
       
       // Add delay between requests to respect API rate limits
       if (i > 0) {
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        await new Promise(resolve => setTimeout(resolve, 1200));
       }
 
       const result = await scanSingleProduct(firecrawlApiKey, supabase, product);
       results.push(result);
       
-      console.log(`Progress: ${i + 1}/${products.length} - ${product.name}: ${result.competitors_found} competitors`);
+      console.log(`Progress: ${offset + i + 1}/${totalCount} - ${product.name}: ${result.competitors_found} competitors`);
     }
 
     const summary = {
-      total: products.length,
+      total: totalCount || 0,
       scanned: results.filter(r => r.success).length,
       with_data: results.filter(r => r.success && r.competitors_found > 0).length,
       failed: results.filter(r => !r.success).length,
     };
 
-    console.log('Bulk scan complete:', summary);
+    const hasMore = (offset + products.length) < (totalCount || 0);
+
+    console.log(`Batch complete: ${summary.scanned} scanned, ${summary.with_data} with data. Has more: ${hasMore}`);
 
     return new Response(
       JSON.stringify({
         success: true,
         summary,
         results,
+        pagination: {
+          offset,
+          batch_size,
+          has_more: hasMore,
+          next_offset: hasMore ? offset + batch_size : null,
+          total: totalCount || 0,
+          processed_so_far: offset + products.length
+        }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

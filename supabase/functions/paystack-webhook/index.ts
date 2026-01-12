@@ -99,44 +99,95 @@ async function verifySignature(paystackSecretKey: string, rawBody: string, signa
 }
 
 serve(async (req: Request) => {
-  console.log(`[Paystack Webhook] Received ${req.method} request at ${new Date().toISOString()}`);
+  const requestTime = new Date().toISOString();
+  console.log(`[Paystack Webhook] ========================================`);
+  console.log(`[Paystack Webhook] Received ${req.method} request at ${requestTime}`);
+  console.log(`[Paystack Webhook] URL: ${req.url}`);
+  
+  // Log all headers for debugging
+  const headers: Record<string, string> = {};
+  req.headers.forEach((value, key) => {
+    headers[key] = key.toLowerCase().includes('authorization') ? '[REDACTED]' : value;
+  });
+  console.log(`[Paystack Webhook] Headers:`, JSON.stringify(headers));
 
   if (req.method === "OPTIONS") {
+    console.log(`[Paystack Webhook] Responding to OPTIONS preflight`);
     return new Response(null, { headers: corsHeaders });
+  }
+  
+  // Handle GET requests (for testing the endpoint)
+  if (req.method === "GET") {
+    console.log(`[Paystack Webhook] GET request - returning health check`);
+    return new Response(JSON.stringify({ 
+      status: "ok", 
+      message: "Paystack webhook endpoint is active",
+      timestamp: requestTime 
+    }), { 
+      status: 200, 
+      headers: { ...corsHeaders, "Content-Type": "application/json" } 
+    });
   }
 
   try {
     const paystackSecretKey = Deno.env.get("PAYSTACK_SECRET_KEY");
     if (!paystackSecretKey) {
       console.error("[Paystack Webhook] CRITICAL: PAYSTACK_SECRET_KEY not configured");
-      return new Response(JSON.stringify({ error: "Server configuration error" }), { status: 500 });
+      return new Response(JSON.stringify({ error: "Server configuration error" }), { 
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
     }
+    console.log(`[Paystack Webhook] PAYSTACK_SECRET_KEY is configured (length: ${paystackSecretKey.length})`);
 
     const rawBody = await req.text();
+    console.log(`[Paystack Webhook] Raw body length: ${rawBody.length} characters`);
+    console.log(`[Paystack Webhook] Raw body preview: ${rawBody.substring(0, 200)}...`);
+    
     const signature = req.headers.get("x-paystack-signature");
-
-    console.log(`[Paystack Webhook] Signature verification - Present: ${!!signature}`);
-
-    if (!signature || !await verifySignature(paystackSecretKey, rawBody, signature)) {
-      console.error("[Paystack Webhook] SECURITY: Invalid webhook signature rejected");
-      return new Response(JSON.stringify({ error: "Invalid signature" }), { status: 401 });
+    console.log(`[Paystack Webhook] Signature present: ${!!signature}`);
+    if (signature) {
+      console.log(`[Paystack Webhook] Signature value: ${signature.substring(0, 20)}...`);
     }
 
-    console.log("[Paystack Webhook] Signature verification: PASSED");
+    if (!signature) {
+      console.error("[Paystack Webhook] SECURITY: No signature provided - rejecting request");
+      return new Response(JSON.stringify({ error: "Missing signature" }), { 
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    
+    const isValidSignature = await verifySignature(paystackSecretKey, rawBody, signature);
+    console.log(`[Paystack Webhook] Signature verification result: ${isValidSignature}`);
+    
+    if (!isValidSignature) {
+      console.error("[Paystack Webhook] SECURITY: Invalid webhook signature rejected");
+      console.error("[Paystack Webhook] This could mean the PAYSTACK_SECRET_KEY doesn't match the one in Paystack dashboard");
+      return new Response(JSON.stringify({ error: "Invalid signature" }), { 
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    console.log("[Paystack Webhook] ✓ Signature verification: PASSED");
 
     const webhookData = JSON.parse(rawBody);
     const { event, data } = webhookData;
-    const { reference, amount, metadata } = data;
+    const { reference, amount, metadata, status: paystackStatus, gateway_response } = data;
 
-    console.log(`[Paystack Webhook] Event: ${event}`);
+    console.log(`[Paystack Webhook] Event Type: ${event}`);
     console.log(`[Paystack Webhook] Reference: ${reference}`);
     console.log(`[Paystack Webhook] Amount (kobo): ${amount}`);
+    console.log(`[Paystack Webhook] Paystack Status: ${paystackStatus}`);
+    console.log(`[Paystack Webhook] Gateway Response: ${gateway_response}`);
     console.log(`[Paystack Webhook] Metadata:`, JSON.stringify(metadata));
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+    console.log(`[Paystack Webhook] Supabase client initialized`);
 
     if (event === "charge.success") {
       const paymentType = metadata?.type || 'standard_order';

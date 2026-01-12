@@ -1260,12 +1260,33 @@ function IntegrationSettingsManager() {
           <strong> Paystack Dashboard → Settings → API Keys & Webhooks → Live Webhook URL</strong>.
         </p>
         
-        <div className="p-4 bg-muted rounded-lg font-mono text-sm break-all">
-          https://oczsddmantovkqfwczqk.supabase.co/functions/v1/paystack-webhook
+        <div className="p-4 bg-muted rounded-lg font-mono text-sm break-all flex items-center justify-between gap-2">
+          <span>https://oczsddmantovkqfwczqk.supabase.co/functions/v1/paystack-webhook</span>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => {
+              navigator.clipboard.writeText('https://oczsddmantovkqfwczqk.supabase.co/functions/v1/paystack-webhook');
+              toast({ title: 'Copied!', description: 'Webhook URL copied to clipboard' });
+            }}
+          >
+            Copy
+          </Button>
         </div>
         <p className="text-xs text-muted-foreground mt-2">
           This URL receives payment notifications from Paystack and cannot be changed dynamically.
         </p>
+        
+        <div className="mt-6 p-4 border rounded-lg bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800">
+          <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-2">⚠️ Troubleshooting Checklist</h4>
+          <ul className="text-sm text-amber-700 dark:text-amber-300 space-y-2 list-disc list-inside">
+            <li>Ensure you're using <strong>Live Mode</strong> in Paystack (not Test Mode) if using live keys</li>
+            <li>Verify the webhook URL is set under <strong>Settings → API Keys & Webhooks</strong> in Paystack dashboard</li>
+            <li>Check that the <strong>PAYSTACK_SECRET_KEY</strong> stored in Supabase matches the Live Secret Key in Paystack</li>
+            <li>Paystack will not call webhooks for Test Mode transactions if you've set a Live webhook URL</li>
+            <li>Make sure your Paystack account is activated for live transactions</li>
+          </ul>
+        </div>
       </div>
     </div>
   );

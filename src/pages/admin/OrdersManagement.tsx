@@ -7,9 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Eye, Clock, Package, TruckIcon, CheckCircle, XCircle } from 'lucide-react';
+import { Eye, Clock, Package, TruckIcon, CheckCircle, XCircle, RefreshCw, CreditCard, Loader2, AlertCircle } from 'lucide-react';
 import { getOrderStatusBreakdown, getOrdersTimeline, OrderStatusBreakdown } from '@/utils/analytics';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Badge } from '@/components/ui/badge';
+import { Tooltip as UITooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface Vendor {
   id: string;
@@ -22,6 +24,9 @@ interface Order {
   customer_email: string;
   total_amount: number;
   status: string;
+  payment_status: string;
+  paystack_status: string | null;
+  payment_reference: string | null;
   created_at: string;
   items: any;
   shipping_address: any;
@@ -39,6 +44,7 @@ export function OrdersManagement() {
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
   const [selectedVendor, setSelectedVendor] = useState<string>('all');
   const [timePeriod, setTimePeriod] = useState<'day' | 'week' | 'month'>('week');
+  const [verifyingOrderId, setVerifyingOrderId] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<{ start: Date; end: Date }>({
     start: new Date(new Date().setDate(new Date().getDate() - 7)),
     end: new Date()
@@ -136,6 +142,69 @@ export function OrdersManagement() {
     }
   };
 
+  const verifyPayment = async (orderId: string) => {
+    setVerifyingOrderId(orderId);
+    try {
+      const { data, error } = await supabase.functions.invoke('verify-payment', {
+        body: { orderId }
+      });
+
+      if (error) {
+        toast.error('Verification failed', { description: error.message });
+        return;
+      }
+
+      if (data?.verified && data?.status === 'success') {
+        toast.success('Payment verified!', { 
+          description: 'Order has been updated to paid/processing status'
+        });
+        fetchOrders();
+        fetchAnalytics();
+      } else if (data?.status === 'pending') {
+        toast.info('Payment still pending', {
+          description: 'Paystack has not confirmed this payment yet'
+        });
+      } else if (data?.status === 'failed' || data?.status === 'abandoned') {
+        toast.error('Payment failed', {
+          description: `Paystack reports: ${data?.message || data?.status}`
+        });
+      } else {
+        toast.warning('Unable to verify', {
+          description: data?.message || 'Transaction not found in Paystack'
+        });
+      }
+    } catch (err: any) {
+      toast.error('Verification error', { description: err.message });
+    } finally {
+      setVerifyingOrderId(null);
+    }
+  };
+
+  const manuallyMarkAsPaid = async (orderId: string) => {
+    const confirmed = window.confirm(
+      'Are you sure you want to manually mark this order as paid? Only do this if you have confirmed payment through other means.'
+    );
+    if (!confirmed) return;
+
+    const { error } = await supabase
+      .from('orders')
+      .update({
+        status: 'processing',
+        payment_status: 'paid',
+        paystack_status: 'manual_override',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', orderId);
+
+    if (error) {
+      toast.error('Failed to update order');
+    } else {
+      toast.success('Order marked as paid');
+      fetchOrders();
+      fetchAnalytics();
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'text-yellow-600';
@@ -145,6 +214,19 @@ export function OrdersManagement() {
       case 'cancelled': return 'text-red-600';
       default: return 'text-gray-600';
     }
+  };
+
+  const getPaymentStatusBadge = (paymentStatus: string, paystackStatus: string | null) => {
+    if (paymentStatus === 'paid') {
+      return <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">Paid</Badge>;
+    }
+    if (paystackStatus === 'manual_override') {
+      return <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">Manual</Badge>;
+    }
+    if (paymentStatus === 'failed' || paystackStatus === 'failed') {
+      return <Badge variant="destructive">Failed</Badge>;
+    }
+    return <Badge variant="secondary">Pending</Badge>;
   };
 
   const getVendorName = (vendorId: string | null) => {
@@ -281,61 +363,126 @@ export function OrdersManagement() {
             <TableHeader>
               <TableRow>
                 <TableHead>Order ID</TableHead>
-                      <TableHead>Customer</TableHead>
-                      <TableHead>Items / Vendors</TableHead>
-                      <TableHead>Total</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Actions</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead>Items / Vendors</TableHead>
+                <TableHead>Total</TableHead>
+                <TableHead>Payment</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {orders.map((order) => (
-                <TableRow key={order.id}>
-                  <TableCell className="font-mono text-sm">{order.id.slice(0, 8)}</TableCell>
-                  <TableCell>{order.customer_email}</TableCell>
-                  <TableCell>
-                    <div className="text-sm space-y-1">
-                      {order.items?.map((item: any, idx: number) => (
-                        <div key={idx} className="text-muted-foreground">
-                          {item.name} - {getVendorName(item.vendor_id)}
-                        </div>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell>₦{order.total_amount.toLocaleString()}</TableCell>
-                  <TableCell>
-                    <Select
-                      value={order.status}
-                      onValueChange={(value: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled') => updateOrderStatus(order.id, value)}
-                    >
-                      <SelectTrigger className="w-32">
-                        <SelectValue className={getStatusColor(order.status)} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="processing">Processing</SelectItem>
-                        <SelectItem value="shipped">Shipped</SelectItem>
-                        <SelectItem value="delivered">Delivered</SelectItem>
-                        <SelectItem value="cancelled">Cancelled</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell>{new Date(order.created_at).toLocaleDateString()}</TableCell>
-                  <TableCell>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setSelectedOrder(order);
-                        setIsDialogOpen(true);
-                      }}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {orders.map((order) => {
+                const isPending = order.payment_status === 'pending';
+                const isVerifying = verifyingOrderId === order.id;
+                
+                return (
+                  <TableRow key={order.id} className={isPending ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''}>
+                    <TableCell className="font-mono text-sm">{order.id.slice(0, 8)}</TableCell>
+                    <TableCell>{order.customer_email}</TableCell>
+                    <TableCell>
+                      <div className="text-sm space-y-1">
+                        {order.items?.map((item: any, idx: number) => (
+                          <div key={idx} className="text-muted-foreground">
+                            {item.name} - {getVendorName(item.vendor_id)}
+                          </div>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell>₦{order.total_amount.toLocaleString()}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {getPaymentStatusBadge(order.payment_status, order.paystack_status)}
+                        {isPending && (
+                          <UITooltip>
+                            <TooltipTrigger asChild>
+                              <AlertCircle className="h-4 w-4 text-amber-500" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Payment not confirmed</p>
+                            </TooltipContent>
+                          </UITooltip>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Select
+                        value={order.status}
+                        onValueChange={(value: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled') => updateOrderStatus(order.id, value)}
+                      >
+                        <SelectTrigger className="w-32">
+                          <SelectValue className={getStatusColor(order.status)} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="processing">Processing</SelectItem>
+                          <SelectItem value="shipped">Shipped</SelectItem>
+                          <SelectItem value="delivered">Delivered</SelectItem>
+                          <SelectItem value="cancelled">Cancelled</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell>{new Date(order.created_at).toLocaleDateString()}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <UITooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setSelectedOrder(order);
+                                setIsDialogOpen(true);
+                              }}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>View Details</TooltipContent>
+                        </UITooltip>
+                        
+                        {isPending && (
+                          <>
+                            <UITooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => verifyPayment(order.id)}
+                                  disabled={isVerifying}
+                                  className="text-blue-600 hover:text-blue-700"
+                                >
+                                  {isVerifying ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <RefreshCw className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Verify with Paystack</TooltipContent>
+                            </UITooltip>
+                            
+                            <UITooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => manuallyMarkAsPaid(order.id)}
+                                  className="text-green-600 hover:text-green-700"
+                                >
+                                  <CreditCard className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Mark as Paid (Manual)</TooltipContent>
+                            </UITooltip>
+                          </>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>

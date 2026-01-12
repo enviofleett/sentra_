@@ -70,10 +70,10 @@ export default function CheckoutSuccess() {
           setVerificationStatus('failed');
         }
       } else if (orderId) {
-        // Verify standard order
+        // First check current order status
         const { data: order, error } = await supabase
           .from('orders')
-          .select('id, total_amount, payment_status, status, customer_email, items')
+          .select('id, total_amount, payment_status, status, customer_email, items, payment_reference')
           .eq('id', orderId)
           .single();
 
@@ -85,19 +85,55 @@ export default function CheckoutSuccess() {
 
         setOrderDetails(order as OrderDetails);
 
-        // Check if payment was successful
+        // If already paid, we're done
         if (order.payment_status === 'paid') {
           setVerificationStatus('success');
           await clearCart();
-        } else if (order.payment_status === 'pending') {
-          // Payment might still be processing via webhook
-          if (retryCount < 5) {
-            setRetryCount(prev => prev + 1);
-            setTimeout(verifyPayment, 2000);
-          } else {
-            // After 10 seconds, show pending state
-            setVerificationStatus('pending');
+          return;
+        }
+
+        // If still pending, call verify-payment edge function to check with Paystack directly
+        if (order.payment_status === 'pending' && retryCount < 3) {
+          console.log(`[CheckoutSuccess] Calling verify-payment API (attempt ${retryCount + 1})`);
+          
+          try {
+            const { data: verifyResult, error: verifyError } = await supabase.functions.invoke('verify-payment', {
+              body: { orderId: orderId }
+            });
+            
+            console.log('[CheckoutSuccess] Verify result:', verifyResult);
+            
+            if (verifyError) {
+              console.error('[CheckoutSuccess] Verify API error:', verifyError);
+            } else if (verifyResult?.verified && verifyResult?.status === 'success') {
+              // Payment confirmed by Paystack API
+              setVerificationStatus('success');
+              await clearCart();
+              
+              // Refetch order to get updated details
+              const { data: updatedOrder } = await supabase
+                .from('orders')
+                .select('id, total_amount, payment_status, status, customer_email, items')
+                .eq('id', orderId)
+                .single();
+              if (updatedOrder) {
+                setOrderDetails(updatedOrder as OrderDetails);
+              }
+              return;
+            } else if (verifyResult?.status === 'failed' || verifyResult?.status === 'abandoned') {
+              setVerificationStatus('failed');
+              return;
+            }
+          } catch (e) {
+            console.error('[CheckoutSuccess] Verify API call failed:', e);
           }
+          
+          // Still pending, retry
+          setRetryCount(prev => prev + 1);
+          setTimeout(verifyPayment, 3000);
+        } else if (order.payment_status === 'pending') {
+          // After retries exhausted, show pending state
+          setVerificationStatus('pending');
         } else {
           setVerificationStatus('failed');
         }

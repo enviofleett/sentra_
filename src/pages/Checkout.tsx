@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { sendEmail } from '@/utils/emailService';
+// sendEmail removed - emails are now sent by the webhook after payment confirmation
 import { toast } from '@/hooks/use-toast';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
@@ -214,11 +214,17 @@ export default function Checkout() {
       // Get Paystack public key from environment
       const paystackPublicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
       
-      // Validate Paystack configuration
+      // Validate Paystack configuration - check for ad blockers or network issues
       // @ts-ignore - PaystackPop is loaded from script in index.html
-      if (typeof PaystackPop === 'undefined') {
-        console.error('PaystackPop script not loaded. Check index.html script tag.');
-        throw new Error('Payment service is temporarily unavailable. Please try again later.');
+      if (typeof window.PaystackPop === 'undefined') {
+        console.error('[Checkout] PaystackPop script not loaded. Possible causes: ad blocker, network issue, or missing script tag.');
+        toast({
+          title: 'Payment Service Unavailable',
+          description: 'The payment service could not load. This may be due to an ad blocker or network issue. Please disable ad blockers, refresh the page, and try again.',
+          variant: 'destructive'
+        });
+        setProcessing(false);
+        return;
       }
       
       if (!paystackPublicKey || paystackPublicKey === 'pk_live_YOUR_PAYSTACK_PUBLIC_KEY') {
@@ -241,31 +247,17 @@ export default function Checkout() {
           customer_name: data.fullName,
           type: 'standard_order'
         },
-        onSuccess: async (transaction: any) => {
-          console.log('Payment successful:', transaction.reference);
-          
-          // Update order status as backup (in case webhook is delayed)
-          await supabase
-            .from('orders')
-            .update({ 
-              status: 'processing',
-              paystack_status: 'success',
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', order.id);
+        onSuccess: (transaction: any) => {
+          // SECURITY: Do NOT update database here - webhook is the single source of truth
+          // Do NOT assume payment was successful - let the verification page confirm
+          console.log('[Checkout] Payment popup closed with reference:', transaction.reference);
           
           toast({
-            title: 'Payment successful!',
-            description: 'Redirecting to confirmation...'
+            title: 'Processing payment...',
+            description: 'Redirecting to verify your payment.'
           });
 
-          await sendEmail(data.email, 'ORDER_CONFIRMATION', {
-            customer_name: data.fullName,
-            order_id: order.id.slice(0, 8),
-            total_amount: subtotal.toLocaleString()
-          });
-
-          // Navigate to success page instead of clearing cart here
+          // Immediately redirect to verification page - do not write to database
           navigate(`/checkout/success?order_id=${order.id}&type=standard_order`);
         },
         onCancel: () => {

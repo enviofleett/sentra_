@@ -6,14 +6,58 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+/**
+ * VERIFY-PAYMENT Edge Function
+ * 
+ * SECURITY ARCHITECTURE:
+ * - This function is READ-ONLY - it does NOT update the database
+ * - The Paystack webhook is the ONLY source of truth for payment updates
+ * - This function is authenticated - users can only verify their own orders
+ * - Safe to call repeatedly (idempotent, spam-proof)
+ */
 serve(async (req: Request) => {
-  console.log(`[Verify Payment] Received ${req.method} request`);
+  console.log(`[Verify Payment] Received ${req.method} request at ${new Date().toISOString()}`);
 
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    // ========================
+    // AUTHENTICATION ENFORCEMENT
+    // ========================
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      console.error("[Verify Payment] SECURITY: No authorization header provided");
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    
+    // Create client with user's token for auth verification
+    const userSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: authData, error: authError } = await userSupabase.auth.getUser(token);
+
+    if (authError || !authData?.user) {
+      console.error("[Verify Payment] SECURITY: Invalid or expired token:", authError?.message);
+      return new Response(JSON.stringify({ error: "Invalid token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const userId = authData.user.id;
+    console.log(`[Verify Payment] Authenticated user: ${userId}`);
+
+    // Parse request body
     const { reference, orderId } = await req.json();
     
     if (!reference && !orderId) {
@@ -23,27 +67,21 @@ serve(async (req: Request) => {
       });
     }
 
-    console.log(`[Verify Payment] Verifying reference: ${reference}, orderId: ${orderId}`);
+    console.log(`[Verify Payment] Verifying - reference: ${reference}, orderId: ${orderId}`);
 
-    const paystackSecretKey = Deno.env.get("PAYSTACK_SECRET_KEY");
-    if (!paystackSecretKey) {
-      console.error("[Verify Payment] PAYSTACK_SECRET_KEY not configured");
-      return new Response(JSON.stringify({ error: "Payment service not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
+    // Service role client for database reads
     const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
+      supabaseUrl,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Get order to find payment reference
+    // ========================
+    // FETCH AND VERIFY ORDER OWNERSHIP
+    // ========================
     let paymentReference = reference;
     let order = null;
     
-    if (orderId && !paymentReference) {
+    if (orderId) {
       const { data: orderData, error: orderError } = await supabase
         .from("orders")
         .select("id, payment_reference, payment_status, paystack_status, total_amount, user_id")
@@ -58,6 +96,15 @@ serve(async (req: Request) => {
         });
       }
       
+      // SECURITY: Verify the order belongs to the authenticated user
+      if (orderData.user_id !== userId) {
+        console.error(`[Verify Payment] SECURITY: User ${userId} attempted to access order owned by ${orderData.user_id}`);
+        return new Response(JSON.stringify({ error: "Forbidden" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       order = orderData;
       paymentReference = orderData.payment_reference;
     }
@@ -69,9 +116,12 @@ serve(async (req: Request) => {
       });
     }
 
-    // If already paid, return success immediately
+    // ========================
+    // CHECK CURRENT STATUS (READ-ONLY)
+    // ========================
+    // If order is already marked as paid in our database, return success
     if (order && (order.payment_status === 'paid' || order.paystack_status === 'success')) {
-      console.log(`[Verify Payment] Order already marked as paid`);
+      console.log(`[Verify Payment] Order ${order.id} already marked as paid in database`);
       return new Response(JSON.stringify({ 
         verified: true, 
         status: "success",
@@ -82,9 +132,20 @@ serve(async (req: Request) => {
       });
     }
 
+    // ========================
+    // VERIFY WITH PAYSTACK API (READ-ONLY)
+    // ========================
+    const paystackSecretKey = Deno.env.get("PAYSTACK_SECRET_KEY");
+    if (!paystackSecretKey) {
+      console.error("[Verify Payment] PAYSTACK_SECRET_KEY not configured");
+      return new Response(JSON.stringify({ error: "Payment service not configured" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     console.log(`[Verify Payment] Calling Paystack verify API for: ${paymentReference}`);
 
-    // Call Paystack verify endpoint
     const paystackResponse = await fetch(
       `https://api.paystack.co/transaction/verify/${encodeURIComponent(paymentReference)}`,
       {
@@ -97,7 +158,7 @@ serve(async (req: Request) => {
     );
 
     const paystackData = await paystackResponse.json();
-    console.log(`[Verify Payment] Paystack response:`, JSON.stringify(paystackData));
+    console.log(`[Verify Payment] Paystack API response status: ${paystackData.status}`);
 
     if (!paystackData.status) {
       console.error("[Verify Payment] Paystack API error:", paystackData.message);
@@ -112,85 +173,46 @@ serve(async (req: Request) => {
     }
 
     const txData = paystackData.data;
-    const txStatus = txData.status; // success, failed, abandoned
-    const txAmount = txData.amount; // in kobo
-    const txReference = txData.reference;
+    const txStatus = txData.status; // success, failed, abandoned, pending
 
-    console.log(`[Verify Payment] Transaction status: ${txStatus}, Amount: ${txAmount} kobo`);
+    console.log(`[Verify Payment] Paystack transaction status: ${txStatus}`);
+
+    // ========================
+    // RETURN READ-ONLY STATUS
+    // ========================
+    // IMPORTANT: We do NOT update the database here. That is the webhook's job.
+    // This function only reports the current status from Paystack.
 
     if (txStatus === "success") {
-      // Get order if we don't have it yet
-      if (!order) {
-        const { data: orderData } = await supabase
-          .from("orders")
-          .select("id, total_amount, user_id, payment_status, paystack_status")
-          .eq("payment_reference", txReference)
-          .single();
-        order = orderData;
-      }
-
-      if (order && order.payment_status !== 'paid') {
-        // Verify amount matches
+      // Verify amount matches (sanity check)
+      if (order) {
         const expectedAmount = Math.round(order.total_amount * 100);
-        // Allow some tolerance for fees
-        const amountMatches = Math.abs(txAmount - expectedAmount) <= expectedAmount * 0.05; // 5% tolerance for fees
+        const amountMatches = txData.amount === expectedAmount;
+        console.log(`[Verify Payment] Amount check - Expected: ${expectedAmount}, Got: ${txData.amount}, Matches: ${amountMatches}`);
         
-        console.log(`[Verify Payment] Amount check - Expected: ~${expectedAmount}, Got: ${txAmount}, Matches: ${amountMatches}`);
-
-        if (amountMatches) {
-          // Update order status
-          const { error: updateError } = await supabase
-            .from("orders")
-            .update({
-              status: "processing",
-              payment_status: "paid",
-              paystack_status: "success",
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", order.id);
-
-          if (updateError) {
-            console.error("[Verify Payment] Failed to update order:", updateError);
-          } else {
-            console.log(`[Verify Payment] ✓ Order ${order.id} updated to paid/processing`);
-            
-            // Record profit split
-            try {
-              await supabase.rpc('record_profit_split', {
-                p_order_id: order.id,
-                p_commitment_id: null,
-                p_payment_reference: txReference,
-                p_total_amount: order.total_amount
-              });
-              console.log(`[Verify Payment] Profit split recorded`);
-            } catch (e) {
-              console.error("[Verify Payment] Profit split error (non-blocking):", e);
-            }
-          }
+        if (!amountMatches) {
+          console.error(`[Verify Payment] SECURITY: Amount mismatch detected`);
+          return new Response(JSON.stringify({ 
+            verified: false, 
+            status: "error",
+            message: "Payment amount mismatch - please contact support" 
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         }
       }
 
       return new Response(JSON.stringify({ 
         verified: true, 
         status: "success",
-        message: "Payment verified successfully",
-        amount: txAmount / 100
+        message: "Payment confirmed by Paystack"
       }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-    } else if (txStatus === "failed" || txStatus === "abandoned") {
-      // Update order to failed if needed
-      if (order && order.payment_status === 'pending') {
-        await supabase
-          .from("orders")
-          .update({
-            paystack_status: txStatus,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", order.id);
-      }
 
+    } else if (txStatus === "failed" || txStatus === "abandoned") {
       return new Response(JSON.stringify({ 
         verified: false, 
         status: txStatus,
@@ -199,8 +221,9 @@ serve(async (req: Request) => {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+
     } else {
-      // Still pending
+      // Still pending or unknown status
       return new Response(JSON.stringify({ 
         verified: false, 
         status: "pending",
@@ -212,7 +235,7 @@ serve(async (req: Request) => {
     }
 
   } catch (error: any) {
-    console.error("[Verify Payment] Error:", error);
+    console.error("[Verify Payment] Error:", error.message);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -31,30 +31,7 @@ interface ProductWithCost {
   name: string;
 }
 
-/**
- * Calculate the gross amount needed so customer pays Paystack fees
- * Fee structure: 1.5% + ₦100 (capped at ₦2,000)
- */
-function calculateGrossAmount(netAmount: number): number {
-  // Paystack fee: 1.5% + ₦100, capped at ₦2,000
-  const percentFee = 0.015;
-  const flatFee = 100;
-  const feeCap = 2000;
-  
-  // Calculate what the gross needs to be so that net = gross - fees
-  // For amounts where fee doesn't hit cap: gross = (net + flatFee) / (1 - percentFee)
-  // Then verify if fee exceeds cap
-  
-  let grossAmount = (netAmount + flatFee) / (1 - percentFee);
-  let calculatedFee = (grossAmount * percentFee) + flatFee;
-  
-  // If fee exceeds cap, recalculate with capped fee
-  if (calculatedFee > feeCap) {
-    grossAmount = netAmount + feeCap;
-  }
-  
-  return Math.round(grossAmount * 100) / 100; // Round to 2 decimal places
-}
+// NOTE: Merchant absorbs Paystack fees - customer pays exact order total
 
 /**
  * Calculate profit-based split amounts for Paystack subaccounts
@@ -336,11 +313,10 @@ serve(async (req) => {
       });
     }
 
-    // Calculate gross amount (customer pays fees)
-    const grossAmount = calculateGrossAmount(verifiedTotal);
-    const amountInKobo = Math.round(grossAmount * 100);
+    // Customer pays exact order total - merchant absorbs Paystack fees
+    const amountInKobo = Math.round(verifiedTotal * 100);
     
-    console.log(`[Initialize Payment] Net: ₦${verifiedTotal}, Gross (with fees): ₦${grossAmount}, Kobo: ${amountInKobo}`);
+    console.log(`[Initialize Payment] Amount: ₦${verifiedTotal}, Kobo: ${amountInKobo}`);
 
     // Build Paystack payload
     const paystackPayload: any = {
@@ -351,9 +327,7 @@ serve(async (req) => {
         order_id: orderId,
         user_id: user.id,
         customer_name: customerName,
-        type: 'standard_order',
-        net_amount: verifiedTotal,
-        gross_amount: grossAmount
+        type: 'standard_order'
       },
       callback_url: `${appBaseUrl}/checkout/success?order_id=${orderId}&type=standard_order`
     };
@@ -397,9 +371,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       paymentUrl: paystackData.data.authorization_url,
       reference: paystackData.data.reference,
-      amount: grossAmount,
-      netAmount: verifiedTotal,
-      feesIncluded: Math.round((grossAmount - verifiedTotal) * 100) / 100
+      amount: verifiedTotal
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

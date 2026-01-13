@@ -206,17 +206,35 @@ serve(async (req: Request) => {
 
         if (fetchError || !order) {
           console.error(`[Paystack Webhook] ERROR: Order not found for reference: ${reference}`, fetchError);
-          return new Response(JSON.stringify({ error: "Order not found" }), { status: 404 });
+          // Return 200 to prevent Paystack retries - order may have been deleted
+          return new Response(JSON.stringify({ received: true, error: "Order not found" }), { 
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
         }
 
         console.log(`[Paystack Webhook] Found order: ${order.id}`);
-        console.log(`[Paystack Webhook] Amount check - Expected: ${order.total_amount * 100} kobo, Received: ${amount} kobo`);
-
+        
+        // STRICT EQUALITY: Customer pays exact order total, merchant absorbs fees
         const expectedAmount = Math.round(order.total_amount * 100);
+        console.log(`[Paystack Webhook] Amount check - Expected: ${expectedAmount} kobo, Received: ${amount} kobo`);
+
         if (amount !== expectedAmount) {
           console.error(`[Paystack Webhook] SECURITY: Amount mismatch for order ${order.id} - Expected ${expectedAmount}, Got ${amount}`);
-          await supabase.from("orders").update({ paystack_status: "amount_mismatch" }).eq("payment_reference", reference);
-          return new Response(JSON.stringify({ error: "Amount mismatch" }), { status: 400 });
+          
+          // Update order with mismatch status but return 200 to prevent retries
+          await supabase.from("orders").update({ 
+            paystack_status: "amount_mismatch",
+            updated_at: new Date().toISOString()
+          }).eq("payment_reference", reference);
+          
+          return new Response(JSON.stringify({ 
+            received: true, 
+            error: "Amount mismatch" 
+          }), { 
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
         }
         console.log(`[Paystack Webhook] Amount verification: PASSED`);
 

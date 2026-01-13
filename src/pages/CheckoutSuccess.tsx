@@ -93,7 +93,8 @@ export default function CheckoutSuccess() {
         }
 
         // If still pending, call verify-payment edge function to check with Paystack directly
-        if (order.payment_status === 'pending' && retryCount < 3) {
+        // Note: verify-payment is now READ-ONLY - it reports Paystack status but doesn't update DB
+        if (order.payment_status === 'pending' && retryCount < 5) {
           console.log(`[CheckoutSuccess] Calling verify-payment API (attempt ${retryCount + 1})`);
           
           try {
@@ -105,21 +106,27 @@ export default function CheckoutSuccess() {
             
             if (verifyError) {
               console.error('[CheckoutSuccess] Verify API error:', verifyError);
+              // Continue with retry - don't fail immediately
             } else if (verifyResult?.verified && verifyResult?.status === 'success') {
-              // Payment confirmed by Paystack API
-              setVerificationStatus('success');
-              await clearCart();
-              
-              // Refetch order to get updated details
-              const { data: updatedOrder } = await supabase
+              // Paystack confirms payment - now wait for webhook to update DB
+              // Re-check the database to see if webhook has processed
+              const { data: refreshedOrder } = await supabase
                 .from('orders')
                 .select('id, total_amount, payment_status, status, customer_email, items')
                 .eq('id', orderId)
                 .single();
-              if (updatedOrder) {
-                setOrderDetails(updatedOrder as OrderDetails);
+              
+              if (refreshedOrder?.payment_status === 'paid') {
+                // Webhook has updated the order
+                setOrderDetails(refreshedOrder as OrderDetails);
+                setVerificationStatus('success');
+                await clearCart();
+                return;
+              } else {
+                // Paystack says success but webhook hasn't processed yet
+                // Continue retrying to give webhook time
+                console.log('[CheckoutSuccess] Paystack confirmed but waiting for webhook...');
               }
-              return;
             } else if (verifyResult?.status === 'failed' || verifyResult?.status === 'abandoned') {
               setVerificationStatus('failed');
               return;
@@ -128,9 +135,10 @@ export default function CheckoutSuccess() {
             console.error('[CheckoutSuccess] Verify API call failed:', e);
           }
           
-          // Still pending, retry
+          // Still pending, retry with increasing delay
           setRetryCount(prev => prev + 1);
-          setTimeout(verifyPayment, 3000);
+          const delay = Math.min(2000 + retryCount * 1000, 5000); // 2s, 3s, 4s, 5s, 5s
+          setTimeout(verifyPayment, delay);
         } else if (order.payment_status === 'pending') {
           // After retries exhausted, show pending state
           setVerificationStatus('pending');

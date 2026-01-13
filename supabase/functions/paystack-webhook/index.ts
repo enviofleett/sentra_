@@ -627,6 +627,14 @@ serve(async (req: Request) => {
   } catch (error: any) {
     console.error("[Paystack Webhook] CRITICAL ERROR:", error.message);
     console.error("[Paystack Webhook] Stack:", error.stack);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    // IMPORTANT: Always return 200 to Paystack to prevent retry storms
+    // The error has been logged and can be investigated manually
+    return new Response(JSON.stringify({ 
+      received: true, 
+      error: "Internal processing error - logged for review" 
+    }), { 
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
   }
 });

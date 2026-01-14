@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
@@ -8,6 +8,7 @@ import { useCart } from '@/contexts/CartContext';
 import { supabase } from '@/integrations/supabase/client';
 import { CheckCircle, Package, Users, Loader2, XCircle, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { toast } from 'sonner';
 
 type VerificationStatus = 'verifying' | 'success' | 'pending' | 'failed';
 
@@ -27,6 +28,7 @@ export default function CheckoutSuccess() {
   const [verificationStatus, setVerificationStatus] = useState<VerificationStatus>('verifying');
   const [orderDetails, setOrderDetails] = useState<OrderDetails | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const successNotificationShown = useRef(false);
 
   const orderId = searchParams.get('order_id');
   const commitmentId = searchParams.get('commitment_id');
@@ -58,6 +60,13 @@ export default function CheckoutSuccess() {
         if (commitment.status === 'committed_paid' || commitment.status === 'paid_finalized') {
           setVerificationStatus('success');
           await clearCart();
+          if (!successNotificationShown.current) {
+            toast.success('Payment Successful!', {
+              description: 'Your group buy commitment has been confirmed.',
+              duration: 5000,
+            });
+            successNotificationShown.current = true;
+          }
         } else if (commitment.status === 'committed_unpaid') {
           // Payment might still be processing
           if (retryCount < 5) {
@@ -89,6 +98,13 @@ export default function CheckoutSuccess() {
         if (order.payment_status === 'paid') {
           setVerificationStatus('success');
           await clearCart();
+          if (!successNotificationShown.current) {
+            toast.success('Payment Successful!', {
+              description: `Your order #${order.id.slice(0, 8).toUpperCase()} has been confirmed.`,
+              duration: 5000,
+            });
+            successNotificationShown.current = true;
+          }
           return;
         }
 
@@ -121,6 +137,13 @@ export default function CheckoutSuccess() {
                 setOrderDetails(refreshedOrder as OrderDetails);
                 setVerificationStatus('success');
                 await clearCart();
+                if (!successNotificationShown.current) {
+                  toast.success('Payment Successful!', {
+                    description: `Your order #${refreshedOrder.id.slice(0, 8).toUpperCase()} has been confirmed.`,
+                    duration: 5000,
+                  });
+                  successNotificationShown.current = true;
+                }
                 return;
               } else {
                 // Paystack says success but webhook hasn't processed yet

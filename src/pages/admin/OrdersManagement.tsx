@@ -60,6 +60,55 @@ export function OrdersManagement() {
     fetchOrders();
   }, [selectedVendor, timePeriod]);
 
+  // Set up real-time subscription for order updates
+  useEffect(() => {
+    const channel = supabase
+      .channel('orders-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders'
+        },
+        (payload) => {
+          console.log('Order updated via real-time:', payload);
+          // Refresh orders when any order is updated
+          fetchOrders();
+          fetchAnalytics();
+          
+          // Show notification for payment status changes
+          if (payload.eventType === 'UPDATE') {
+            const oldOrder = payload.old as Order;
+            const newOrder = payload.new as Order;
+            
+            if (oldOrder.payment_status !== newOrder.payment_status) {
+              if (newOrder.payment_status === 'paid') {
+                toast.success('Payment Confirmed', {
+                  description: `Order #${newOrder.id.slice(0, 8)} payment has been confirmed.`,
+                });
+              } else if (newOrder.payment_status === 'failed') {
+                toast.error('Payment Failed', {
+                  description: `Order #${newOrder.id.slice(0, 8)} payment failed.`,
+                });
+              }
+            }
+            
+            if (oldOrder.status !== newOrder.status) {
+              toast.info('Order Status Updated', {
+                description: `Order #${newOrder.id.slice(0, 8)} status changed to ${newOrder.status}.`,
+              });
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   const fetchVendors = async () => {
     const { data } = await supabase
       .from('vendors')

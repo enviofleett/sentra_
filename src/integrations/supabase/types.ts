@@ -790,6 +790,7 @@ export type Database = {
           cost_price: number | null
           created_at: string | null
           description: string | null
+          gender: string | null
           id: string
           image_url: string | null
           images: Json | null
@@ -814,6 +815,7 @@ export type Database = {
           cost_price?: number | null
           created_at?: string | null
           description?: string | null
+          gender?: string | null
           id?: string
           image_url?: string | null
           images?: Json | null
@@ -838,6 +840,7 @@ export type Database = {
           cost_price?: number | null
           created_at?: string | null
           description?: string | null
+          gender?: string | null
           id?: string
           image_url?: string | null
           images?: Json | null

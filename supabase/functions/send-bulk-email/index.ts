@@ -13,12 +13,23 @@ interface BulkEmailRequest {
   textContent?: string;
   recipientFilter: 'all' | 'verified' | 'pending';
   campaignId?: string;
+  testEmail?: string; // For sending test emails
 }
 
 interface WaitlistEntry {
   id: string;
   email: string;
   full_name: string | null;
+}
+
+// Helper to strip HTML tags for plain text fallback
+function stripHtml(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 serve(async (req) => {
@@ -28,16 +39,83 @@ serve(async (req) => {
   }
 
   try {
-    const { subject, htmlContent, textContent, recipientFilter, campaignId }: BulkEmailRequest = await req.json();
+    const { subject, htmlContent, textContent, recipientFilter, campaignId, testEmail }: BulkEmailRequest = await req.json();
 
-    console.log('📧 Processing bulk email request:', { subject, recipientFilter, campaignId });
+    console.log('📧 Processing email request:', { subject, recipientFilter, campaignId, testEmail: !!testEmail });
 
     // Validate inputs
     if (!subject || !htmlContent) {
       throw new Error('Subject and HTML content are required');
     }
 
-    // Initialize Supabase client
+    // Configure SMTP client
+    const gmailEmail = Deno.env.get('GMAIL_EMAIL');
+    const gmailPassword = Deno.env.get('GMAIL_APP_PASSWORD');
+
+    if (!gmailEmail || !gmailPassword) {
+      throw new Error('Gmail credentials not configured');
+    }
+
+    const client = new SMTPClient({
+      connection: {
+        hostname: "smtp.gmail.com",
+        port: 465,
+        tls: true,
+        auth: {
+          username: gmailEmail,
+          password: gmailPassword,
+        },
+      },
+    });
+
+    console.log('✅ SMTP client created');
+
+    // If testEmail is provided, send only to that address
+    if (testEmail) {
+      console.log(`📧 Sending test email to: ${testEmail}`);
+      
+      // Personalize with sample data
+      let personalizedHtml = htmlContent
+        .replace(/{{name}}/g, 'Test User')
+        .replace(/{{email}}/g, testEmail);
+      
+      // Generate plain text from HTML if not provided
+      const plainText = textContent 
+        ? textContent.replace(/{{name}}/g, 'Test User').replace(/{{email}}/g, testEmail)
+        : stripHtml(personalizedHtml);
+
+      try {
+        await client.send({
+          from: `Sentra <${gmailEmail}>`,
+          to: testEmail,
+          subject: `[TEST] ${subject.replace(/{{name}}/g, 'Test User')}`,
+          content: plainText,
+          html: personalizedHtml,
+        });
+        
+        await client.close();
+        
+        console.log('✅ Test email sent successfully');
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: `Test email sent to ${testEmail}`,
+            isTest: true
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      } catch (err: any) {
+        await client.close();
+        console.error('❌ Test email failed:', err);
+        throw new Error(`Failed to send test email: ${err.message}`);
+      }
+    }
+
+    // Initialize Supabase client for bulk sending
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -62,6 +140,7 @@ serve(async (req) => {
     }
 
     if (!recipients || recipients.length === 0) {
+      await client.close();
       return new Response(
         JSON.stringify({ 
           success: true, 
@@ -87,28 +166,6 @@ serve(async (req) => {
         .eq('id', campaignId);
     }
 
-    // Configure SMTP client
-    const gmailEmail = Deno.env.get('GMAIL_EMAIL');
-    const gmailPassword = Deno.env.get('GMAIL_APP_PASSWORD');
-
-    if (!gmailEmail || !gmailPassword) {
-      throw new Error('Gmail credentials not configured');
-    }
-
-    const client = new SMTPClient({
-      connection: {
-        hostname: "smtp.gmail.com",
-        port: 465,
-        tls: true,
-        auth: {
-          username: gmailEmail,
-          password: gmailPassword,
-        },
-      },
-    });
-
-    console.log('✅ SMTP client created');
-
     let sent = 0;
     let failed = 0;
     const errors: string[] = [];
@@ -122,9 +179,11 @@ serve(async (req) => {
       
       const batchPromises = batch.map(async (recipient: WaitlistEntry) => {
         try {
+          const recipientName = recipient.full_name || 'Valued Customer';
+          
           // Personalize email content
           let personalizedHtml = htmlContent
-            .replace(/{{name}}/g, recipient.full_name || 'Valued Customer')
+            .replace(/{{name}}/g, recipientName)
             .replace(/{{email}}/g, recipient.email);
           
           // Add tracking pixel if campaign is being tracked
@@ -149,16 +208,15 @@ serve(async (req) => {
             );
           }
           
+          // Generate plain text from HTML if not provided
           const personalizedText = textContent
-            ? textContent
-                .replace(/{{name}}/g, recipient.full_name || 'Valued Customer')
-                .replace(/{{email}}/g, recipient.email)
-            : '';
+            ? textContent.replace(/{{name}}/g, recipientName).replace(/{{email}}/g, recipient.email)
+            : stripHtml(personalizedHtml);
 
           await client.send({
             from: `Sentra <${gmailEmail}>`,
             to: recipient.email,
-            subject: subject.replace(/{{name}}/g, recipient.full_name || 'Valued Customer'),
+            subject: subject.replace(/{{name}}/g, recipientName),
             content: personalizedText,
             html: personalizedHtml,
           });
@@ -230,7 +288,7 @@ serve(async (req) => {
       }
     );
   } catch (error: any) {
-    console.error('❌ Error sending bulk email:', error);
+    console.error('❌ Error sending email:', error);
     return new Response(
       JSON.stringify({ 
         success: false, 

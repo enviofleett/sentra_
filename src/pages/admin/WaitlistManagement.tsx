@@ -259,19 +259,24 @@ export default function WaitlistManagement() {
     setSendingTestEmail(true);
 
     try {
+      console.log('Sending test email to:', testEmailAddress);
       const { data, error } = await supabase.functions.invoke('send-bulk-email', {
         body: {
           subject: emailSubject,
           htmlContent: emailContent,
-          testEmail: testEmailAddress
+          testEmail: testEmailAddress.trim()
         }
       });
+
+      console.log('Test email response:', { data, error });
 
       if (error) {
         console.error('Test email error:', error);
         toast.error('Failed to send test email: ' + error.message);
       } else if (data?.success) {
-        toast.success(`Test email sent to ${testEmailAddress}`);
+        toast.success(`✅ Test email sent to ${testEmailAddress}! Check your inbox.`, {
+          duration: 5000
+        });
       } else {
         toast.error(data?.error || 'Failed to send test email');
       }

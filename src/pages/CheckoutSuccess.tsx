@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
@@ -35,7 +35,7 @@ export default function CheckoutSuccess() {
   const type = searchParams.get('type');
   const isGroupBuy = type === 'group_buy';
 
-  const verifyPayment = async () => {
+  const verifyPayment = useCallback(async () => {
     if (!orderId && !commitmentId) {
       setVerificationStatus('failed');
       return;
@@ -173,13 +173,72 @@ export default function CheckoutSuccess() {
       console.error('Payment verification error:', error);
       setVerificationStatus('failed');
     }
-  };
+  }, [orderId, commitmentId, isGroupBuy, retryCount, clearCart, successNotificationShown]);
+
+  // Set up real-time subscription for order updates (if orderId exists)
+  useEffect(() => {
+    if (!orderId) return;
+
+    console.log('[CheckoutSuccess] Setting up real-time subscription for order:', orderId);
+    
+    const channel = supabase
+      .channel(`order-${orderId}-success`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'orders',
+          filter: `id=eq.${orderId}`
+        },
+        (payload) => {
+          console.log('[CheckoutSuccess] Order updated via real-time:', payload);
+          const updatedOrder = payload.new as OrderDetails;
+          
+          // If payment status changed to paid, update state and show notification
+          if (updatedOrder.payment_status === 'paid') {
+            setOrderDetails(updatedOrder);
+            setVerificationStatus('success');
+            clearCart();
+            
+            if (!successNotificationShown.current) {
+              toast.success('Payment Successful!', {
+                description: `Your order #${updatedOrder.id.slice(0, 8).toUpperCase()} has been confirmed.`,
+                duration: 5000,
+              });
+              successNotificationShown.current = true;
+            }
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[CheckoutSuccess] Real-time subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('[CheckoutSuccess] Successfully subscribed to order updates');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[CheckoutSuccess] Real-time subscription error');
+        }
+      });
+
+    return () => {
+      console.log('[CheckoutSuccess] Cleaning up real-time subscription');
+      supabase.removeChannel(channel);
+    };
+  }, [orderId, clearCart]);
 
   useEffect(() => {
     // Start verification after a short delay to allow webhook to process
-    const timer = setTimeout(verifyPayment, 1500);
+    if (!orderId && !commitmentId) {
+      setVerificationStatus('failed');
+      return;
+    }
+    
+    const timer = setTimeout(() => {
+      verifyPayment();
+    }, 1500);
+    
     return () => clearTimeout(timer);
-  }, []);
+  }, [orderId, commitmentId, verifyPayment]);
 
   const displayId = orderId?.slice(0, 8) || commitmentId?.slice(0, 8) || 'N/A';
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -62,8 +62,10 @@ export function OrdersManagement() {
 
   // Set up real-time subscription for order updates
   useEffect(() => {
+    console.log('[OrdersManagement] Setting up real-time subscription');
+    
     const channel = supabase
-      .channel('orders-changes')
+      .channel('orders-changes-admin')
       .on(
         'postgres_changes',
         {
@@ -72,10 +74,7 @@ export function OrdersManagement() {
           table: 'orders'
         },
         (payload) => {
-          console.log('Order updated via real-time:', payload);
-          // Refresh orders when any order is updated
-          fetchOrders();
-          fetchAnalytics();
+          console.log('[OrdersManagement] Order updated via real-time:', payload);
           
           // Show notification for payment status changes
           if (payload.eventType === 'UPDATE') {
@@ -100,14 +99,31 @@ export function OrdersManagement() {
               });
             }
           }
+          
+          // Refresh orders when any order is updated
+          // Use the current state values to refetch with current filters
+          fetchOrders();
+          fetchAnalytics();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[OrdersManagement] Real-time subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('[OrdersManagement] Successfully subscribed to order updates');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[OrdersManagement] Real-time subscription error');
+          toast.error('Real-time updates unavailable', {
+            description: 'Order updates may be delayed. Please refresh the page.',
+          });
+        }
+      });
 
     return () => {
+      console.log('[OrdersManagement] Cleaning up real-time subscription');
       supabase.removeChannel(channel);
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Intentionally empty - subscription should persist regardless of filter changes
 
   const fetchVendors = async () => {
     const { data } = await supabase
@@ -117,7 +133,7 @@ export function OrdersManagement() {
     setVendors(data || []);
   };
 
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = useCallback(async () => {
     setAnalyticsLoading(true);
     try {
       const [breakdown, timeline] = await Promise.all([
@@ -131,9 +147,9 @@ export function OrdersManagement() {
     } finally {
       setAnalyticsLoading(false);
     }
-  };
+  }, []);
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     setLoading(true);
     let query = supabase
       .from('orders')
@@ -174,7 +190,7 @@ export function OrdersManagement() {
       setOrders(filteredOrders);
     }
     setLoading(false);
-  };
+  }, [selectedVendor, timePeriod]);
 
   const updateOrderStatus = async (orderId: string, newStatus: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled') => {
     const { error } = await supabase

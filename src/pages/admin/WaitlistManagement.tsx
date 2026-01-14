@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { CheckCircle, ExternalLink, Users, Gift, Loader2, Settings, UserPlus, Download, Mail, Send, BarChart3, Eye, MousePointerClick } from 'lucide-react';
+import { CheckCircle, ExternalLink, Users, Gift, Loader2, Settings, UserPlus, Download, Mail, Send, BarChart3, Eye, MousePointerClick, TestTube } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface WaitlistEntry {
@@ -62,6 +62,8 @@ export default function WaitlistManagement() {
   const [emailContent, setEmailContent] = useState('');
   const [recipientFilter, setRecipientFilter] = useState<RecipientFilter>('all');
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [sendingTestEmail, setSendingTestEmail] = useState(false);
+  const [testEmailAddress, setTestEmailAddress] = useState('');
   
   // Email analytics state
   const [campaigns, setCampaigns] = useState<EmailCampaign[]>([]);
@@ -236,6 +238,51 @@ export default function WaitlistManagement() {
     return stats.total;
   };
 
+  const handleSendTestEmail = async () => {
+    if (!emailSubject.trim() || !emailContent.trim()) {
+      toast.error('Please fill in subject and content first');
+      return;
+    }
+
+    if (!testEmailAddress.trim()) {
+      toast.error('Please enter a test email address');
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(testEmailAddress)) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    setSendingTestEmail(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('send-bulk-email', {
+        body: {
+          subject: emailSubject,
+          htmlContent: emailContent,
+          testEmail: testEmailAddress
+        }
+      });
+
+      if (error) {
+        console.error('Test email error:', error);
+        toast.error('Failed to send test email: ' + error.message);
+      } else if (data?.success) {
+        toast.success(`Test email sent to ${testEmailAddress}`);
+      } else {
+        toast.error(data?.error || 'Failed to send test email');
+      }
+    } catch (err) {
+      console.error('Test email error:', err);
+      toast.error('Failed to send test email');
+    }
+
+    setSendingTestEmail(false);
+  };
+
   const handleSendBulkEmail = async () => {
     if (!emailSubject.trim() || !emailContent.trim()) {
       toast.error('Please fill in subject and content');
@@ -290,6 +337,7 @@ export default function WaitlistManagement() {
         setEmailDialogOpen(false);
         setEmailSubject('');
         setEmailContent('');
+        setTestEmailAddress('');
         fetchData(); // Refresh campaigns list
       } else {
         toast.error(data?.error || 'Failed to send emails');
@@ -539,9 +587,42 @@ export default function WaitlistManagement() {
                     </div>
                   </div>
                 )}
+
+                {/* Test Email Section */}
+                <div className="space-y-2 border-t pt-4">
+                  <Label className="flex items-center gap-2">
+                    <TestTube className="h-4 w-4" />
+                    Send Test Email
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Send a test email to yourself before sending to all recipients.
+                  </p>
+                  <div className="flex gap-2">
+                    <Input
+                      type="email"
+                      placeholder="Enter your email address..."
+                      value={testEmailAddress}
+                      onChange={(e) => setTestEmailAddress(e.target.value)}
+                      className="flex-1 bg-background/50"
+                    />
+                    <Button 
+                      variant="outline"
+                      onClick={handleSendTestEmail} 
+                      disabled={sendingTestEmail || !emailSubject || !emailContent || !testEmailAddress}
+                      className="gap-2"
+                    >
+                      {sendingTestEmail ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <TestTube className="h-4 w-4" />
+                      )}
+                      Send Test
+                    </Button>
+                  </div>
+                </div>
               </div>
 
-              <DialogFooter>
+              <DialogFooter className="flex-col sm:flex-row gap-2">
                 <Button variant="outline" onClick={() => setEmailDialogOpen(false)}>
                   Cancel
                 </Button>

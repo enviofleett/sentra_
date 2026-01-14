@@ -89,7 +89,7 @@ export const Footer = () => {
               <li className="flex items-center gap-3">
                 <Mail className="h-4 w-4 text-background/40 flex-shrink-0" />
                 <a href="mailto:hello@sentra.com" className="text-sm text-background/60 hover:text-background transition-colors">
-                  hello@sentra.com
+                  support@sentra.africa
                 </a>
               </li>
               <li className="flex items-center gap-3">

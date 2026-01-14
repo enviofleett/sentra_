@@ -94,8 +94,8 @@ export const Footer = () => {
               </li>
               <li className="flex items-center gap-3">
                 <Instagram className="h-4 w-4 text-background/40 flex-shrink-0" />
-                <a href="https://instagram.com/sentra" target="_blank" rel="noopener noreferrer" className="text-sm text-background/60 hover:text-background transition-colors">
-                  @sentra
+                <a href="https://instagram.com/sentraafrica" target="_blank" rel="noopener noreferrer" className="text-sm text-background/60 hover:text-background transition-colors">
+                  @sentraafrica
                 </a>
               </li>
             </ul>

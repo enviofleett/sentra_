@@ -85,7 +85,11 @@ serve(async (req) => {
         : stripHtml(personalizedHtml);
 
       try {
-        await client.send({
+        console.log(`📧 Attempting to send to: ${testEmail}`);
+        console.log(`📧 From: Sentra <${gmailEmail}>`);
+        console.log(`📧 Subject: [TEST] ${subject.replace(/{{name}}/g, 'Test User')}`);
+        
+        const sendResult = await client.send({
           from: `Sentra <${gmailEmail}>`,
           to: testEmail,
           subject: `[TEST] ${subject.replace(/{{name}}/g, 'Test User')}`,
@@ -93,15 +97,19 @@ serve(async (req) => {
           html: personalizedHtml,
         });
         
+        console.log('📧 SMTP send result:', JSON.stringify(sendResult));
+        
         await client.close();
         
-        console.log('✅ Test email sent successfully');
+        console.log('✅ Test email sent successfully to:', testEmail);
+        console.log('📧 Check spam/junk folder if not in inbox');
         
         return new Response(
           JSON.stringify({ 
             success: true, 
-            message: `Test email sent to ${testEmail}`,
-            isTest: true
+            message: `Test email sent to ${testEmail}. Check spam folder if not in inbox.`,
+            isTest: true,
+            sentFrom: gmailEmail
           }),
           {
             status: 200,
@@ -109,8 +117,13 @@ serve(async (req) => {
           }
         );
       } catch (err: any) {
-        await client.close();
-        console.error('❌ Test email failed:', err);
+        console.error('❌ Test email SMTP error:', err);
+        console.error('❌ Error details:', JSON.stringify(err, Object.getOwnPropertyNames(err)));
+        try {
+          await client.close();
+        } catch (closeErr) {
+          console.error('❌ Error closing client:', closeErr);
+        }
         throw new Error(`Failed to send test email: ${err.message}`);
       }
     }

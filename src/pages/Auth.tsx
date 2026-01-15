@@ -51,6 +51,9 @@ export const AuthFormContent: React.FC<AuthFormContentProps> = ({
   const navigate = externalNavigate || defaultNavigate;
   const { signIn, signUp } = useAuth();
   const [activeTab, setActiveTab] = useState<'signin' | 'signup'>(referralCode ? 'signup' : initialTab);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [sendingResetEmail, setSendingResetEmail] = useState(false);
 
   const signInForm = useForm<SignInFormData>({
     resolver: zodResolver(signInSchema),
@@ -61,6 +64,49 @@ export const AuthFormContent: React.FC<AuthFormContentProps> = ({
     resolver: zodResolver(signUpSchema),
     defaultValues: { fullName: '', email: '', password: '' }
   });
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotPasswordEmail.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Please enter your email address',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setSendingResetEmail(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotPasswordEmail.trim(), {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) {
+        toast({
+          title: 'Error',
+          description: error.message,
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      toast({
+        title: 'Email Sent',
+        description: 'Check your inbox for the password reset link.'
+      });
+      setShowForgotPassword(false);
+      setForgotPasswordEmail('');
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: 'An unexpected error occurred. Please try again.',
+        variant: 'destructive'
+      });
+    } finally {
+      setSendingResetEmail(false);
+    }
+  };
 
   const handleSignIn = async (data: SignInFormData) => {
     try {
@@ -177,55 +223,93 @@ export const AuthFormContent: React.FC<AuthFormContentProps> = ({
       </TabsList>
       
       <TabsContent value="signin" className="mt-4">
-        <Form {...signInForm}>
-          <form onSubmit={signInForm.handleSubmit(handleSignIn)} className="space-y-4">
-            <FormField
-              control={signInForm.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="email" 
-                      placeholder="you@example.com" 
-                      autoComplete="email"
-                      {...field} 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={signInForm.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Password</FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="password" 
-                      placeholder="••••••••" 
-                      autoComplete="current-password"
-                      {...field} 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <Button 
-              type="submit" 
-              className="w-full" 
-              disabled={signInForm.formState.isSubmitting}
+        {showForgotPassword ? (
+          <form onSubmit={handleForgotPassword} className="space-y-4">
+            <div className="text-center mb-4">
+              <h3 className="font-semibold">Reset Password</h3>
+              <p className="text-sm text-muted-foreground">Enter your email to receive a reset link</p>
+            </div>
+            <div className="space-y-2">
+              <Input
+                type="email"
+                placeholder="you@example.com"
+                value={forgotPasswordEmail}
+                onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                autoComplete="email"
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={sendingResetEmail}>
+              {sendingResetEmail ? 'Sending...' : 'Send Reset Link'}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full"
+              onClick={() => setShowForgotPassword(false)}
             >
-              {signInForm.formState.isSubmitting ? 'Signing in...' : 'Sign In'}
+              Back to Sign In
             </Button>
           </form>
-        </Form>
+        ) : (
+          <Form {...signInForm}>
+            <form onSubmit={signInForm.handleSubmit(handleSignIn)} className="space-y-4">
+              <FormField
+                control={signInForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="email" 
+                        placeholder="you@example.com" 
+                        autoComplete="email"
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={signInForm.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="password" 
+                        placeholder="••••••••" 
+                        autoComplete="current-password"
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <Button 
+                type="submit" 
+                className="w-full" 
+                disabled={signInForm.formState.isSubmitting}
+              >
+                {signInForm.formState.isSubmitting ? 'Signing in...' : 'Sign In'}
+              </Button>
+
+              <Button
+                type="button"
+                variant="link"
+                className="w-full text-sm"
+                onClick={() => setShowForgotPassword(true)}
+              >
+                Forgot your password?
+              </Button>
+            </form>
+          </Form>
+        )}
       </TabsContent>
 
       <TabsContent value="signup" className="mt-4">

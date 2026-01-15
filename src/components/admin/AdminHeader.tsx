@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Package, 
@@ -13,12 +13,14 @@ import {
   Tag,
   UserPlus,
   Wallet,
-  FileText
+  FileText,
+  LogOut
 } from 'lucide-react';
 import sentraLogo from '@/assets/sentra-logo.png';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 
 const navigation = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
@@ -37,6 +39,8 @@ const navigation = [
 
 export function AdminHeader() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
   const [open, setOpen] = useState(false);
 
   const isActive = (path: string) => {
@@ -44,6 +48,11 @@ export function AdminHeader() {
       return location.pathname === '/admin';
     }
     return location.pathname.startsWith(path);
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/');
   };
 
   return (
@@ -81,6 +90,15 @@ export function AdminHeader() {
                 </Button>
               </Link>
             ))}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLogout}
+              className="gap-1.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Logout
+            </Button>
           </nav>
 
           {/* Mobile/Tablet Navigation */}
@@ -113,6 +131,17 @@ export function AdminHeader() {
                     </Button>
                   </Link>
                 ))}
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setOpen(false);
+                    handleLogout();
+                  }}
+                  className="w-full justify-start gap-3 h-11 text-destructive hover:text-destructive hover:bg-destructive/10"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </Button>
               </nav>
             </SheetContent>
           </Sheet>

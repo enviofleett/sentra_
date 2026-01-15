@@ -107,6 +107,51 @@ export type Database = {
         }
         Relationships: []
       }
+      articles: {
+        Row: {
+          author_id: string | null
+          content: string
+          cover_image_url: string | null
+          created_at: string
+          excerpt: string | null
+          id: string
+          is_featured: boolean | null
+          is_published: boolean | null
+          published_at: string | null
+          slug: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          author_id?: string | null
+          content: string
+          cover_image_url?: string | null
+          created_at?: string
+          excerpt?: string | null
+          id?: string
+          is_featured?: boolean | null
+          is_published?: boolean | null
+          published_at?: string | null
+          slug: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string | null
+          content?: string
+          cover_image_url?: string | null
+          created_at?: string
+          excerpt?: string | null
+          id?: string
+          is_featured?: boolean | null
+          is_published?: boolean | null
+          published_at?: string | null
+          slug?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       cart_items: {
         Row: {
           created_at: string | null
@@ -499,6 +544,86 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      membership_transactions: {
+        Row: {
+          amount: number
+          balance_after: number
+          created_at: string
+          description: string | null
+          id: string
+          metadata: Json | null
+          reference_id: string | null
+          reference_type: string | null
+          type: string
+          user_id: string
+          wallet_id: string
+        }
+        Insert: {
+          amount: number
+          balance_after: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          reference_id?: string | null
+          reference_type?: string | null
+          type: string
+          user_id: string
+          wallet_id: string
+        }
+        Update: {
+          amount?: number
+          balance_after?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          reference_id?: string | null
+          reference_type?: string | null
+          type?: string
+          user_id?: string
+          wallet_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "membership_transactions_wallet_id_fkey"
+            columns: ["wallet_id"]
+            isOneToOne: false
+            referencedRelation: "membership_wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      membership_wallets: {
+        Row: {
+          balance: number
+          created_at: string
+          id: string
+          total_deposited: number
+          total_spent: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          balance?: number
+          created_at?: string
+          id?: string
+          total_deposited?: number
+          total_spent?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          id?: string
+          total_deposited?: number
+          total_spent?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       monthly_volumes: {
         Row: {
@@ -1673,11 +1798,38 @@ export type Database = {
           marketing_budget_amount: number
         }[]
       }
+      check_membership_status: {
+        Args: { p_user_id: string }
+        Returns: {
+          balance: number
+          is_member: boolean
+          required_amount: number
+        }[]
+      }
       cleanup_expired_campaigns: { Args: never; Returns: undefined }
+      credit_membership_wallet: {
+        Args: {
+          p_amount: number
+          p_description?: string
+          p_reference: string
+          p_user_id: string
+        }
+        Returns: string
+      }
       credit_waitlist_reward: {
         Args: { p_amount: number; p_user_id: string }
         Returns: boolean
       }
+      debit_membership_wallet: {
+        Args: {
+          p_amount: number
+          p_description?: string
+          p_order_id: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      ensure_membership_wallet: { Args: { p_user_id: string }; Returns: string }
       ensure_user_wallet: { Args: { p_user_id: string }; Returns: string }
       generate_affiliate_code: { Args: { p_user_id: string }; Returns: string }
       has_role: {

@@ -605,6 +605,57 @@ serve(async (req: Request) => {
           message: "Final payment processed successfully",
           order_id: newOrder.id 
         }), { status: 200 });
+      } else if (paymentType === 'membership_deposit') {
+        // --- MEMBERSHIP WALLET DEPOSIT ---
+        const userId = metadata?.user_id;
+        if (!userId) {
+          console.error("[Paystack Webhook] ERROR: membership_deposit missing user_id");
+          return new Response(JSON.stringify({ error: "Missing user ID" }), { status: 400 });
+        }
+
+        console.log(`[Paystack Webhook] Membership Deposit - User ID: ${userId}`);
+
+        // Credit the membership wallet
+        const depositAmount = amount / 100; // Convert from kobo
+        const { data: transactionId, error: creditError } = await supabase
+          .rpc('credit_membership_wallet', {
+            p_user_id: userId,
+            p_amount: depositAmount,
+            p_reference: reference,
+            p_description: 'Membership deposit via Paystack'
+          });
+
+        if (creditError) {
+          console.error(`[Paystack Webhook] Membership credit error:`, creditError);
+          return new Response(JSON.stringify({ error: "Failed to credit wallet" }), { status: 500 });
+        }
+
+        console.log(`[Paystack Webhook] SUCCESS: Membership wallet credited - Transaction: ${transactionId}`);
+        
+        // Send confirmation email
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('email, full_name')
+          .eq('id', userId)
+          .single();
+
+        if (profile?.email) {
+          supabase.functions.invoke('send-email', {
+            body: {
+              to: profile.email,
+              templateId: 'MEMBERSHIP_DEPOSIT_SUCCESS',
+              data: {
+                customer_name: profile.full_name || 'Member',
+                amount: depositAmount.toLocaleString(),
+              }
+            }
+          }).catch(err => console.error('[Paystack Webhook] Email error:', err));
+        }
+
+        return new Response(JSON.stringify({ 
+          message: "Membership deposit processed",
+          transaction_id: transactionId 
+        }), { status: 200 });
       }
 
       return new Response(JSON.stringify({ message: "Webhook processed" }), { status: 200 });

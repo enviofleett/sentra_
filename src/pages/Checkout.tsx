@@ -5,17 +5,17 @@ import { Footer } from '@/components/layout/Footer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-// sendEmail removed - emails are now sent by the webhook after payment confirmation
 import { toast } from '@/hooks/use-toast';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { AuthFormContent } from '@/pages/Auth';
+import { Phone } from 'lucide-react';
 
 const checkoutSchema = z.object({
   fullName: z.string().min(2, 'Name must be at least 2 characters'),
@@ -36,6 +36,10 @@ export default function Checkout() {
   const [termsContent, setTermsContent] = useState('');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [emailPreFilled, setEmailPreFilled] = useState(false);
+  const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
+  const [phoneInput, setPhoneInput] = useState('');
+  const [savingPhone, setSavingPhone] = useState(false);
+  const [profileChecked, setProfileChecked] = useState(false);
 
   const form = useForm<CheckoutFormData>({
     resolver: zodResolver(checkoutSchema),
@@ -65,6 +69,36 @@ export default function Checkout() {
     }
   };
 
+  // Check user profile for missing phone number
+  useEffect(() => {
+    const checkProfile = async () => {
+      if (!user || profileChecked) return;
+      
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('phone, full_name')
+        .eq('id', user.id)
+        .maybeSingle();
+      
+      setProfileChecked(true);
+      
+      // Pre-fill form with profile data
+      if (profile?.full_name) {
+        form.setValue('fullName', profile.full_name);
+      }
+      if (profile?.phone) {
+        form.setValue('phone', profile.phone);
+      } else {
+        // Show phone modal if no phone number
+        setIsPhoneModalOpen(true);
+      }
+    };
+    
+    if (user && !authLoading) {
+      checkProfile();
+    }
+  }, [user, authLoading, profileChecked, form]);
+
   // Handle cart empty check
   useEffect(() => {
     if (items.length === 0) {
@@ -86,6 +120,43 @@ export default function Checkout() {
       setEmailPreFilled(true);
     }
   }, [user, emailPreFilled, form]);
+
+  // Save phone number to profile
+  const handleSavePhone = async () => {
+    if (!phoneInput || phoneInput.length < 10) {
+      toast({
+        title: 'Invalid phone number',
+        description: 'Please enter a valid phone number (at least 10 digits)',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setSavingPhone(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ phone: phoneInput })
+        .eq('id', user!.id);
+
+      if (error) throw error;
+
+      form.setValue('phone', phoneInput);
+      setIsPhoneModalOpen(false);
+      toast({
+        title: 'Phone number saved',
+        description: 'Your phone number has been added to your profile.',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to save phone number',
+        variant: 'destructive'
+      });
+    } finally {
+      setSavingPhone(false);
+    }
+  };
 
   // Handle successful authentication
   const handleAuthSuccess = () => {
@@ -305,6 +376,39 @@ export default function Checkout() {
             onSuccess={handleAuthSuccess}
             navigate={navigate}
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* Phone Number Modal - Required for waitlist users */}
+      <Dialog open={isPhoneModalOpen} onOpenChange={() => {}}>
+        <DialogContent className="max-w-sm [&>button]:hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Phone className="h-5 w-5 text-primary" />
+              Phone Number Required
+            </DialogTitle>
+            <DialogDescription>
+              Please add your phone number to continue with checkout. This is required for delivery coordination.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <Input
+              type="tel"
+              placeholder="+234 800 000 0000"
+              value={phoneInput}
+              onChange={(e) => setPhoneInput(e.target.value)}
+              className="text-lg"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={handleSavePhone}
+              disabled={savingPhone || phoneInput.length < 10}
+              className="w-full"
+            >
+              {savingPhone ? 'Saving...' : 'Save & Continue'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

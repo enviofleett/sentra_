@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Gift, Clock, Instagram, Star, Percent, Truck, Shield, Sparkles, Heart, Eye, Settings } from 'lucide-react';
+import { Loader2, Gift, Clock, Instagram, Star, Percent, Truck, Shield, Sparkles, Heart, Eye, Settings, Phone } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -118,13 +118,14 @@ function WaitlistFormModal({
 }) {
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
   const [instagramHandle, setInstagramHandle] = useState('');
   const [facebookHandle, setFacebookHandle] = useState('');
   const [tiktokHandle, setTiktokHandle] = useState('');
   const [loading, setLoading] = useState(false);
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !fullName) {
+    if (!email || !fullName || !phone) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -134,6 +135,7 @@ function WaitlistFormModal({
     } = await supabase.from('waiting_list').insert([{
       email: email.toLowerCase().trim(),
       full_name: fullName.trim(),
+      phone: phone.trim(),
       social_handle: instagramHandle.trim() || null,
       facebook_handle: facebookHandle.trim() || null,
       tiktok_handle: tiktokHandle.trim() || null
@@ -191,6 +193,14 @@ function WaitlistFormModal({
           <div className="space-y-2">
             <Label htmlFor="email" className="text-sm">Email Address *</Label>
             <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com" required className="h-11" />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="phone" className="text-sm flex items-center gap-2">
+              <Phone className="h-4 w-4 text-muted-foreground" />
+              Phone Number *
+            </Label>
+            <Input id="phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="08012345678" required className="h-11" />
           </div>
 
           <div className="pt-3 border-t border-border">

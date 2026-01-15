@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Plus, Mail, Users, FileText, Image as ImageIcon, Link, Rocket, Upload, PieChart, TrendingUp, ExternalLink } from 'lucide-react';
+import { Loader2, Plus, Mail, Users, FileText, Image as ImageIcon, Link, Rocket, Upload, PieChart, TrendingUp, ExternalLink, Crown } from 'lucide-react';
 import { useBranding } from '@/hooks/useBranding';
 
 // Preview Store Button Component
@@ -415,7 +415,136 @@ function PreLaunchSettingsManager() {
   );
 }
 
-// 1. Terms & Conditions Management
+// Membership Settings Manager
+function MembershipSettingsManager() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [membershipEnabled, setMembershipEnabled] = useState(false);
+  const [minDeposit, setMinDeposit] = useState(50000);
+
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  const loadSettings = async () => {
+    setLoading(true);
+    
+    // Fetch membership_enabled
+    const { data: enabledData } = await supabase
+      .from('app_config')
+      .select('value')
+      .eq('key', 'membership_enabled')
+      .maybeSingle();
+    
+    if (enabledData?.value && typeof enabledData.value === 'object' && 'enabled' in enabledData.value) {
+      setMembershipEnabled(enabledData.value.enabled as boolean);
+    }
+
+    // Fetch membership_min_deposit
+    const { data: depositData } = await supabase
+      .from('app_config')
+      .select('value')
+      .eq('key', 'membership_min_deposit')
+      .maybeSingle();
+    
+    if (depositData?.value && typeof depositData.value === 'object' && 'amount' in depositData.value) {
+      setMinDeposit(depositData.value.amount as number);
+    }
+    
+    setLoading(false);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    
+    // Update membership_enabled
+    const { error: enabledError } = await supabase
+      .from('app_config')
+      .upsert({
+        key: 'membership_enabled',
+        value: { enabled: membershipEnabled },
+        description: 'Toggle to enable/disable members-only mode',
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'key' });
+
+    if (enabledError) {
+      toast({ title: 'Error', description: enabledError.message, variant: 'destructive' });
+      setSaving(false);
+      return;
+    }
+
+    // Update membership_min_deposit
+    const { error: depositError } = await supabase
+      .from('app_config')
+      .upsert({
+        key: 'membership_min_deposit',
+        value: { amount: minDeposit, currency: 'NGN' },
+        description: 'Minimum deposit required to access the members-only store',
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'key' });
+
+    if (depositError) {
+      toast({ title: 'Error', description: depositError.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Success', description: 'Membership settings updated.' });
+    }
+    
+    setSaving(false);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Membership Mode Toggle */}
+      <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
+        <div>
+          <h3 className="font-semibold text-foreground">Members-Only Mode</h3>
+          <p className="text-sm text-muted-foreground">
+            When enabled, users must deposit the minimum amount to access the shop
+          </p>
+        </div>
+        <Switch
+          checked={membershipEnabled}
+          onCheckedChange={setMembershipEnabled}
+        />
+      </div>
+
+      {/* Minimum Deposit Amount */}
+      <div className="space-y-2">
+        <Label htmlFor="min-deposit">Minimum Deposit Amount (₦)</Label>
+        <Input
+          id="min-deposit"
+          type="number"
+          value={minDeposit}
+          onChange={(e) => setMinDeposit(parseFloat(e.target.value) || 0)}
+          className="max-w-xs"
+        />
+        <p className="text-xs text-muted-foreground">
+          Users must deposit at least this amount to access the members-only shop
+        </p>
+      </div>
+
+      <Button onClick={handleSave} disabled={saving}>
+        {saving ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Saving...
+          </>
+        ) : (
+          'Save Membership Settings'
+        )}
+      </Button>
+    </div>
+  );
+}
+
 function TermsAndConditionsManager() {
   const T_AND_C_KEY = 'terms_and_conditions';
   const [content, setContent] = useState('');
@@ -1673,9 +1802,12 @@ export default function SettingsManagement() {
       <h1 className="text-3xl font-bold">Admin Settings</h1>
       
       <Card>
-        <Tabs defaultValue="prelaunch" className="w-full">
+        <Tabs defaultValue="membership" className="w-full">
           <CardHeader className="p-0 overflow-x-auto">
-            <TabsList className="grid w-full grid-cols-7 h-auto rounded-none border-b bg-transparent p-0 min-w-[700px]">
+            <TabsList className="grid w-full grid-cols-8 h-auto rounded-none border-b bg-transparent p-0 min-w-[800px]">
+              <TabsTrigger value="membership" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
+                <Crown className="h-4 w-4 mr-2" /> Membership
+              </TabsTrigger>
               <TabsTrigger value="prelaunch" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
                 <Rocket className="h-4 w-4 mr-2" /> Pre-Launch
               </TabsTrigger>
@@ -1699,6 +1831,10 @@ export default function SettingsManagement() {
               </TabsTrigger>
             </TabsList>
           </CardHeader>
+
+          <TabsContent value="membership" className="p-6">
+            <MembershipSettingsManager />
+          </TabsContent>
 
           <TabsContent value="prelaunch" className="p-6">
             <PreLaunchSettingsManager />

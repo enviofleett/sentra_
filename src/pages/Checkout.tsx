@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMembership } from '@/hooks/useMembership';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { z } from 'zod';
@@ -15,7 +16,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { AuthFormContent } from '@/pages/Auth';
-import { Phone } from 'lucide-react';
+import { Phone, Wallet, CreditCard, Loader2 } from 'lucide-react';
 
 const checkoutSchema = z.object({
   fullName: z.string().min(2, 'Name must be at least 2 characters'),
@@ -32,7 +33,9 @@ export default function Checkout() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const { items, subtotal, clearCart } = useCart();
+  const { isMember, balance, isEnabled: membershipEnabled, isLoading: membershipLoading, refetch: refetchMembership } = useMembership();
   const [processing, setProcessing] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'paystack' | 'membership'>('paystack');
   const [termsContent, setTermsContent] = useState('');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [emailPreFilled, setEmailPreFilled] = useState(false);
@@ -184,7 +187,102 @@ export default function Checkout() {
     return null;
   }
 
+  const canPayWithMembership = membershipEnabled && isMember && balance >= subtotal;
+
+  const handleMembershipPayment = async (data: CheckoutFormData) => {
+    // Verify session
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+
+    setProcessing(true);
+
+    try {
+      // Stock check
+      const productIds = items.map(item => item.product_id);
+      const { data: productsInStock, error: stockError } = await supabase
+        .from('products')
+        .select('id, name, stock_quantity')
+        .in('id', productIds);
+
+      if (stockError) throw new Error("Could not verify stock. Please try again.");
+
+      const outOfStockItems: string[] = [];
+      for (const item of items) {
+        const dbProduct = productsInStock.find(p => p.id === item.product_id);
+        if (!dbProduct || dbProduct.stock_quantity < item.quantity) {
+          outOfStockItems.push(item.product?.name || 'An item');
+        }
+      }
+
+      if (outOfStockItems.length > 0) {
+        toast({
+          title: 'Stock Error',
+          description: `One or more items are out of stock: ${outOfStockItems.join(', ')}`,
+          variant: 'destructive'
+        });
+        setProcessing(false);
+        return;
+      }
+
+      // Call pay-with-membership edge function
+      const { data: result, error } = await supabase.functions.invoke('pay-with-membership', {
+        body: {
+          items: items.map(item => ({
+            product_id: item.product_id,
+            name: item.product?.name,
+            price: item.product?.price,
+            quantity: item.quantity,
+            vendor_id: item.product?.vendor_id
+          })),
+          total_amount: subtotal,
+          shipping_address: {
+            fullName: data.fullName,
+            phone: data.phone,
+            address: data.address,
+            city: data.city,
+            state: data.state,
+          },
+          customer_email: data.email
+        }
+      });
+
+      if (error) throw error;
+
+      if (!result.success) {
+        throw new Error(result.error || 'Payment failed');
+      }
+
+      // Success - clear cart and redirect
+      clearCart();
+      refetchMembership();
+      
+      toast({
+        title: 'Order Placed!',
+        description: 'Your order has been paid with your membership credit.',
+      });
+
+      navigate(`/checkout/success?order_id=${result.order_id}&type=membership_payment`);
+    } catch (error: any) {
+      console.error('Membership payment error:', error);
+      toast({
+        title: 'Payment Failed',
+        description: error.message || 'Failed to process membership payment',
+        variant: 'destructive'
+      });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   const onSubmit = async (data: CheckoutFormData) => {
+    // If paying with membership credit
+    if (paymentMethod === 'membership') {
+      return handleMembershipPayment(data);
+    }
+
     // Verify session is still valid
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
@@ -521,8 +619,74 @@ export default function Checkout() {
                       </div>
                     )}
 
+                    {/* Payment Method Selection */}
+                    {membershipEnabled && user && (
+                      <div className="space-y-3">
+                        <FormLabel>Payment Method</FormLabel>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {/* Paystack Option */}
+                          <button
+                            type="button"
+                            onClick={() => setPaymentMethod('paystack')}
+                            className={`p-4 rounded-lg border-2 text-left transition-all ${
+                              paymentMethod === 'paystack'
+                                ? 'border-primary bg-primary/5'
+                                : 'border-border hover:border-primary/50'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <CreditCard className="h-5 w-5 text-primary" />
+                              <div>
+                                <p className="font-medium">Pay with Card</p>
+                                <p className="text-xs text-muted-foreground">Paystack secure payment</p>
+                              </div>
+                            </div>
+                          </button>
+
+                          {/* Membership Wallet Option */}
+                          <button
+                            type="button"
+                            onClick={() => canPayWithMembership && setPaymentMethod('membership')}
+                            disabled={!canPayWithMembership}
+                            className={`p-4 rounded-lg border-2 text-left transition-all ${
+                              paymentMethod === 'membership'
+                                ? 'border-primary bg-primary/5'
+                                : canPayWithMembership
+                                  ? 'border-border hover:border-primary/50'
+                                  : 'border-border opacity-50 cursor-not-allowed'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Wallet className="h-5 w-5 text-primary" />
+                              <div>
+                                <p className="font-medium">Membership Credit</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Balance: ₦{balance.toLocaleString()}
+                                  {!canPayWithMembership && balance < subtotal && (
+                                    <span className="text-destructive ml-1">(Insufficient)</span>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     <Button type="submit" size="lg" className="w-full" disabled={processing}>
-                      {processing ? 'Processing...' : 'Place Order'}
+                      {processing ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Processing...
+                        </>
+                      ) : paymentMethod === 'membership' ? (
+                        <>
+                          <Wallet className="mr-2 h-4 w-4" />
+                          Pay ₦{subtotal.toLocaleString()} with Credit
+                        </>
+                      ) : (
+                        'Place Order'
+                      )}
                     </Button>
                   </form>
                 </Form>

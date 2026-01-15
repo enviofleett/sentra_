@@ -33,6 +33,7 @@ const navigation = [
   { name: 'Affiliates', href: '/admin/affiliates', icon: Wallet },
   { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'Waitlist', href: '/admin/waitlist', icon: UserPlus },
+  { name: 'Articles', href: '/admin/articles', icon: FileText },
   { name: 'Content', href: '/admin/content', icon: FileText },
   { name: 'Settings', href: '/admin/settings', icon: Settings },
 ];

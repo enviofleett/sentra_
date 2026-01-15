@@ -1378,6 +1378,7 @@ export type Database = {
           full_name: string | null
           id: string
           is_social_verified: boolean | null
+          phone: string | null
           reward_credited: boolean | null
           social_handle: string | null
           tiktok_handle: string | null
@@ -1392,6 +1393,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           is_social_verified?: boolean | null
+          phone?: string | null
           reward_credited?: boolean | null
           social_handle?: string | null
           tiktok_handle?: string | null
@@ -1406,6 +1408,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           is_social_verified?: boolean | null
+          phone?: string | null
           reward_credited?: boolean | null
           social_handle?: string | null
           tiktok_handle?: string | null

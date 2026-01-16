@@ -3,8 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowRight, Sparkles, BookOpen, Clock } from 'lucide-react';
-import { format } from 'date-fns';
+import { ArrowRight, Sparkles, BookOpen } from 'lucide-react';
 
 interface Article {
   id: string;
@@ -35,15 +34,6 @@ const placeholderImages = [
 ];
 
 const getPlaceholderImage = (index: number) => placeholderImages[index % placeholderImages.length];
-
-const formatDate = (dateString: string | null) => {
-  if (!dateString) return '';
-  try {
-    return format(new Date(dateString), 'MMM d, yyyy');
-  } catch {
-    return '';
-  }
-};
 
 export function ArticlesSection({ articles, featuredArticle, loading, title, subtitle }: ArticlesSectionProps) {
   if (loading) {
@@ -129,10 +119,6 @@ export function ArticlesSection({ articles, featuredArticle, loading, title, sub
                 
                 {/* Content Section - Below Image */}
                 <CardContent className="p-5 md:p-7">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
-                    <Clock className="h-3 w-3" />
-                    <span>{formatDate(mainArticle.published_at)}</span>
-                  </div>
                   
                   <Link to={`/articles/${mainArticle.slug}`}>
                     <h3 className="text-xl md:text-2xl lg:text-3xl font-serif mb-3 group-hover:text-primary transition-colors line-clamp-2">
@@ -180,10 +166,6 @@ export function ArticlesSection({ articles, featuredArticle, loading, title, sub
                   {/* Content */}
                   <CardContent className="w-full sm:w-3/5 p-4 md:p-5 flex flex-col justify-between">
                     <div>
-                      <span className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1 mb-2">
-                        <Clock className="h-3 w-3" />
-                        {formatDate(article.published_at)}
-                      </span>
                       <Link to={`/articles/${article.slug}`}>
                         <h3 className="font-serif text-base md:text-lg lg:text-xl mb-2 group-hover:text-primary transition-colors line-clamp-2">
                           {article.title}
@@ -235,10 +217,6 @@ export function ArticlesSection({ articles, featuredArticle, loading, title, sub
                 
                 {/* Content */}
                 <CardContent className="p-4">
-                  <span className="text-xs text-muted-foreground flex items-center gap-1 mb-2">
-                    <Clock className="h-3 w-3" />
-                    {formatDate(article.published_at)}
-                  </span>
                   
                   <Link to={`/articles/${article.slug}`}>
                     <h3 className="font-medium text-sm md:text-base mb-2 group-hover:text-primary transition-colors line-clamp-2">

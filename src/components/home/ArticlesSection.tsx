@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowRight, Sparkles, BookOpen, Clock } from 'lucide-react';
 import { format } from 'date-fns';
@@ -108,83 +109,107 @@ export function ArticlesSection({ articles, featuredArticle, loading, title, sub
         <div className="grid lg:grid-cols-12 gap-5 md:gap-6 mb-8">
           {/* Main Featured Article - Large */}
           {mainArticle && (
-            <Link 
-              to={`/articles/${mainArticle.slug}`} 
-              className="lg:col-span-7 group"
-            >
+            <div className="lg:col-span-7 group">
               <Card className="overflow-hidden h-full border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-card">
-                <div className="relative h-[300px] md:h-[500px]">
-                  <img
-                    src={mainArticle.cover_image_url || getPlaceholderImage(0)}
-                    alt={mainArticle.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                  <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8">
+                {/* Image Section - Clean without overlay text */}
+                <Link to={`/articles/${mainArticle.slug}`} className="block relative overflow-hidden">
+                  <div className="relative aspect-[16/10] md:aspect-[16/9]">
+                    <img
+                      src={mainArticle.cover_image_url || getPlaceholderImage(0)}
+                      alt={mainArticle.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                    />
                     {mainArticle.is_featured && (
-                      <Badge className="mb-3 bg-primary/90 text-primary-foreground">
+                      <Badge className="absolute top-4 left-4 bg-primary/90 text-primary-foreground shadow-lg">
                         Featured Story
                       </Badge>
                     )}
-                    <h3 className="text-xl md:text-3xl font-serif text-white mb-3 group-hover:text-primary-foreground/90 transition-colors line-clamp-2">
+                  </div>
+                </Link>
+                
+                {/* Content Section - Below Image */}
+                <CardContent className="p-5 md:p-7">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
+                    <Clock className="h-3 w-3" />
+                    <span>{formatDate(mainArticle.published_at)}</span>
+                  </div>
+                  
+                  <Link to={`/articles/${mainArticle.slug}`}>
+                    <h3 className="text-xl md:text-2xl lg:text-3xl font-serif mb-3 group-hover:text-primary transition-colors line-clamp-2">
                       {mainArticle.title}
                     </h3>
-                    {mainArticle.excerpt && (
-                      <p className="text-white/80 mb-4 line-clamp-2 text-sm md:text-base hidden md:block">
-                        {mainArticle.excerpt}
-                      </p>
-                    )}
-                    <div className="flex items-center justify-between">
-                      <span className="text-white/60 text-sm flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {formatDate(mainArticle.published_at)}
-                      </span>
-                      <span className="inline-flex items-center text-white font-medium text-sm group-hover:gap-3 gap-2 transition-all">
-                        Read Story <ArrowRight className="h-4 w-4" />
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                  </Link>
+                  
+                  {mainArticle.excerpt && (
+                    <p className="text-muted-foreground mb-5 line-clamp-3 text-sm md:text-base leading-relaxed">
+                      {mainArticle.excerpt}
+                    </p>
+                  )}
+                  
+                  <Button asChild variant="outline" size="sm" className="group/btn">
+                    <Link to={`/articles/${mainArticle.slug}`} className="inline-flex items-center gap-2">
+                      Read Full Story
+                      <ArrowRight className="h-4 w-4 group-hover/btn:translate-x-1 transition-transform" />
+                    </Link>
+                  </Button>
+                </CardContent>
               </Card>
-            </Link>
+            </div>
           )}
 
           {/* Secondary Articles - Stacked */}
           <div className="lg:col-span-5 flex flex-col gap-5 md:gap-6">
             {secondaryArticles.map((article, index) => (
-              <Link 
+              <Card 
                 key={article.id} 
-                to={`/articles/${article.slug}`} 
-                className="group flex-1"
+                className="overflow-hidden flex-1 border-0 shadow-md hover:shadow-lg transition-all duration-300 group"
               >
-                <Card className="overflow-hidden h-full border-0 shadow-md hover:shadow-lg transition-all duration-300">
-                  <div className="flex h-full">
-                    <div className="relative w-2/5 min-h-[180px] md:min-h-[220px]">
-                      <img
-                        src={article.cover_image_url || getPlaceholderImage(index + 1)}
-                        alt={article.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
-                    </div>
-                    <CardContent className="w-3/5 p-4 md:p-6 flex flex-col justify-center">
-                      <span className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
+                <div className="flex flex-col sm:flex-row h-full">
+                  {/* Image */}
+                  <Link 
+                    to={`/articles/${article.slug}`}
+                    className="relative w-full sm:w-2/5 aspect-[16/9] sm:aspect-auto sm:min-h-[180px] overflow-hidden"
+                  >
+                    <img
+                      src={article.cover_image_url || getPlaceholderImage(index + 1)}
+                      alt={article.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                  </Link>
+                  
+                  {/* Content */}
+                  <CardContent className="w-full sm:w-3/5 p-4 md:p-5 flex flex-col justify-between">
+                    <div>
+                      <span className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1 mb-2">
+                        <Clock className="h-3 w-3" />
                         {formatDate(article.published_at)}
                       </span>
-                      <h3 className="font-serif text-base md:text-xl mb-2 group-hover:text-primary transition-colors line-clamp-2">
-                        {article.title}
-                      </h3>
+                      <Link to={`/articles/${article.slug}`}>
+                        <h3 className="font-serif text-base md:text-lg lg:text-xl mb-2 group-hover:text-primary transition-colors line-clamp-2">
+                          {article.title}
+                        </h3>
+                      </Link>
                       {article.excerpt && (
-                        <p className="text-sm text-muted-foreground line-clamp-2 hidden md:block">
+                        <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
                           {article.excerpt}
                         </p>
                       )}
-                      <span className="inline-flex items-center text-primary text-sm font-medium mt-3 group-hover:gap-2 gap-1 transition-all">
-                        Read <ArrowRight className="h-3 w-3" />
-                      </span>
-                    </CardContent>
-                  </div>
-                </Card>
-              </Link>
+                    </div>
+                    
+                    <Button 
+                      asChild 
+                      variant="ghost" 
+                      size="sm" 
+                      className="w-fit mt-3 p-0 h-auto text-primary hover:bg-transparent group/btn"
+                    >
+                      <Link to={`/articles/${article.slug}`} className="inline-flex items-center gap-1.5">
+                        Read More
+                        <ArrowRight className="h-3.5 w-3.5 group-hover/btn:translate-x-1 transition-transform" />
+                      </Link>
+                    </Button>
+                  </CardContent>
+                </div>
+              </Card>
             ))}
           </div>
         </div>
@@ -193,30 +218,53 @@ export function ArticlesSection({ articles, featuredArticle, loading, title, sub
         {gridArticles.length > 0 && (
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 md:gap-6">
             {gridArticles.map((article, index) => (
-              <Link 
+              <Card 
                 key={article.id} 
-                to={`/articles/${article.slug}`} 
-                className="group"
+                className="overflow-hidden h-full border hover:border-primary/30 hover:shadow-lg transition-all duration-300 group"
               >
-                <Card className="overflow-hidden h-full border hover:border-primary/30 hover:shadow-lg transition-all duration-300">
-                  <div className="relative h-40 md:h-44">
+                {/* Image */}
+                <Link to={`/articles/${article.slug}`} className="block relative overflow-hidden">
+                  <div className="relative aspect-[4/3]">
                     <img
                       src={article.cover_image_url || getPlaceholderImage(index + 3)}
                       alt={article.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
-                  <CardContent className="p-4">
-                    <span className="text-xs text-muted-foreground">
-                      {formatDate(article.published_at)}
-                    </span>
-                    <h3 className="font-medium text-sm md:text-base mt-1 group-hover:text-primary transition-colors line-clamp-2">
+                </Link>
+                
+                {/* Content */}
+                <CardContent className="p-4">
+                  <span className="text-xs text-muted-foreground flex items-center gap-1 mb-2">
+                    <Clock className="h-3 w-3" />
+                    {formatDate(article.published_at)}
+                  </span>
+                  
+                  <Link to={`/articles/${article.slug}`}>
+                    <h3 className="font-medium text-sm md:text-base mb-2 group-hover:text-primary transition-colors line-clamp-2">
                       {article.title}
                     </h3>
-                  </CardContent>
-                </Card>
-              </Link>
+                  </Link>
+                  
+                  {article.excerpt && (
+                    <p className="text-xs text-muted-foreground line-clamp-2 mb-3">
+                      {article.excerpt}
+                    </p>
+                  )}
+                  
+                  <Button 
+                    asChild 
+                    variant="link" 
+                    size="sm" 
+                    className="p-0 h-auto text-primary font-medium group/btn"
+                  >
+                    <Link to={`/articles/${article.slug}`} className="inline-flex items-center gap-1">
+                      Read More
+                      <ArrowRight className="h-3 w-3 group-hover/btn:translate-x-0.5 transition-transform" />
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
             ))}
           </div>
         )}
@@ -224,13 +272,12 @@ export function ArticlesSection({ articles, featuredArticle, loading, title, sub
         {/* View All Link */}
         {allArticles.length >= 4 && (
           <div className="text-center mt-10">
-            <Link 
-              to="/articles" 
-              className="inline-flex items-center gap-2 text-primary font-medium hover:gap-3 transition-all group"
-            >
-              View All Articles 
-              <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-            </Link>
+            <Button asChild variant="outline" size="lg" className="group">
+              <Link to="/articles" className="inline-flex items-center gap-2">
+                View All Articles 
+                <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+              </Link>
+            </Button>
           </div>
         )}
       </div>

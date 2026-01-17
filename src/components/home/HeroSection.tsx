@@ -79,7 +79,7 @@ export function HeroSection() {
               <div className="flex">
                 {slides.map((banner, index) => (
                   <div key={banner.id || index} className="flex-[0_0_100%] min-w-0">
-                    {banner.image_url ? (
+                    {banner.image_url && (
                       <motion.img
                         src={banner.image_url}
                         alt={banner.title || 'Luxury Fragrance'}
@@ -88,10 +88,6 @@ export function HeroSection() {
                         animate={{ y: [0, -8, 0] }}
                         transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
                       />
-                    ) : (
-                      <div className="aspect-[3/4] bg-cream rounded-3xl flex items-center justify-center">
-                        <span className="text-muted-foreground text-sm">Perfume Image</span>
-                      </div>
                     )}
                   </div>
                 ))}
@@ -152,7 +148,7 @@ export function HeroSection() {
               <div className="flex">
                 {slides.map((banner, index) => (
                   <div key={banner.id || index} className="flex-[0_0_100%] min-w-0 p-8">
-                    {banner.image_url ? (
+                    {banner.image_url && (
                       <motion.img
                         src={banner.image_url}
                         alt={banner.title || 'Luxury Fragrance'}
@@ -161,10 +157,6 @@ export function HeroSection() {
                         animate={{ y: [0, -12, 0] }}
                         transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
                       />
-                    ) : (
-                      <div className="aspect-[3/4] bg-cream rounded-3xl flex items-center justify-center">
-                        <span className="text-muted-foreground">Hero Image</span>
-                      </div>
                     )}
                   </div>
                 ))}

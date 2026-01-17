@@ -245,7 +245,7 @@ async function processWaitlistEntry(
           type: 'recovery',
           email: entry.email,
           options: {
-            redirectTo: `${appBaseUrl}/auth`
+            redirectTo: `${appBaseUrl}/reset-password`
           }
         });
         

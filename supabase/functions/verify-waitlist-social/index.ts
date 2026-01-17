@@ -238,21 +238,26 @@ async function processWaitlistEntry(
     if (isNewUser) {
       try {
         // Use APP_BASE_URL secret or fallback to published URL
-        const appBaseUrl = Deno.env.get('APP_BASE_URL') || 'https://sentra-scent-shop-ai.lovable.app';
+        const appBaseUrl = Deno.env.get('APP_BASE_URL');
+        if (!appBaseUrl) {
+          console.warn('[Process Entry] WARNING: APP_BASE_URL secret is not configured. Using fallback URL. Configure this in Supabase Dashboard > Functions > Secrets');
+        }
+        const resolvedBaseUrl = appBaseUrl || 'https://sentra-scent-shop-ai.lovable.app';
+        console.log('[Process Entry] Using base URL for reset link:', resolvedBaseUrl);
         
         // Generate password reset link
         const { data: resetData, error: resetError } = await supabase.auth.admin.generateLink({
           type: 'recovery',
           email: entry.email,
           options: {
-            redirectTo: `${appBaseUrl}/reset-password`
+            redirectTo: `${resolvedBaseUrl}/reset-password`
           }
         });
         
         if (resetError) {
           console.error('[Process Entry] Failed to generate reset link:', resetError);
         } else {
-          const resetUrl = resetData?.properties?.action_link || `${appBaseUrl}/auth`;
+          const resetUrl = resetData?.properties?.action_link || `${resolvedBaseUrl}/auth`;
           
           // Send welcome email
           const emailPayload = {
@@ -340,7 +345,20 @@ async function handleBulkMigration(supabase: any, corsHeaders: Record<string, st
     let skipCount = 0;
     const errors: string[] = [];
     
-    for (const entry of entries) {
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      
+      // Add delay between users to respect Supabase API rate limits (skip first iteration)
+      if (i > 0) {
+        console.log('[Bulk Migration] Rate limiting: waiting 1.2s before next user...');
+        await new Promise(resolve => setTimeout(resolve, 1200));
+      }
+      
+      // Log progress every 10 users
+      if (i > 0 && i % 10 === 0) {
+        console.log(`[Bulk Migration] Progress: ${i}/${entries.length} entries processed (${successCount} success, ${skipCount} skipped, ${errors.length} errors)`);
+      }
+      
       // Check if user already has a wallet with promo balance (already migrated)
       const { data: existingUsers } = await supabase.auth.admin.listUsers();
       const existingUser = existingUsers?.users?.find((u: any) => u.email === entry.email);

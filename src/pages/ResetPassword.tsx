@@ -13,8 +13,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { KeyRound, CheckCircle, AlertCircle } from 'lucide-react';
 
 const resetPasswordSchema = z.object({
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-  confirmPassword: z.string().min(6, 'Password must be at least 6 characters'),
+  password: z.string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number'),
+  confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
@@ -305,6 +309,16 @@ export default function ResetPassword() {
                   </FormItem>
                 )}
               />
+
+              <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-md">
+                <p className="font-medium mb-1">Password requirements:</p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  <li>At least 8 characters</li>
+                  <li>One uppercase letter</li>
+                  <li>One lowercase letter</li>
+                  <li>One number</li>
+                </ul>
+              </div>
 
               <Button
                 type="submit"

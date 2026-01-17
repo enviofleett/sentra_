@@ -34,28 +34,98 @@ export default function ResetPassword() {
   });
 
   useEffect(() => {
-    // Check if we have a valid recovery session
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+    // Handle the recovery token from URL hash parameters
+    const handleRecoveryToken = async () => {
+      // Check for hash parameters (Supabase includes tokens in hash)
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
+      const type = hashParams.get('type');
       
-      // Check if this is a password recovery session
+      // Also check query parameters as fallback
+      const queryParams = new URLSearchParams(window.location.search);
+      const tokenHash = queryParams.get('token_hash') || queryParams.get('token');
+      const tokenType = queryParams.get('type');
+      
+      console.log('[ResetPassword] URL analysis:', {
+        hasHashToken: !!accessToken,
+        hasRefreshToken: !!refreshToken,
+        type,
+        hasQueryToken: !!tokenHash,
+        tokenType
+      });
+      
+      // If we have access_token in hash, set the session directly
+      if (accessToken && refreshToken) {
+        try {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          });
+          
+          if (error) {
+            console.error('[ResetPassword] Failed to set session:', error);
+            setIsValidSession(false);
+          } else if (data.session) {
+            console.log('[ResetPassword] Session established from hash tokens');
+            setIsValidSession(true);
+            // Clear the hash from URL for cleaner UX
+            window.history.replaceState(null, '', window.location.pathname);
+          }
+        } catch (err) {
+          console.error('[ResetPassword] Error setting session:', err);
+          setIsValidSession(false);
+        }
+        return;
+      }
+      
+      // If we have a token_hash in query params (direct Supabase link format)
+      if (tokenHash && tokenType === 'recovery') {
+        try {
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: 'recovery'
+          });
+          
+          if (error) {
+            console.error('[ResetPassword] Failed to verify OTP:', error);
+            setIsValidSession(false);
+          } else if (data.session) {
+            console.log('[ResetPassword] Session established from OTP verification');
+            setIsValidSession(true);
+          }
+        } catch (err) {
+          console.error('[ResetPassword] Error verifying OTP:', err);
+          setIsValidSession(false);
+        }
+        return;
+      }
+      
+      // Fallback: check existing session
+      const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
+        console.log('[ResetPassword] Existing session found');
         setIsValidSession(true);
       } else {
+        console.log('[ResetPassword] No valid session or token found');
         setIsValidSession(false);
       }
     };
 
     // Listen for auth state changes (handles the recovery link redirect)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[ResetPassword] Auth state change:', event);
       if (event === 'PASSWORD_RECOVERY') {
         setIsValidSession(true);
       } else if (event === 'SIGNED_IN' && session) {
-        setIsValidSession(true);
+        // Only set valid if we're on this page intentionally
+        if (isValidSession === null) {
+          setIsValidSession(true);
+        }
       }
     });
 
-    checkSession();
+    handleRecoveryToken();
 
     return () => subscription.unsubscribe();
   }, []);

@@ -237,19 +237,22 @@ async function processWaitlistEntry(
     // Send welcome email with password reset link for new users
     if (isNewUser) {
       try {
+        // Use APP_BASE_URL secret or fallback to published URL
+        const appBaseUrl = Deno.env.get('APP_BASE_URL') || 'https://sentra-scent-shop-ai.lovable.app';
+        
         // Generate password reset link
         const { data: resetData, error: resetError } = await supabase.auth.admin.generateLink({
           type: 'recovery',
           email: entry.email,
           options: {
-            redirectTo: `${Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '.lovableproject.com') || 'https://sentra.lovableproject.com'}/auth`
+            redirectTo: `${appBaseUrl}/auth`
           }
         });
         
         if (resetError) {
           console.error('[Process Entry] Failed to generate reset link:', resetError);
         } else {
-          const resetUrl = resetData?.properties?.action_link || `${Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '.lovableproject.com')}/auth`;
+          const resetUrl = resetData?.properties?.action_link || `${appBaseUrl}/auth`;
           
           // Send welcome email
           const emailPayload = {

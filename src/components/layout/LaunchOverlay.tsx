@@ -151,22 +151,27 @@ function WaitlistFormModal({
       return;
     }
 
-    // Send welcome email
+    // Send signup confirmation email
     try {
-      await supabase.functions.invoke('send-email', {
+      const { error: emailError } = await supabase.functions.invoke('send-email', {
         body: {
           to: email.toLowerCase().trim(),
-          templateId: 'WAITLIST_WELCOME',
+          templateId: 'WAITLIST_SIGNUP',
           data: {
             name: fullName.trim(),
             reward_amount: rewardAmount.toLocaleString()
           }
         }
       });
-      console.log('Welcome email sent to:', email);
+      if (emailError) {
+        console.error('Error sending confirmation email:', emailError);
+        toast.warning('Signed up! Check spam if you don\'t see our confirmation email.');
+      } else {
+        console.log('Confirmation email sent to:', email);
+      }
     } catch (emailError) {
-      console.error('Error sending welcome email:', emailError);
-      // Don't fail the signup if email fails
+      console.error('Error sending confirmation email:', emailError);
+      toast.warning('Signed up! Check spam if you don\'t see our confirmation email.');
     }
     toast.success('Welcome to the Sentra Circle!');
     onSuccess();

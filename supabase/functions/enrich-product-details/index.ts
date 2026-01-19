@@ -8,8 +8,9 @@ const corsHeaders = {
 interface EnrichmentResult {
   description: string;
   gender: "Men" | "Women" | "Unisex";
-  brand: string;
+  brand: string | null;
   size: string;
+  image_url: string | null;
 }
 
 Deno.serve(async (req) => {
@@ -18,7 +19,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { product_id, product_name } = await req.json();
+    const { product_id, product_name, brand: existingBrand } = await req.json();
 
     if (!product_id || !product_name) {
       return new Response(
@@ -28,6 +29,7 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[enrich-product-details] Starting enrichment for: ${product_name} (${product_id})`);
+    console.log(`[enrich-product-details] Existing brand from CSV: ${existingBrand || "not provided"}`);
 
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -53,9 +55,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Step 1: Search for product info using Firecrawl
+    // Step 1: Search for product info using Firecrawl (include image in query)
     console.log(`[enrich-product-details] Searching for product info...`);
-    const searchQuery = `${product_name} perfume fragrance description notes size ml`;
+    const searchQuery = `${product_name} perfume bottle high quality image description notes size ml`;
     
     const searchResponse = await fetch("https://api.firecrawl.dev/v1/search", {
       method: "POST",
@@ -67,7 +69,7 @@ Deno.serve(async (req) => {
         query: searchQuery,
         limit: 3,
         scrapeOptions: {
-          formats: ["markdown"],
+          formats: ["markdown", "links"],
         },
       }),
     });
@@ -84,14 +86,34 @@ Deno.serve(async (req) => {
     const searchData = await searchResponse.json();
     console.log(`[enrich-product-details] Found ${searchData.data?.length || 0} search results`);
 
-    // Compile search results into context
+    // Compile search results into context (including potential image URLs)
     let searchContext = "";
+    let potentialImageUrls: string[] = [];
+    
     if (searchData.data && searchData.data.length > 0) {
       for (const result of searchData.data) {
         searchContext += `\n--- Source: ${result.url} ---\n`;
-        searchContext += result.markdown?.substring(0, 2000) || result.description || "";
+        searchContext += result.markdown?.substring(0, 3000) || result.description || "";
         searchContext += "\n";
+        
+        // Collect any image URLs found in the results
+        if (result.links) {
+          const imageLinks = result.links.filter((link: string) => 
+            /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(link) && 
+            !link.includes('icon') && 
+            !link.includes('logo') &&
+            !link.includes('sprite')
+          );
+          potentialImageUrls.push(...imageLinks.slice(0, 3));
+        }
       }
+    }
+
+    // Add potential image URLs to the context
+    if (potentialImageUrls.length > 0) {
+      searchContext += `\n--- Potential Product Image URLs Found ---\n`;
+      searchContext += potentialImageUrls.slice(0, 5).join("\n");
+      searchContext += "\n";
     }
 
     if (!searchContext.trim()) {
@@ -101,20 +123,33 @@ Deno.serve(async (req) => {
     // Step 2: Use AI to analyze and generate product details
     console.log(`[enrich-product-details] Sending to AI for analysis...`);
     
+    const brandInstruction = existingBrand 
+      ? `The product brand is already known: "${existingBrand}". Do NOT override this - return null for the brand field.`
+      : `Extract the brand name from the product name or search results (e.g., 'Dior' from 'Dior Sauvage').`;
+    
     const aiPrompt = `You are a luxury fragrance expert. Analyze the following search results about "${product_name}" and extract/generate product details.
+
+EXISTING BRAND: ${existingBrand || "Not provided - you must extract it"}
 
 SEARCH RESULTS:
 ${searchContext}
 
 Based on the above information, provide the following in JSON format:
 {
-  "description": "A 2-sentence luxury marketing description for this fragrance. Be evocative and appealing.",
-  "gender": "Men" or "Women" or "Unisex" (determine the target audience),
-  "brand": "The brand name extracted from the product name (e.g., 'Dior' from 'Dior Sauvage')",
-  "size": "The size if found (e.g., '100ml', '3.4oz'), or 'N/A' if not found"
+  "description": "A 2-sentence luxury marketing description for this fragrance. Be evocative and appealing. Mention key notes if found.",
+  "gender": "Men" or "Women" or "Unisex" (determine the target audience based on fragrance type and marketing),
+  "brand": ${existingBrand ? 'null (brand already provided)' : '"The brand name extracted from the product name"'},
+  "size": "The size if found (e.g., '100ml', '3.4oz', '50ml'), or 'N/A' if not found",
+  "image_url": "The best high-quality product image URL from the search context. Must be a direct image URL ending in .jpg, .jpeg, .png, or .webp. Return null if no suitable image found."
 }
 
-IMPORTANT: Return ONLY valid JSON, no markdown code blocks or extra text.`;
+${brandInstruction}
+
+IMPORTANT RULES:
+1. Return ONLY valid JSON, no markdown code blocks or extra text.
+2. For image_url, prefer images from official brand sites or major retailers.
+3. Avoid small thumbnails, icons, or placeholder images.
+4. The description should be elegant and compelling, suitable for a luxury perfume store.`;
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -183,8 +218,9 @@ IMPORTANT: Return ONLY valid JSON, no markdown code blocks or extra text.`;
       enrichment = {
         description: `${product_name} - A sophisticated fragrance for discerning tastes. Experience luxury in every spray.`,
         gender: "Unisex",
-        brand: product_name.split(" ")[0] || "Unknown",
+        brand: existingBrand ? null : (product_name.split(" ")[0] || "Unknown"),
         size: "N/A",
+        image_url: null,
       };
     }
 
@@ -229,12 +265,23 @@ IMPORTANT: Return ONLY valid JSON, no markdown code blocks or extra text.`;
     const updateData: Record<string, any> = {
       description: enrichment.description,
       gender: enrichment.gender,
-      brand: enrichment.brand,
       is_active: true, // Mark as active after enrichment
     };
 
+    // Only update brand if CSV didn't provide one and AI extracted one
+    if (!existingBrand && enrichment.brand) {
+      updateData.brand = enrichment.brand;
+    }
+
     if (enrichment.size && enrichment.size !== "N/A") {
       updateData.size = enrichment.size;
+    }
+
+    // Handle image URL
+    if (enrichment.image_url) {
+      updateData.image_url = enrichment.image_url;
+      updateData.images = [enrichment.image_url]; // Store in images array as well
+      console.log(`[enrich-product-details] Found image URL: ${enrichment.image_url}`);
     }
 
     if (categoryId) {
@@ -262,6 +309,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown code blocks or extra text.`;
         enrichment: {
           ...enrichment,
           category_id: categoryId,
+          brand_updated: !existingBrand && enrichment.brand ? true : false,
         },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

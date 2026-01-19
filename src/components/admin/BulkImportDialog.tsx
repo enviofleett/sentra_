@@ -22,6 +22,8 @@ interface BulkImportDialogProps {
 interface ParsedProduct {
   name: string;
   price: number;
+  cost_price?: number;
+  brand?: string;
   stock?: number;
 }
 
@@ -46,12 +48,12 @@ export function BulkImportDialog({ onSuccess }: BulkImportDialogProps) {
   }, []);
 
   const downloadSampleCSV = () => {
-    const sampleData = `name,price,stock
-Dior Sauvage EDP 100ml,85000,10
-Chanel Bleu de Chanel EDT 150ml,120000,5
-Tom Ford Oud Wood 50ml,250000,3
-Versace Eros EDT 100ml,45000,15
-Creed Aventus 100ml,350000,2`;
+    const sampleData = `name,price,cost_price,brand,stock
+Dior Sauvage EDP 100ml,85000,55000,Dior,10
+Chanel Bleu de Chanel EDT 150ml,120000,78000,Chanel,5
+Tom Ford Oud Wood 50ml,250000,165000,Tom Ford,3
+Versace Eros EDT 100ml,45000,28000,,15
+Creed Aventus 100ml,350000,230000,,2`;
     
     const blob = new Blob([sampleData], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -92,8 +94,21 @@ Creed Aventus 100ml,350000,2`;
           const errors: string[] = [];
 
           results.data.forEach((row: any, index: number) => {
+            // Handle name column (case-insensitive)
             const name = row.name?.trim() || row.Name?.trim() || row.NAME?.trim();
+            
+            // Handle price column (case-insensitive)
             const priceStr = row.price?.toString() || row.Price?.toString() || row.PRICE?.toString();
+            
+            // Handle cost_price column (case-insensitive)
+            const costPriceStr = row.cost_price?.toString() || row.costPrice?.toString() || 
+                                 row.Cost_Price?.toString() || row.CostPrice?.toString() ||
+                                 row.cost?.toString() || row.Cost?.toString() || row.COST_PRICE?.toString();
+            
+            // Handle brand column (case-insensitive)
+            const brand = row.brand?.trim() || row.Brand?.trim() || row.BRAND?.trim();
+            
+            // Handle stock column (case-insensitive)
             const stockStr = row.stock?.toString() || row.Stock?.toString() || row.STOCK?.toString() || 
                             row.quantity?.toString() || row.Quantity?.toString();
 
@@ -108,9 +123,25 @@ Creed Aventus 100ml,350000,2`;
               return;
             }
 
+            // Parse cost_price (optional)
+            let costPrice: number | undefined;
+            if (costPriceStr) {
+              const parsed = parseFloat(costPriceStr.replace(/[^0-9.]/g, ''));
+              if (!isNaN(parsed) && parsed > 0) {
+                costPrice = parsed;
+              }
+            }
+
+            // Parse stock (optional, default to 0)
             const stock = stockStr ? parseInt(stockStr.replace(/[^0-9]/g, ''), 10) : 0;
 
-            products.push({ name, price, stock: isNaN(stock) ? 0 : stock });
+            products.push({ 
+              name, 
+              price, 
+              cost_price: costPrice,
+              brand: brand || undefined,
+              stock: isNaN(stock) ? 0 : stock 
+            });
           });
 
           if (errors.length > 0) {
@@ -151,6 +182,12 @@ Creed Aventus 100ml,350000,2`;
       }
 
       addLog('success', `Parsed ${products.length} products from file`);
+      
+      // Log summary of parsed data
+      const withBrand = products.filter(p => p.brand).length;
+      const withCost = products.filter(p => p.cost_price).length;
+      addLog('info', `With brand: ${withBrand}, With cost price: ${withCost}`);
+      
       setStats(prev => ({ ...prev, total: products.length }));
 
       // Step 2: Create products as drafts
@@ -160,6 +197,8 @@ Creed Aventus 100ml,350000,2`;
       const productInserts = products.map(p => ({
         name: p.name,
         price: p.price,
+        cost_price: p.cost_price || null,
+        brand: p.brand || null,
         stock_quantity: p.stock || 0,
         is_active: false, // Draft mode
         is_featured: false,
@@ -168,7 +207,7 @@ Creed Aventus 100ml,350000,2`;
       const { data: createdProducts, error: insertError } = await supabase
         .from('products')
         .insert(productInserts)
-        .select('id, name');
+        .select('id, name, brand');
 
       if (insertError) {
         addLog('error', `Failed to create products: ${insertError.message}`);
@@ -199,7 +238,11 @@ Creed Aventus 100ml,350000,2`;
 
         try {
           const { data, error } = await supabase.functions.invoke('enrich-product-details', {
-            body: { product_id: product.id, product_name: product.name },
+            body: { 
+              product_id: product.id, 
+              product_name: product.name,
+              brand: product.brand || null // Pass existing brand if provided
+            },
           });
 
           if (error) {
@@ -208,7 +251,13 @@ Creed Aventus 100ml,350000,2`;
 
           if (data?.success) {
             enrichedCount++;
-            addLog('success', `✓ Enriched: ${product.name}`);
+            const details = [];
+            if (data.enrichment?.image_url) details.push('image');
+            if (data.enrichment?.size && data.enrichment.size !== 'N/A') details.push('size');
+            if (data.enrichment?.brand_updated) details.push('brand');
+            
+            const detailStr = details.length > 0 ? ` (found: ${details.join(', ')})` : '';
+            addLog('success', `✓ Enriched: ${product.name}${detailStr}`);
             setStats(prev => ({ ...prev, enriched: enrichedCount }));
           } else {
             throw new Error(data?.error || 'Unknown error');
@@ -223,9 +272,9 @@ Creed Aventus 100ml,350000,2`;
           continue;
         }
 
-        // Small delay between requests to avoid rate limiting
+        // Delay between requests to avoid rate limiting (1.2 seconds)
         if (i < createdProducts.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 1200));
         }
       }
 
@@ -291,7 +340,7 @@ Creed Aventus 100ml,350000,2`;
           <DialogTitle>Bulk Product Import with AI Enrichment</DialogTitle>
           <DialogDescription>
             Upload a CSV file with product names and prices. The system will create the products and
-            automatically enrich them with descriptions, categories, and more using AI.
+            automatically enrich them with descriptions, categories, images, and more using AI.
           </DialogDescription>
         </DialogHeader>
 
@@ -315,7 +364,7 @@ Creed Aventus 100ml,350000,2`;
                 {file ? file.name : 'Click to upload CSV file'}
               </span>
               <span className="text-xs text-muted-foreground">
-                Required columns: name, price | Optional: stock
+                Required: name, price | Optional: cost_price, brand, stock
               </span>
             </label>
             <Button

@@ -657,15 +657,18 @@ export type Database = {
       }
       orders: {
         Row: {
+          applied_reseller_discount: boolean | null
           billing_address: Json | null
           created_at: string | null
           customer_email: string
           id: string
           items: Json
           notes: string | null
+          order_type: string | null
           payment_reference: string | null
           payment_status: Database["public"]["Enums"]["payment_status"] | null
           paystack_status: string | null
+          reseller_access_id: string | null
           shipping_address: Json | null
           shipping_cost: number | null
           status: Database["public"]["Enums"]["order_status"] | null
@@ -677,15 +680,18 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          applied_reseller_discount?: boolean | null
           billing_address?: Json | null
           created_at?: string | null
           customer_email: string
           id?: string
           items?: Json
           notes?: string | null
+          order_type?: string | null
           payment_reference?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"] | null
           paystack_status?: string | null
+          reseller_access_id?: string | null
           shipping_address?: Json | null
           shipping_cost?: number | null
           status?: Database["public"]["Enums"]["order_status"] | null
@@ -697,15 +703,18 @@ export type Database = {
           user_id: string
         }
         Update: {
+          applied_reseller_discount?: boolean | null
           billing_address?: Json | null
           created_at?: string | null
           customer_email?: string
           id?: string
           items?: Json
           notes?: string | null
+          order_type?: string | null
           payment_reference?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"] | null
           paystack_status?: string | null
+          reseller_access_id?: string | null
           shipping_address?: Json | null
           shipping_cost?: number | null
           status?: Database["public"]["Enums"]["order_status"] | null
@@ -716,7 +725,15 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "orders_reseller_access_id_fkey"
+            columns: ["reseller_access_id"]
+            isOneToOne: false
+            referencedRelation: "reseller_access"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pre_launch_settings: {
         Row: {
@@ -1058,10 +1075,12 @@ export type Database = {
           default_shipping_address: Json | null
           email: string
           full_name: string | null
+          has_reseller_access: boolean | null
           id: string
           phone: string | null
           rank_updated_at: string | null
           referred_by: string | null
+          reseller_access_expires_at: string | null
           updated_at: string
         }
         Insert: {
@@ -1072,10 +1091,12 @@ export type Database = {
           default_shipping_address?: Json | null
           email: string
           full_name?: string | null
+          has_reseller_access?: boolean | null
           id: string
           phone?: string | null
           rank_updated_at?: string | null
           referred_by?: string | null
+          reseller_access_expires_at?: string | null
           updated_at?: string
         }
         Update: {
@@ -1086,10 +1107,12 @@ export type Database = {
           default_shipping_address?: Json | null
           email?: string
           full_name?: string | null
+          has_reseller_access?: boolean | null
           id?: string
           phone?: string | null
           rank_updated_at?: string | null
           referred_by?: string | null
+          reseller_access_expires_at?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1254,6 +1277,50 @@ export type Database = {
             columns: ["affiliate_link_id"]
             isOneToOne: false
             referencedRelation: "affiliate_links"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reseller_access: {
+        Row: {
+          created_at: string | null
+          discount_percentage: number | null
+          expires_at: string
+          id: string
+          is_active: boolean | null
+          unlock_order_id: string | null
+          unlocked_at: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          discount_percentage?: number | null
+          expires_at: string
+          id?: string
+          is_active?: boolean | null
+          unlock_order_id?: string | null
+          unlocked_at?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          discount_percentage?: number | null
+          expires_at?: string
+          id?: string
+          is_active?: boolean | null
+          unlock_order_id?: string | null
+          unlocked_at?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reseller_access_unlock_order_id_fkey"
+            columns: ["unlock_order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
             referencedColumns: ["id"]
           },
         ]
@@ -1832,6 +1899,14 @@ export type Database = {
       ensure_membership_wallet: { Args: { p_user_id: string }; Returns: string }
       ensure_user_wallet: { Args: { p_user_id: string }; Returns: string }
       generate_affiliate_code: { Args: { p_user_id: string }; Returns: string }
+      get_active_reseller_access_id: {
+        Args: { p_user_id: string }
+        Returns: string
+      }
+      get_reseller_discount_percentage: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1862,6 +1937,10 @@ export type Database = {
       sanitize_html: { Args: { p_html: string }; Returns: string }
       update_product_cost_price: {
         Args: { p_cost_price: number; p_product_id: string }
+        Returns: boolean
+      }
+      user_has_reseller_access: {
+        Args: { p_user_id: string }
         Returns: boolean
       }
       verify_and_reward_user: {

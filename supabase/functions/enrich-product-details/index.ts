@@ -262,9 +262,12 @@ IMPORTANT RULES:
     // Step 4: Update the product
     console.log(`[enrich-product-details] Updating product in database...`);
     
+    // Normalize gender to lowercase to match database constraint (men, women, unisex)
+    const normalizedGender = enrichment.gender?.toLowerCase() || "unisex";
+    
     const updateData: Record<string, any> = {
       description: enrichment.description,
-      gender: enrichment.gender,
+      gender: normalizedGender,
       is_active: true, // Mark as active after enrichment
     };
 

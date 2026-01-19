@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Mail, Phone, MapPin, ShoppingBag, DollarSign } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, MapPin, ShoppingBag, DollarSign, KeyRound, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 
 interface Profile {
   id: string;
@@ -33,6 +34,7 @@ export function UserDetailPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sendingReset, setSendingReset] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -66,6 +68,37 @@ export function UserDetailPage() {
       console.error('Error fetching user data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSendPasswordReset = async () => {
+    if (!profile?.email) return;
+
+    setSendingReset(true);
+    try {
+      // Get current admin user
+      const { data: { user: adminUser } } = await supabase.auth.getUser();
+      
+      const { data, error } = await supabase.functions.invoke('send-password-reset', {
+        body: {
+          emails: [profile.email],
+          adminId: adminUser?.id
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.success && data?.results?.[0]?.success) {
+        toast.success('Password reset email sent successfully');
+      } else {
+        const errorMsg = data?.results?.[0]?.error || 'Failed to send email';
+        toast.error(`Failed to send: ${errorMsg}`);
+      }
+    } catch (error: any) {
+      console.error('Error sending password reset:', error);
+      toast.error(error.message || 'Failed to send password reset email');
+    } finally {
+      setSendingReset(false);
     }
   };
 
@@ -209,6 +242,28 @@ export function UserDetailPage() {
                 </div>
                 <p className="text-2xl font-bold">₦{totalSpent.toLocaleString()}</p>
               </div>
+            </div>
+
+            {/* Password Reset Button */}
+            <div className="pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={handleSendPasswordReset}
+                disabled={sendingReset}
+                className="w-full"
+              >
+                {sendingReset ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <KeyRound className="h-4 w-4 mr-2" />
+                    Send Password Reset Email
+                  </>
+                )}
+              </Button>
             </div>
           </CardContent>
         </Card>

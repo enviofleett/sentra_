@@ -18,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useAuth } from '@/contexts/AuthContext';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { BulkImportDialog } from '@/components/admin/BulkImportDialog';
 
 interface PriceIntelligence {
   average_market_price: number | null;
@@ -878,6 +879,7 @@ export function ProductsManagement() {
               className="pl-9 w-full sm:w-64"
             />
           </div>
+          <BulkImportDialog onSuccess={fetchProducts} />
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button onClick={() => openDialog()}>

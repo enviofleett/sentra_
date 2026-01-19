@@ -8,8 +8,9 @@ import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Pencil, Trash2, Plus, Upload, X, AlertTriangle, TrendingUp, TrendingDown, Search, CheckSquare, Square, Power, PowerOff, Radar, Zap, ArrowDown, Check, Loader2, RefreshCw, XCircle, CheckCircle, Edit3, Save } from 'lucide-react';
+import { Pencil, Trash2, Plus, Upload, X, AlertTriangle, TrendingUp, TrendingDown, Search, CheckSquare, Square, Power, PowerOff, Radar, Zap, ArrowDown, Check, Loader2, RefreshCw, XCircle, CheckCircle, Edit3, Save, Bomb } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ProductPerformanceChart } from '@/components/admin/ProductPerformanceChart';
 import { TopProductsWidget } from '@/components/admin/TopProductsWidget';
@@ -178,6 +179,11 @@ export function ProductsManagement() {
   // Inline price editing state
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
   const [editingPriceValue, setEditingPriceValue] = useState<string>('');
+  
+  // Delete all state
+  const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deletingAll, setDeletingAll] = useState(false);
   const [savingPriceId, setSavingPriceId] = useState<string | null>(null);
 
   const emptyProduct: Omit<Product, 'id'> = {
@@ -829,6 +835,41 @@ export function ProductsManagement() {
     }
     setIsDialogOpen(true);
   };
+
+  const handleDeleteAll = async () => {
+    if (deleteConfirmText !== 'DELETE ALL') {
+      toast.error('Please type "DELETE ALL" to confirm');
+      return;
+    }
+
+    setDeletingAll(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('delete-all-products');
+
+      if (error) {
+        console.error('Delete all error:', error);
+        toast.error(`Failed to delete products: ${error.message}`);
+        return;
+      }
+
+      if (!data.success) {
+        toast.error(data.error || 'Failed to delete products');
+        return;
+      }
+
+      toast.success(data.message || 'All products deleted successfully');
+      setDeleteAllDialogOpen(false);
+      setDeleteConfirmText('');
+      setSelectedProducts(new Set());
+      fetchProducts();
+    } catch (error) {
+      console.error('Delete all error:', error);
+      toast.error('An unexpected error occurred');
+    } finally {
+      setDeletingAll(false);
+    }
+  };
+
   if (loading) return <div className="flex items-center justify-center min-h-[400px]">
       <p className="text-muted-foreground">Loading products...</p>
     </div>;
@@ -880,6 +921,76 @@ export function ProductsManagement() {
             />
           </div>
           <BulkImportDialog onSuccess={fetchProducts} />
+          
+          {/* Delete All Button with AlertDialog */}
+          <AlertDialog open={deleteAllDialogOpen} onOpenChange={(open) => {
+            setDeleteAllDialogOpen(open);
+            if (!open) setDeleteConfirmText('');
+          }}>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" size="default">
+                <Bomb className="h-4 w-4 mr-2" />
+                Delete All
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                  <AlertTriangle className="h-5 w-5" />
+                  Delete All Products?
+                </AlertDialogTitle>
+                <AlertDialogDescription className="space-y-3">
+                  <p>
+                    This action will <strong>permanently delete ALL {products.length} products</strong> from the database, 
+                    along with all related data including:
+                  </p>
+                  <ul className="list-disc list-inside text-sm space-y-1">
+                    <li>Cart items</li>
+                    <li>Price intelligence data</li>
+                    <li>Product analytics</li>
+                    <li>Group buy campaigns</li>
+                  </ul>
+                  <p className="text-destructive font-medium">
+                    This action cannot be undone!
+                  </p>
+                  <div className="pt-2">
+                    <Label htmlFor="confirm-delete" className="text-foreground">
+                      Type <strong>DELETE ALL</strong> to confirm:
+                    </Label>
+                    <Input
+                      id="confirm-delete"
+                      value={deleteConfirmText}
+                      onChange={(e) => setDeleteConfirmText(e.target.value)}
+                      placeholder="DELETE ALL"
+                      className="mt-2"
+                      autoComplete="off"
+                    />
+                  </div>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={deletingAll}>Cancel</AlertDialogCancel>
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteAll}
+                  disabled={deleteConfirmText !== 'DELETE ALL' || deletingAll}
+                >
+                  {deletingAll ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete All Products
+                    </>
+                  )}
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button onClick={() => openDialog()}>

@@ -3,10 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Search, Users, UserPlus } from 'lucide-react';
-import { format } from 'date-fns';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Search, Users, UserPlus, KeyRound, Loader2, Mail, AlertTriangle } from 'lucide-react';
+import { format, subDays } from 'date-fns';
+import { toast } from 'sonner';
 
 interface Profile {
   id: string;
@@ -16,11 +21,21 @@ interface Profile {
   created_at: string;
 }
 
+type BulkResetTarget = 'all' | 'before_date' | 'selected';
+
 export function UsersManagement() {
   const navigate = useNavigate();
   const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Bulk reset state
+  const [bulkResetOpen, setBulkResetOpen] = useState(false);
+  const [bulkResetTarget, setBulkResetTarget] = useState<BulkResetTarget>('all');
+  const [bulkResetBeforeDate, setBulkResetBeforeDate] = useState(format(subDays(new Date(), 7), 'yyyy-MM-dd'));
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
+  const [sendingBulkReset, setSendingBulkReset] = useState(false);
+  const [bulkResetProgress, setBulkResetProgress] = useState({ sent: 0, total: 0 });
 
   useEffect(() => {
     fetchUsers();
@@ -69,6 +84,82 @@ export function UsersManagement() {
     return new Date(u.created_at) > weekAgo;
   }).length;
 
+  const toggleUserSelection = (userId: string) => {
+    const newSelected = new Set(selectedUserIds);
+    if (newSelected.has(userId)) {
+      newSelected.delete(userId);
+    } else {
+      newSelected.add(userId);
+    }
+    setSelectedUserIds(newSelected);
+  };
+
+  const getEmailsForBulkReset = (): string[] => {
+    let targetUsers: Profile[] = [];
+
+    switch (bulkResetTarget) {
+      case 'all':
+        targetUsers = users;
+        break;
+      case 'before_date':
+        const beforeDate = new Date(bulkResetBeforeDate);
+        targetUsers = users.filter(u => new Date(u.created_at) <= beforeDate);
+        break;
+      case 'selected':
+        targetUsers = users.filter(u => selectedUserIds.has(u.id));
+        break;
+    }
+
+    return targetUsers.map(u => u.email);
+  };
+
+  const handleBulkPasswordReset = async () => {
+    const emails = getEmailsForBulkReset();
+    
+    if (emails.length === 0) {
+      toast.error('No users selected for password reset');
+      return;
+    }
+
+    setSendingBulkReset(true);
+    setBulkResetProgress({ sent: 0, total: emails.length });
+
+    try {
+      // Get current admin user
+      const { data: { user: adminUser } } = await supabase.auth.getUser();
+
+      const { data, error } = await supabase.functions.invoke('send-password-reset', {
+        body: {
+          emails,
+          adminId: adminUser?.id
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        const { sent, failed } = data.summary;
+        setBulkResetProgress({ sent, total: emails.length });
+        
+        if (failed === 0) {
+          toast.success(`Password reset emails sent to all ${sent} users`);
+        } else {
+          toast.warning(`Sent ${sent} emails, ${failed} failed`);
+        }
+        
+        setBulkResetOpen(false);
+        setSelectedUserIds(new Set());
+      } else {
+        throw new Error(data?.error || 'Failed to send emails');
+      }
+    } catch (error: any) {
+      console.error('Error sending bulk password reset:', error);
+      toast.error(error.message || 'Failed to send password reset emails');
+    } finally {
+      setSendingBulkReset(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -77,7 +168,8 @@ export function UsersManagement() {
           <p className="text-muted-foreground">View and manage all registered customers</p>
         </div>
         
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-3">
+          <Skeleton className="h-32" />
           <Skeleton className="h-32" />
           <Skeleton className="h-32" />
         </div>
@@ -87,6 +179,8 @@ export function UsersManagement() {
     );
   }
 
+  const targetEmailCount = getEmailsForBulkReset().length;
+
   return (
     <div className="space-y-6">
       <div>
@@ -95,7 +189,7 @@ export function UsersManagement() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
@@ -121,13 +215,107 @@ export function UsersManagement() {
             </p>
           </CardContent>
         </Card>
+
+        {/* Bulk Password Reset Card */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Password Reset</CardTitle>
+            <KeyRound className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <Dialog open={bulkResetOpen} onOpenChange={setBulkResetOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="w-full">
+                  <Mail className="h-4 w-4 mr-2" />
+                  Send Bulk Reset
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Send Bulk Password Reset</DialogTitle>
+                  <DialogDescription>
+                    Send password reset emails to multiple users. This is useful for fixing broken reset links.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 py-4">
+                  <RadioGroup value={bulkResetTarget} onValueChange={(v) => setBulkResetTarget(v as BulkResetTarget)}>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="all" id="all" />
+                      <Label htmlFor="all">All users ({users.length})</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="before_date" id="before_date" />
+                      <Label htmlFor="before_date">Users registered before:</Label>
+                    </div>
+                    {bulkResetTarget === 'before_date' && (
+                      <Input
+                        type="date"
+                        value={bulkResetBeforeDate}
+                        onChange={(e) => setBulkResetBeforeDate(e.target.value)}
+                        className="ml-6 w-auto"
+                      />
+                    )}
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="selected" id="selected" />
+                      <Label htmlFor="selected">Selected users only ({selectedUserIds.size})</Label>
+                    </div>
+                  </RadioGroup>
+
+                  {bulkResetTarget === 'selected' && selectedUserIds.size === 0 && (
+                    <p className="text-sm text-muted-foreground ml-6">
+                      Select users from the table below first
+                    </p>
+                  )}
+
+                  <div className="flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-md">
+                    <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                    <p className="text-sm text-amber-600 dark:text-amber-400">
+                      This will send {targetEmailCount} email(s). Processing may take {Math.ceil(targetEmailCount * 1.5)} seconds due to rate limiting.
+                    </p>
+                  </div>
+                </div>
+
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setBulkResetOpen(false)} disabled={sendingBulkReset}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={handleBulkPasswordReset} 
+                    disabled={sendingBulkReset || targetEmailCount === 0}
+                  >
+                    {sendingBulkReset ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Sending ({bulkResetProgress.sent}/{bulkResetProgress.total})
+                      </>
+                    ) : (
+                      <>
+                        <Mail className="h-4 w-4 mr-2" />
+                        Send {targetEmailCount} Email{targetEmailCount !== 1 ? 's' : ''}
+                      </>
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            <p className="text-xs text-muted-foreground mt-2">
+              Fix broken password reset links
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Search Bar */}
       <Card>
         <CardHeader>
           <CardTitle>All Customers</CardTitle>
-          <CardDescription>Search and view customer profiles</CardDescription>
+          <CardDescription>
+            Search and view customer profiles. 
+            {bulkResetTarget === 'selected' && (
+              <span className="ml-1 text-primary">Click rows to select users for bulk reset.</span>
+            )}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="mb-4">
@@ -147,6 +335,9 @@ export function UsersManagement() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  {bulkResetTarget === 'selected' && (
+                    <TableHead className="w-12">Select</TableHead>
+                  )}
                   <TableHead>Customer</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
@@ -156,7 +347,7 @@ export function UsersManagement() {
               <TableBody>
                 {filteredUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={bulkResetTarget === 'selected' ? 5 : 4} className="text-center py-8 text-muted-foreground">
                       {searchQuery ? 'No customers found matching your search' : 'No customers yet'}
                     </TableCell>
                   </TableRow>
@@ -164,9 +355,26 @@ export function UsersManagement() {
                   filteredUsers.map((user) => (
                     <TableRow
                       key={user.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => navigate(`/admin/users/${user.id}`)}
+                      className={`cursor-pointer hover:bg-muted/50 ${selectedUserIds.has(user.id) ? 'bg-primary/5' : ''}`}
+                      onClick={() => {
+                        if (bulkResetTarget === 'selected') {
+                          toggleUserSelection(user.id);
+                        } else {
+                          navigate(`/admin/users/${user.id}`);
+                        }
+                      }}
                     >
+                      {bulkResetTarget === 'selected' && (
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            checked={selectedUserIds.has(user.id)}
+                            onChange={() => toggleUserSelection(user.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="h-4 w-4 rounded border-gray-300"
+                          />
+                        </TableCell>
+                      )}
                       <TableCell className="font-medium">
                         {user.full_name || 'No name provided'}
                       </TableCell>
@@ -190,15 +398,34 @@ export function UsersManagement() {
               filteredUsers.map((user) => (
                 <Card
                   key={user.id}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => navigate(`/admin/users/${user.id}`)}
+                  className={`cursor-pointer hover:bg-muted/50 ${selectedUserIds.has(user.id) ? 'ring-2 ring-primary' : ''}`}
+                  onClick={() => {
+                    if (bulkResetTarget === 'selected') {
+                      toggleUserSelection(user.id);
+                    } else {
+                      navigate(`/admin/users/${user.id}`);
+                    }
+                  }}
                 >
                   <CardContent className="p-4">
-                    <div className="font-medium mb-1">{user.full_name || 'No name provided'}</div>
-                    <div className="text-sm text-muted-foreground space-y-1">
-                      <div>{user.email}</div>
-                      {user.phone && <div>{user.phone}</div>}
-                      <div>{format(new Date(user.created_at), 'MMM d, yyyy')}</div>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="font-medium mb-1">{user.full_name || 'No name provided'}</div>
+                        <div className="text-sm text-muted-foreground space-y-1">
+                          <div>{user.email}</div>
+                          {user.phone && <div>{user.phone}</div>}
+                          <div>{format(new Date(user.created_at), 'MMM d, yyyy')}</div>
+                        </div>
+                      </div>
+                      {bulkResetTarget === 'selected' && (
+                        <input
+                          type="checkbox"
+                          checked={selectedUserIds.has(user.id)}
+                          onChange={() => toggleUserSelection(user.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="h-4 w-4 rounded border-gray-300"
+                        />
+                      )}
                     </div>
                   </CardContent>
                 </Card>

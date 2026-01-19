@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.bulk-scan-prices]
 verify_jwt = false
+
+[functions.send-password-reset]
+verify_jwt = false

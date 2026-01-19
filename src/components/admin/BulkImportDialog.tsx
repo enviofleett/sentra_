@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Upload, FileSpreadsheet, Loader2, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Upload, FileSpreadsheet, Loader2, CheckCircle, XCircle, AlertCircle, Download } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface BulkImportDialogProps {
@@ -44,6 +44,25 @@ export function BulkImportDialog({ onSuccess }: BulkImportDialogProps) {
   const addLog = useCallback((type: ImportLog['type'], message: string) => {
     setLogs(prev => [...prev, { type, message, timestamp: new Date() }]);
   }, []);
+
+  const downloadSampleCSV = () => {
+    const sampleData = `name,price,stock
+Dior Sauvage EDP 100ml,85000,10
+Chanel Bleu de Chanel EDT 150ml,120000,5
+Tom Ford Oud Wood 50ml,250000,3
+Versace Eros EDT 100ml,45000,15
+Creed Aventus 100ml,350000,2`;
+    
+    const blob = new Blob([sampleData], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'product_import_template.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -299,6 +318,16 @@ export function BulkImportDialog({ onSuccess }: BulkImportDialogProps) {
                 Required columns: name, price | Optional: stock
               </span>
             </label>
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              onClick={downloadSampleCSV}
+              className="mt-2 gap-1"
+            >
+              <Download className="h-3 w-3" />
+              Download sample template
+            </Button>
           </div>
 
           {/* Progress Section */}

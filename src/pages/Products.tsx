@@ -250,21 +250,21 @@ export default function Products() {
         >
           <h1 className="text-4xl md:text-5xl font-serif">Our Collection</h1>
           <p className="text-muted-foreground mt-3">Discover your perfect scent</p>
-        </motion.div>
-
-        {/* Mobile Search Bar */}
-        <div className="lg:hidden w-full mb-6">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input 
-              type="text" 
-              placeholder="Search products..." 
-              value={searchQuery}
-              onChange={handleSearchChange}
-              className="w-full pl-10 rounded-full"
-            />
+          
+          {/* Main Search Bar */}
+          <div className="mt-6 max-w-md mx-auto">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+              <Input 
+                type="text" 
+                placeholder="Search products, brands..." 
+                value={searchQuery}
+                onChange={handleSearchChange}
+                className="w-full pl-12 pr-4 py-3 h-12 text-base rounded-full border-muted-foreground/20 focus:border-primary"
+              />
+            </div>
           </div>
-        </div>
+        </motion.div>
 
         <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
           {/* Desktop Filters */}

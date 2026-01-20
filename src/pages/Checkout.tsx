@@ -19,6 +19,7 @@ import { AuthFormContent } from '@/pages/Auth';
 import { Phone, Wallet, CreditCard, Loader2, Truck, Clock, MapPin } from 'lucide-react';
 import { calculateShipping, ShippingCalculationResult, getShippingRegions } from '@/utils/shippingCalculator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 
 const checkoutSchema = z.object({
   fullName: z.string().min(2, 'Name must be at least 2 characters'),

@@ -46,6 +46,7 @@ interface Product {
   scent_profile: string | null;
   brand: string | null;
   size: string | null;
+  weight: number | null;
   margin_override_allowed: boolean | null;
   price_intelligence?: PriceIntelligence | null;
 }
@@ -202,6 +203,7 @@ export function ProductsManagement() {
     scent_profile: null,
     brand: null,
     size: null,
+    weight: null,
     margin_override_allowed: false
   };
   useEffect(() => {
@@ -373,6 +375,7 @@ export function ProductsManagement() {
     const scentValue = formData.get('scent_profile') as string;
     const validScents = ['aquatic', 'citrus', 'floral', 'fresh', 'gourmand', 'oriental', 'spicy', 'woody'];
     const costPriceValue = formData.get('cost_price') as string;
+    const weightValue = formData.get('weight') as string;
     const productData = {
       name: formData.get('name') as string,
       description: description,
@@ -389,6 +392,7 @@ export function ProductsManagement() {
       scent_profile: (scentValue && validScents.includes(scentValue) ? scentValue : null) as any,
       brand: formData.get('brand') as string || null,
       size: formData.get('size') as string || null,
+      weight: weightValue ? parseFloat(weightValue) : null,
       margin_override_allowed: marginOverride
     };
     if (editingProduct) {
@@ -1013,9 +1017,25 @@ export function ProductsManagement() {
                   <Input id="brand" name="brand" defaultValue={editingProduct?.brand || ''} placeholder="e.g., Tom Ford" />
                 </div>
               </div>
-              <div>
-                <Label htmlFor="size">Bottle Size</Label>
-                <Input id="size" name="size" defaultValue={editingProduct?.size || ''} placeholder="e.g., 100ml" />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="size">Bottle Size</Label>
+                  <Input id="size" name="size" defaultValue={editingProduct?.size || ''} placeholder="e.g., 100ml" />
+                </div>
+                <div>
+                  <Label htmlFor="weight">Weight (kg)</Label>
+                  <Input 
+                    id="weight" 
+                    name="weight" 
+                    type="number" 
+                    step="0.01" 
+                    defaultValue={editingProduct?.weight || ''} 
+                    placeholder="e.g., 0.5"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Leave blank to auto-calculate from size
+                  </p>
+                </div>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div>

@@ -5,17 +5,38 @@ import { Footer } from '@/components/layout/Footer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import { useCart } from '@/contexts/CartContext';
 import { useCartIncentive } from '@/hooks/useCartIncentive';
-import { calculateShipping, ShippingCalculationResult } from '@/utils/shippingCalculator';
-import { Minus, Plus, Trash2, ShoppingBag, Gift, Truck, Clock, Loader2 } from 'lucide-react';
+import { calculateShipping, ShippingCalculationResult, getShippingRegions } from '@/utils/shippingCalculator';
+import { Minus, Plus, Trash2, ShoppingBag, Gift, Truck, Clock, Loader2, MapPin } from 'lucide-react';
+
+interface ShippingRegion {
+  id: string;
+  name: string;
+}
 
 export default function Cart() {
   const { items, updateQuantity, removeFromCart, subtotal, totalItems } = useCart();
   const [shippingData, setShippingData] = useState<ShippingCalculationResult | null>(null);
   const [calculatingShipping, setCalculatingShipping] = useState(false);
+  const [regions, setRegions] = useState<ShippingRegion[]>([]);
+  const [selectedRegionId, setSelectedRegionId] = useState<string>('');
+  const [loadingRegions, setLoadingRegions] = useState(true);
 
-  // Calculate shipping when items change
+  // Fetch shipping regions on mount
+  useEffect(() => {
+    const fetchRegions = async () => {
+      setLoadingRegions(true);
+      const data = await getShippingRegions();
+      setRegions(data);
+      setLoadingRegions(false);
+    };
+    fetchRegions();
+  }, []);
+
+  // Calculate shipping when items or selected region changes
   useEffect(() => {
     const calculateShippingCost = async () => {
       if (items.length === 0) {
@@ -25,7 +46,6 @@ export default function Cart() {
 
       setCalculatingShipping(true);
       try {
-        // Map to the CartItem format expected by the shipping calculator
         const cartItems = items.map(item => ({
           product_id: item.product_id,
           quantity: item.quantity,
@@ -33,10 +53,11 @@ export default function Cart() {
             id: item.product_id,
             name: item.product.name,
             weight: (item.product as Record<string, unknown>).weight as number | undefined,
+            size: (item.product as Record<string, unknown>).size as string | undefined,
             vendor_id: item.product.vendor_id
           } : undefined
         }));
-        const result = await calculateShipping(cartItems);
+        const result = await calculateShipping(cartItems, selectedRegionId || undefined);
         setShippingData(result);
       } catch (error) {
         console.error('Error calculating shipping:', error);
@@ -46,7 +67,7 @@ export default function Cart() {
     };
 
     calculateShippingCost();
-  }, [items]);
+  }, [items, selectedRegionId]);
 
   const shippingCost = shippingData?.weightBasedCost || 0;
   const estimatedTotal = subtotal + shippingCost;
@@ -191,6 +212,31 @@ export default function Cart() {
               <CardContent className="p-6 space-y-4">
                 <h3 className="text-xl font-bold">Order Summary</h3>
 
+                {/* Region Selector for Shipping Estimate */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2 text-sm font-medium">
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                    Delivery Region
+                  </Label>
+                  <Select value={selectedRegionId} onValueChange={setSelectedRegionId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={loadingRegions ? "Loading regions..." : "Select your region"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {regions.map(region => (
+                        <SelectItem key={region.id} value={region.id}>
+                          {region.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {!selectedRegionId && (
+                    <p className="text-xs text-muted-foreground">
+                      Select your region for accurate shipping estimate
+                    </p>
+                  )}
+                </div>
+
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Subtotal ({totalItems} items)</span>
@@ -206,6 +252,8 @@ export default function Cart() {
                         <Loader2 className="h-3 w-3 animate-spin" />
                         Calculating...
                       </span>
+                    ) : !selectedRegionId ? (
+                      <span className="text-muted-foreground text-xs">Select region above</span>
                     ) : shippingCost === 0 ? (
                       <span className="font-medium text-green-600 dark:text-green-400">FREE</span>
                     ) : (
@@ -214,7 +262,38 @@ export default function Cart() {
                   </div>
                 </div>
 
-                {/* Vendor Delivery Schedules */}
+                {/* Vendor Breakdown with Location-Based Pricing */}
+                {shippingData && shippingData.hasLocationBasedPricing && shippingData.vendorBreakdown.length > 0 && (
+                  <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <Truck className="h-4 w-4 text-muted-foreground" />
+                      <span>Shipping Breakdown</span>
+                    </div>
+                    <div className="space-y-2">
+                      {shippingData.vendorBreakdown.map((breakdown, index) => (
+                        <div key={index} className="text-xs border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground truncate max-w-[140px]">
+                              {breakdown.vendorName}
+                            </span>
+                            <span className="font-medium">
+                              ₦{breakdown.shippingCost.toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-muted-foreground mt-0.5">
+                            <span>{breakdown.vendorRegionName || 'Unknown'} → Your Region</span>
+                            <span>{breakdown.totalWeight.toFixed(2)}kg</span>
+                          </div>
+                          {breakdown.estimatedDays && (
+                            <span className="text-xs text-primary">{breakdown.estimatedDays}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Vendor Delivery Schedules (MOQ-based) */}
                 {shippingData && shippingData.vendorSchedules.length > 0 && (
                   <div className="bg-muted/50 rounded-lg p-3 space-y-2">
                     <div className="flex items-center gap-2 text-sm font-medium">
@@ -243,7 +322,7 @@ export default function Cart() {
                       ₦{estimatedTotal.toLocaleString()}
                     </span>
                   </div>
-                  {shippingCost > 0 && (
+                  {!selectedRegionId && (
                     <p className="text-xs text-muted-foreground mt-1">
                       Final shipping calculated at checkout
                     </p>

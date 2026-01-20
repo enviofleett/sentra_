@@ -9,8 +9,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
-import { Sparkles, SlidersHorizontal, Search, ShoppingBag } from 'lucide-react';
+import { Sparkles, SlidersHorizontal, Search, ShoppingBag, ChevronDown } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { motion } from 'framer-motion';
 import { useCart } from '@/contexts/CartContext';
 
@@ -185,23 +186,28 @@ export default function Products() {
         </div>
       </div>
 
-      <div>
-        <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-4 font-medium">Brands</h3>
-        <div className="space-y-3">
-          {brands.map((brand) => (
-            <div key={brand} className="flex items-center space-x-3">
-              <Checkbox
-                id={`brand-${brand}`}
-                checked={selectedBrands.includes(brand)}
-                onCheckedChange={() => toggleBrand(brand)}
-              />
-              <Label htmlFor={`brand-${brand}`} className="cursor-pointer text-sm font-normal">
-                {brand}
-              </Label>
-            </div>
-          ))}
-        </div>
-      </div>
+      <Collapsible defaultOpen={false}>
+        <CollapsibleTrigger className="flex items-center justify-between w-full group">
+          <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-medium">Brands</h3>
+          <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="mt-4">
+          <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+            {brands.map((brand) => (
+              <div key={brand} className="flex items-center space-x-3">
+                <Checkbox
+                  id={`brand-${brand}`}
+                  checked={selectedBrands.includes(brand)}
+                  onCheckedChange={() => toggleBrand(brand)}
+                />
+                <Label htmlFor={`brand-${brand}`} className="cursor-pointer text-sm font-normal">
+                  {brand}
+                </Label>
+              </div>
+            ))}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
 
       <div>
         <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-4 font-medium">Sort By</h3>

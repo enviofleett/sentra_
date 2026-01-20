@@ -991,6 +991,7 @@ export type Database = {
           stock_quantity: number | null
           updated_at: string | null
           vendor_id: string | null
+          weight: number | null
         }
         Insert: {
           active_group_buy_id?: string | null
@@ -1016,6 +1017,7 @@ export type Database = {
           stock_quantity?: number | null
           updated_at?: string | null
           vendor_id?: string | null
+          weight?: number | null
         }
         Update: {
           active_group_buy_id?: string | null
@@ -1041,6 +1043,7 @@ export type Database = {
           stock_quantity?: number | null
           updated_at?: string | null
           vendor_id?: string | null
+          weight?: number | null
         }
         Relationships: [
           {
@@ -1400,6 +1403,33 @@ export type Database = {
         }
         Relationships: []
       }
+      shipping_weight_rates: {
+        Row: {
+          cost: number
+          created_at: string
+          id: string
+          max_weight: number
+          min_weight: number
+          updated_at: string
+        }
+        Insert: {
+          cost: number
+          created_at?: string
+          id?: string
+          max_weight: number
+          min_weight: number
+          updated_at?: string
+        }
+        Update: {
+          cost?: number
+          created_at?: string
+          id?: string
+          max_weight?: number
+          min_weight?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       site_banners: {
         Row: {
           button_link: string | null
@@ -1528,6 +1558,44 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      vendor_shipping_rules: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          min_quantity: number
+          shipping_schedule: string
+          updated_at: string
+          vendor_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          min_quantity: number
+          shipping_schedule: string
+          updated_at?: string
+          vendor_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          min_quantity?: number
+          shipping_schedule?: string
+          updated_at?: string
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_shipping_rules_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       vendors: {
         Row: {

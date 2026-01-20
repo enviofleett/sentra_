@@ -16,7 +16,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { AuthFormContent } from '@/pages/Auth';
-import { Phone, Wallet, CreditCard, Loader2 } from 'lucide-react';
+import { Phone, Wallet, CreditCard, Loader2, Truck, Clock } from 'lucide-react';
+import { calculateShipping, ShippingCalculationResult } from '@/utils/shippingCalculator';
 
 const checkoutSchema = z.object({
   fullName: z.string().min(2, 'Name must be at least 2 characters'),
@@ -43,6 +44,10 @@ export default function Checkout() {
   const [phoneInput, setPhoneInput] = useState('');
   const [savingPhone, setSavingPhone] = useState(false);
   const [profileChecked, setProfileChecked] = useState(false);
+  
+  // Shipping calculation state
+  const [shippingData, setShippingData] = useState<ShippingCalculationResult | null>(null);
+  const [calculatingShipping, setCalculatingShipping] = useState(false);
 
   const form = useForm<CheckoutFormData>({
     resolver: zodResolver(checkoutSchema),
@@ -59,6 +64,25 @@ export default function Checkout() {
   useEffect(() => {
     fetchTerms();
   }, []);
+
+  // Calculate shipping when cart items change
+  useEffect(() => {
+    const fetchShipping = async () => {
+      if (items.length === 0) return;
+      
+      setCalculatingShipping(true);
+      try {
+        const result = await calculateShipping(items);
+        setShippingData(result);
+      } catch (error) {
+        console.error('Failed to calculate shipping:', error);
+      } finally {
+        setCalculatingShipping(false);
+      }
+    };
+    
+    fetchShipping();
+  }, [items]);
 
   const fetchTerms = async () => {
     const { data } = await supabase
@@ -186,8 +210,9 @@ export default function Checkout() {
   if (items.length === 0) {
     return null;
   }
-
-  const canPayWithMembership = membershipEnabled && isMember && balance >= subtotal;
+  const shippingCost = shippingData?.weightBasedCost || 0;
+  const totalAmount = subtotal + shippingCost;
+  const canPayWithMembership = membershipEnabled && isMember && balance >= totalAmount;
 
   const handleMembershipPayment = async (data: CheckoutFormData) => {
     // Verify session
@@ -237,7 +262,8 @@ export default function Checkout() {
             quantity: item.quantity,
             vendor_id: item.product?.vendor_id
           })),
-          total_amount: subtotal,
+          total_amount: totalAmount,
+          shipping_cost: shippingCost,
           shipping_address: {
             fullName: data.fullName,
             phone: data.phone,
@@ -245,7 +271,8 @@ export default function Checkout() {
             city: data.city,
             state: data.state,
           },
-          customer_email: data.email
+          customer_email: data.email,
+          delivery_schedule: shippingData?.consolidatedSchedule || null
         }
       });
 
@@ -340,8 +367,8 @@ export default function Checkout() {
         })),
         subtotal: subtotal,
         tax: 0,
-        shipping_cost: 0,
-        total_amount: subtotal,
+        shipping_cost: shippingCost,
+        total_amount: totalAmount,
         shipping_address: {
           fullName: data.fullName,
           phone: data.phone,
@@ -355,7 +382,8 @@ export default function Checkout() {
           address: data.address,
           city: data.city,
           state: data.state,
-        }
+        },
+        notes: shippingData?.consolidatedSchedule ? `Delivery: ${shippingData.consolidatedSchedule}` : null
       };
 
       const { data: order, error: orderError } = await supabase
@@ -408,7 +436,7 @@ export default function Checkout() {
       const handler = PaystackPop.setup({
         key: paystackPublicKey,
         email: data.email,
-        amount: subtotal * 100,
+        amount: totalAmount * 100,
         ref: paymentReference,
         callback_url: callbackUrl,
         metadata: {
@@ -673,7 +701,7 @@ export default function Checkout() {
                       </div>
                     )}
 
-                    <Button type="submit" size="lg" className="w-full" disabled={processing}>
+                    <Button type="submit" size="lg" className="w-full" disabled={processing || calculatingShipping}>
                       {processing ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -682,10 +710,10 @@ export default function Checkout() {
                       ) : paymentMethod === 'membership' ? (
                         <>
                           <Wallet className="mr-2 h-4 w-4" />
-                          Pay ₦{subtotal.toLocaleString()} with Credit
+                          Pay ₦{totalAmount.toLocaleString()} with Credit
                         </>
                       ) : (
-                        'Place Order'
+                        `Place Order - ₦${totalAmount.toLocaleString()}`
                       )}
                     </Button>
                   </form>
@@ -715,13 +743,41 @@ export default function Checkout() {
                     <span>Subtotal</span>
                     <span>₦{subtotal.toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span>Shipping</span>
-                    <span className="text-secondary">FREE</span>
+                  <div className="flex justify-between items-center">
+                    <span className="flex items-center gap-1">
+                      <Truck className="h-4 w-4" />
+                      Shipping
+                    </span>
+                    {calculatingShipping ? (
+                      <span className="text-muted-foreground text-sm">Calculating...</span>
+                    ) : shippingCost > 0 ? (
+                      <span>₦{shippingCost.toLocaleString()}</span>
+                    ) : (
+                      <span className="text-secondary font-medium">FREE</span>
+                    )}
                   </div>
+                  
+                  {/* Vendor Delivery Schedules */}
+                  {shippingData?.hasVendorRules && shippingData.vendorSchedules.length > 0 && (
+                    <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                      <div className="flex items-center gap-1 text-sm font-medium text-foreground">
+                        <Clock className="h-4 w-4" />
+                        Delivery Schedule
+                      </div>
+                      <div className="space-y-1">
+                        {shippingData.vendorSchedules.map((vs, idx) => (
+                          <div key={idx} className="flex justify-between text-xs text-muted-foreground">
+                            <span>{vs.vendorName}</span>
+                            <span className="font-medium text-foreground">{vs.schedule}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="flex justify-between font-bold text-lg pt-2 border-t">
                     <span>Total</span>
-                    <span className="text-secondary">₦{subtotal.toLocaleString()}</span>
+                    <span className="text-primary">₦{totalAmount.toLocaleString()}</span>
                   </div>
                 </div>
               </CardContent>

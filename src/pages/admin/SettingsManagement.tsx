@@ -9,8 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Plus, Mail, Users, FileText, Image as ImageIcon, Link, Rocket, Upload, PieChart, TrendingUp, ExternalLink, Crown } from 'lucide-react';
+import { Loader2, Plus, Mail, Users, FileText, Image as ImageIcon, Link, Rocket, Upload, PieChart, TrendingUp, ExternalLink, Crown, Truck } from 'lucide-react';
 import { useBranding } from '@/hooks/useBranding';
+import { ShippingRateManager } from '@/components/admin/ShippingRateManager';
 
 // Preview Store Button Component
 function PreviewStoreButton({ isPrelaunchEnabled }: { isPrelaunchEnabled: boolean }) {
@@ -1804,12 +1805,15 @@ export default function SettingsManagement() {
       <Card>
         <Tabs defaultValue="membership" className="w-full">
           <CardHeader className="p-0 overflow-x-auto">
-            <TabsList className="grid w-full grid-cols-8 h-auto rounded-none border-b bg-transparent p-0 min-w-[800px]">
+            <TabsList className="grid w-full grid-cols-9 h-auto rounded-none border-b bg-transparent p-0 min-w-[900px]">
               <TabsTrigger value="membership" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
                 <Crown className="h-4 w-4 mr-2" /> Membership
               </TabsTrigger>
               <TabsTrigger value="prelaunch" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
                 <Rocket className="h-4 w-4 mr-2" /> Pre-Launch
+              </TabsTrigger>
+              <TabsTrigger value="shipping" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
+                <Truck className="h-4 w-4 mr-2" /> Shipping
               </TabsTrigger>
               <TabsTrigger value="profits" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
                 <PieChart className="h-4 w-4 mr-2" /> Profits
@@ -1838,6 +1842,10 @@ export default function SettingsManagement() {
 
           <TabsContent value="prelaunch" className="p-6">
             <PreLaunchSettingsManager />
+          </TabsContent>
+
+          <TabsContent value="shipping" className="p-6">
+            <ShippingRateManager />
           </TabsContent>
 
           <TabsContent value="profits" className="p-6">

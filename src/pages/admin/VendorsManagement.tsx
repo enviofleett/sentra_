@@ -8,7 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Pencil, Trash2, Plus, Store } from 'lucide-react';
+import { Pencil, Trash2, Plus, Store, Truck } from 'lucide-react';
+import { VendorShippingRulesDialog } from '@/components/admin/VendorShippingRulesDialog';
 
 interface Vendor {
   id: string;
@@ -27,6 +28,15 @@ export function VendorsManagement() {
   const [editingVendor, setEditingVendor] = useState<Vendor | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [bankInfo, setBankInfo] = useState('');
+  
+  // Shipping rules dialog state
+  const [shippingRulesOpen, setShippingRulesOpen] = useState(false);
+  const [selectedVendorForRules, setSelectedVendorForRules] = useState<{id: string, name: string} | null>(null);
+
+  const openShippingRulesDialog = (vendor: Vendor) => {
+    setSelectedVendorForRules({ id: vendor.id, name: vendor.rep_full_name });
+    setShippingRulesOpen(true);
+  };
 
   useEffect(() => {
     fetchVendors();
@@ -233,6 +243,7 @@ export function VendorsManagement() {
                 <TableHead>Email</TableHead>
                 <TableHead>Phone</TableHead>
                 <TableHead>Location</TableHead>
+                <TableHead>Shipping</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -243,6 +254,16 @@ export function VendorsManagement() {
                   <TableCell>{vendor.email}</TableCell>
                   <TableCell>{vendor.phone || '-'}</TableCell>
                   <TableCell>{vendor.store_location || '-'}</TableCell>
+                  <TableCell>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => openShippingRulesDialog(vendor)}
+                    >
+                      <Truck className="h-4 w-4 mr-1" />
+                      Rules
+                    </Button>
+                  </TableCell>
                   <TableCell>
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" onClick={() => openDialog(vendor)}>
@@ -259,6 +280,19 @@ export function VendorsManagement() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Vendor Shipping Rules Dialog */}
+      {selectedVendorForRules && (
+        <VendorShippingRulesDialog
+          vendorId={selectedVendorForRules.id}
+          vendorName={selectedVendorForRules.name}
+          isOpen={shippingRulesOpen}
+          onClose={() => {
+            setShippingRulesOpen(false);
+            setSelectedVendorForRules(null);
+          }}
+        />
+      )}
     </div>
   );
 }

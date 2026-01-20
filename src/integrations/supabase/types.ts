@@ -1403,6 +1403,81 @@ export type Database = {
         }
         Relationships: []
       }
+      shipping_matrix: {
+        Row: {
+          base_cost: number
+          created_at: string
+          destination_region_id: string
+          estimated_days: string | null
+          id: string
+          is_active: boolean
+          origin_region_id: string
+          updated_at: string
+          weight_rate: number
+        }
+        Insert: {
+          base_cost?: number
+          created_at?: string
+          destination_region_id: string
+          estimated_days?: string | null
+          id?: string
+          is_active?: boolean
+          origin_region_id: string
+          updated_at?: string
+          weight_rate?: number
+        }
+        Update: {
+          base_cost?: number
+          created_at?: string
+          destination_region_id?: string
+          estimated_days?: string | null
+          id?: string
+          is_active?: boolean
+          origin_region_id?: string
+          updated_at?: string
+          weight_rate?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shipping_matrix_destination_region_id_fkey"
+            columns: ["destination_region_id"]
+            isOneToOne: false
+            referencedRelation: "shipping_regions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shipping_matrix_origin_region_id_fkey"
+            columns: ["origin_region_id"]
+            isOneToOne: false
+            referencedRelation: "shipping_regions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shipping_regions: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       shipping_weight_rates: {
         Row: {
           cost: number
@@ -1605,6 +1680,7 @@ export type Database = {
           id: string
           phone: string | null
           rep_full_name: string
+          shipping_region_id: string | null
           store_location: string | null
           updated_at: string | null
         }
@@ -1615,6 +1691,7 @@ export type Database = {
           id?: string
           phone?: string | null
           rep_full_name: string
+          shipping_region_id?: string | null
           store_location?: string | null
           updated_at?: string | null
         }
@@ -1625,10 +1702,19 @@ export type Database = {
           id?: string
           phone?: string | null
           rep_full_name?: string
+          shipping_region_id?: string | null
           store_location?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "vendors_shipping_region_id_fkey"
+            columns: ["shipping_region_id"]
+            isOneToOne: false
+            referencedRelation: "shipping_regions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       waiting_list: {
         Row: {

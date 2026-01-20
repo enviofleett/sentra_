@@ -7,9 +7,15 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Pencil, Trash2, Plus, Store, Truck } from 'lucide-react';
+import { Pencil, Trash2, Plus, Store, Truck, MapPin } from 'lucide-react';
 import { VendorShippingRulesDialog } from '@/components/admin/VendorShippingRulesDialog';
+
+interface ShippingRegion {
+  id: string;
+  name: string;
+}
 
 interface Vendor {
   id: string;
@@ -18,6 +24,8 @@ interface Vendor {
   email: string;
   bank_info: any | null;
   store_location: string | null;
+  shipping_region_id: string | null;
+  shipping_region?: ShippingRegion | null;
   created_at: string;
   updated_at: string;
 }
@@ -28,6 +36,8 @@ export function VendorsManagement() {
   const [editingVendor, setEditingVendor] = useState<Vendor | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [bankInfo, setBankInfo] = useState('');
+  const [selectedRegionId, setSelectedRegionId] = useState<string>('');
+  const [shippingRegions, setShippingRegions] = useState<ShippingRegion[]>([]);
   
   // Shipping rules dialog state
   const [shippingRulesOpen, setShippingRulesOpen] = useState(false);
@@ -40,12 +50,26 @@ export function VendorsManagement() {
 
   useEffect(() => {
     fetchVendors();
+    fetchShippingRegions();
   }, []);
+
+  const fetchShippingRegions = async () => {
+    const { data } = await supabase
+      .from('shipping_regions')
+      .select('id, name')
+      .eq('is_active', true)
+      .order('name');
+    
+    setShippingRegions(data || []);
+  };
 
   const fetchVendors = async () => {
     const { data, error } = await supabase
       .from('vendors')
-      .select('*')
+      .select(`
+        *,
+        shipping_region:shipping_regions(id, name)
+      `)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -77,7 +101,8 @@ export function VendorsManagement() {
       email: formData.get('email') as string,
       phone: formData.get('phone') as string || null,
       store_location: formData.get('store_location') as string || null,
-      bank_info: parsedBankInfo
+      bank_info: parsedBankInfo,
+      shipping_region_id: selectedRegionId || null
     };
 
     if (editingVendor) {
@@ -130,6 +155,7 @@ export function VendorsManagement() {
   const openDialog = (vendor?: Vendor) => {
     setEditingVendor(vendor || null);
     setBankInfo(vendor?.bank_info ? JSON.stringify(vendor.bank_info, null, 2) : '');
+    setSelectedRegionId(vendor?.shipping_region_id || '');
     setIsDialogOpen(true);
   };
 
@@ -203,6 +229,27 @@ export function VendorsManagement() {
                 </div>
               </div>
 
+              {/* Shipping Region Selection */}
+              <div>
+                <Label htmlFor="shipping_region">Shipping Region</Label>
+                <Select value={selectedRegionId} onValueChange={setSelectedRegionId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select shipping region" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">No region assigned</SelectItem>
+                    {shippingRegions.map((region) => (
+                      <SelectItem key={region.id} value={region.id}>
+                        {region.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  The region where this vendor ships from
+                </p>
+              </div>
+
               <div>
                 <Label htmlFor="bank_info">Bank Information (JSON)</Label>
                 <Textarea 
@@ -243,6 +290,7 @@ export function VendorsManagement() {
                 <TableHead>Email</TableHead>
                 <TableHead>Phone</TableHead>
                 <TableHead>Location</TableHead>
+                <TableHead>Region</TableHead>
                 <TableHead>Shipping</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -254,6 +302,16 @@ export function VendorsManagement() {
                   <TableCell>{vendor.email}</TableCell>
                   <TableCell>{vendor.phone || '-'}</TableCell>
                   <TableCell>{vendor.store_location || '-'}</TableCell>
+                  <TableCell>
+                    {vendor.shipping_region ? (
+                      <span className="inline-flex items-center gap-1 text-sm">
+                        <MapPin className="h-3 w-3 text-muted-foreground" />
+                        {vendor.shipping_region.name}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">Not set</span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Button 
                       size="sm" 

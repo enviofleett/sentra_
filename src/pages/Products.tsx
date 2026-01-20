@@ -27,10 +27,10 @@ export default function Products() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
-  const [vendors, setVendors] = useState<any[]>([]);
+  const [brands, setBrands] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [selectedVendors, setSelectedVendors] = useState<string[]>([]);
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState('newest');
   const [minPrice, setMinPrice] = useState(0);
   const [maxPrice, setMaxPrice] = useState(1000000);
@@ -58,18 +58,22 @@ export default function Products() {
       newSearchParams.delete('q');
     }
     setSearchParams(newSearchParams, { replace: true });
-  }, [selectedCategories, selectedVendors, sortBy, searchQuery]);
+  }, [selectedCategories, selectedBrands, sortBy, searchQuery]);
 
   const loadData = async () => {
     setLoading(true);
     
-    const [categoriesData, vendorsData] = await Promise.all([
+    // Fetch categories and unique brands
+    const [categoriesData, brandsData] = await Promise.all([
       supabase.from('categories').select('*').order('name'),
-      supabase.from('vendors').select('*').order('rep_full_name')
+      supabase.from('products').select('brand').eq('is_active', true).not('brand', 'is', null)
     ]);
 
     if (categoriesData.data) setCategories(categoriesData.data);
-    if (vendorsData.data) setVendors(vendorsData.data);
+    if (brandsData.data) {
+      const uniqueBrands = [...new Set(brandsData.data.map(p => p.brand).filter(Boolean))] as string[];
+      setBrands(uniqueBrands.sort());
+    }
 
     let query = supabase
       .from('products')
@@ -82,8 +86,8 @@ export default function Products() {
       query = query.in('category_id', selectedCategories);
     }
 
-    if (selectedVendors.length > 0) {
-      query = query.in('vendor_id', selectedVendors);
+    if (selectedBrands.length > 0) {
+      query = query.in('brand', selectedBrands);
     }
 
     switch (sortBy) {
@@ -132,11 +136,11 @@ export default function Products() {
     );
   };
 
-  const toggleVendor = (vendorId: string) => {
-    setSelectedVendors(prev =>
-      prev.includes(vendorId)
-        ? prev.filter(id => id !== vendorId)
-        : [...prev, vendorId]
+  const toggleBrand = (brand: string) => {
+    setSelectedBrands(prev =>
+      prev.includes(brand)
+        ? prev.filter(b => b !== brand)
+        : [...prev, brand]
     );
   };
 
@@ -181,15 +185,15 @@ export default function Products() {
       <div>
         <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-4 font-medium">Brands</h3>
         <div className="space-y-3">
-          {vendors.map((vendor) => (
-            <div key={vendor.id} className="flex items-center space-x-3">
+          {brands.map((brand) => (
+            <div key={brand} className="flex items-center space-x-3">
               <Checkbox
-                id={`vendor-${vendor.id}`}
-                checked={selectedVendors.includes(vendor.id)}
-                onCheckedChange={() => toggleVendor(vendor.id)}
+                id={`brand-${brand}`}
+                checked={selectedBrands.includes(brand)}
+                onCheckedChange={() => toggleBrand(brand)}
               />
-              <Label htmlFor={`vendor-${vendor.id}`} className="cursor-pointer text-sm font-normal">
-                {vendor.rep_full_name}
+              <Label htmlFor={`brand-${brand}`} className="cursor-pointer text-sm font-normal">
+                {brand}
               </Label>
             </div>
           ))}
@@ -258,9 +262,9 @@ export default function Products() {
                     <SlidersHorizontal className="h-4 w-4" />
                     Filters
                   </span>
-                  {(selectedCategories.length > 0 || selectedVendors.length > 0) && (
+                  {(selectedCategories.length > 0 || selectedBrands.length > 0) && (
                     <Badge variant="secondary" className="ml-2">
-                      {selectedCategories.length + selectedVendors.length}
+                      {selectedCategories.length + selectedBrands.length}
                     </Badge>
                   )}
                 </Button>

@@ -1,5 +1,9 @@
 import { supabase } from '@/integrations/supabase/client';
 
+// Constants for weight calculation
+const PACKAGING_OVERHEAD_KG = 0.2; // Glass bottle + box weight
+const DEFAULT_WEIGHT_KG = 0.5; // Fallback weight for products without weight data
+
 interface CartItem {
   product_id: string;
   quantity: number;
@@ -7,20 +11,9 @@ interface CartItem {
     id: string;
     name: string;
     weight?: number | null;
+    size?: string | null;
     vendor_id?: string | null;
   };
-}
-
-interface WeightRate {
-  min_weight: number;
-  max_weight: number;
-  cost: number;
-}
-
-interface VendorRule {
-  vendor_id: string;
-  min_quantity: number;
-  shipping_schedule: string;
 }
 
 interface VendorSchedule {
@@ -28,6 +21,19 @@ interface VendorSchedule {
   vendorName: string;
   quantity: number;
   schedule: string;
+  estimatedDays?: string;
+}
+
+interface VendorBreakdown {
+  vendorId: string;
+  vendorName: string;
+  vendorRegionId: string | null;
+  vendorRegionName: string | null;
+  totalWeight: number;
+  itemCount: number;
+  shippingCost: number;
+  schedule: string;
+  estimatedDays?: string;
 }
 
 export interface ShippingCalculationResult {
@@ -36,13 +42,56 @@ export interface ShippingCalculationResult {
   vendorSchedules: VendorSchedule[];
   consolidatedSchedule: string;
   hasVendorRules: boolean;
+  vendorBreakdown: VendorBreakdown[];
+  hasLocationBasedPricing: boolean;
 }
 
 /**
- * Calculate shipping based on cart weight and vendor-specific MOQ rules
+ * Extract numeric weight from product.size string (e.g., "100ml" -> 0.1kg)
+ * Adds packaging overhead for liquid products
+ */
+export function getProductWeight(product: CartItem['product']): number {
+  if (!product) return DEFAULT_WEIGHT_KG;
+
+  // 1. If product.weight is set and > 0, use it directly
+  if (product.weight && product.weight > 0) {
+    return product.weight;
+  }
+
+  // 2. Try to parse weight from size string (e.g., "100ml", "50ML", "200 ml")
+  if (product.size) {
+    const sizeStr = product.size.toLowerCase().replace(/\s/g, '');
+    const mlMatch = sizeStr.match(/(\d+(?:\.\d+)?)\s*ml/);
+    
+    if (mlMatch) {
+      const mlValue = parseFloat(mlMatch[1]);
+      // Convert ml to kg (1000ml = 1kg for liquid) + packaging overhead
+      const liquidWeight = mlValue / 1000;
+      return liquidWeight + PACKAGING_OVERHEAD_KG;
+    }
+  }
+
+  // 3. Fallback to default weight
+  return DEFAULT_WEIGHT_KG;
+}
+
+/**
+ * Calculate total weight for an array of cart items
+ */
+export function calculateTotalWeight(cartItems: CartItem[]): number {
+  return cartItems.reduce((sum, item) => {
+    const weight = getProductWeight(item.product);
+    return sum + weight * item.quantity;
+  }, 0);
+}
+
+/**
+ * Calculate shipping based on cart weight, vendor regions, and customer location
+ * Enhanced version with location-aware pricing
  */
 export async function calculateShipping(
-  cartItems: CartItem[]
+  cartItems: CartItem[],
+  customerRegionId?: string
 ): Promise<ShippingCalculationResult> {
   // Default result
   const result: ShippingCalculationResult = {
@@ -51,110 +100,188 @@ export async function calculateShipping(
     vendorSchedules: [],
     consolidatedSchedule: 'Standard shipping',
     hasVendorRules: false,
+    vendorBreakdown: [],
+    hasLocationBasedPricing: false,
   };
 
   if (!cartItems || cartItems.length === 0) {
     return result;
   }
 
-  // Step 1: Calculate total cart weight
-  result.totalWeight = cartItems.reduce((sum, item) => {
-    const weight = item.product?.weight || 0;
-    return sum + weight * item.quantity;
-  }, 0);
+  // Step 1: Calculate total cart weight using smart weight calculation
+  result.totalWeight = calculateTotalWeight(cartItems);
 
-  // Step 2: Fetch global weight-based shipping rates
-  const { data: weightRates } = await supabase
-    .from('shipping_weight_rates')
-    .select('min_weight, max_weight, cost')
-    .order('min_weight', { ascending: true });
+  // Step 2: Group cart items by vendor
+  const vendorGroups: Record<string, { 
+    items: CartItem[]; 
+    quantity: number; 
+    weight: number;
+  }> = {};
 
-  if (weightRates && weightRates.length > 0) {
-    const matchingRate = weightRates.find(
-      (rate) =>
-        result.totalWeight >= rate.min_weight &&
-        result.totalWeight < rate.max_weight
-    );
+  cartItems.forEach((item) => {
+    const vendorId = item.product?.vendor_id || 'unknown';
+    if (!vendorGroups[vendorId]) {
+      vendorGroups[vendorId] = { items: [], quantity: 0, weight: 0 };
+    }
+    vendorGroups[vendorId].items.push(item);
+    vendorGroups[vendorId].quantity += item.quantity;
+    vendorGroups[vendorId].weight += getProductWeight(item.product) * item.quantity;
+  });
+
+  const vendorIds = Object.keys(vendorGroups).filter(id => id !== 'unknown');
+
+  // Step 3: Fetch vendor information including their shipping regions
+  let vendorRegionMap: Record<string, { regionId: string | null; regionName: string | null; name: string }> = {};
+  
+  if (vendorIds.length > 0) {
+    const { data: vendors } = await supabase
+      .from('vendors')
+      .select(`
+        id, 
+        rep_full_name,
+        shipping_region_id,
+        shipping_region:shipping_regions(id, name)
+      `)
+      .in('id', vendorIds);
+
+    vendors?.forEach((v: any) => {
+      vendorRegionMap[v.id] = {
+        regionId: v.shipping_region_id,
+        regionName: v.shipping_region?.name || null,
+        name: v.rep_full_name
+      };
+    });
+  }
+
+  // Step 4: If customer region is provided, calculate location-based shipping
+  if (customerRegionId) {
+    result.hasLocationBasedPricing = true;
     
-    if (matchingRate) {
-      result.weightBasedCost = matchingRate.cost;
-    } else if (result.totalWeight >= weightRates[weightRates.length - 1].max_weight) {
-      // If weight exceeds all ranges, use the highest rate
-      result.weightBasedCost = weightRates[weightRates.length - 1].cost;
+    for (const vendorId of vendorIds) {
+      const vendorInfo = vendorRegionMap[vendorId];
+      const group = vendorGroups[vendorId];
+      
+      const breakdown: VendorBreakdown = {
+        vendorId,
+        vendorName: vendorInfo?.name || 'Unknown Vendor',
+        vendorRegionId: vendorInfo?.regionId || null,
+        vendorRegionName: vendorInfo?.regionName || null,
+        totalWeight: group.weight,
+        itemCount: group.quantity,
+        shippingCost: 0,
+        schedule: 'Standard shipping',
+      };
+
+      // Look up shipping matrix for this origin->destination
+      if (vendorInfo?.regionId) {
+        const { data: matrixRoute } = await supabase
+          .from('shipping_matrix')
+          .select('base_cost, weight_rate, estimated_days')
+          .eq('origin_region_id', vendorInfo.regionId)
+          .eq('destination_region_id', customerRegionId)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (matrixRoute) {
+          // Calculate cost: base_cost + (weight * weight_rate)
+          breakdown.shippingCost = matrixRoute.base_cost + (group.weight * matrixRoute.weight_rate);
+          breakdown.estimatedDays = matrixRoute.estimated_days || undefined;
+        }
+      }
+
+      // Check vendor MOQ rules for schedule override
+      const { data: vendorRules } = await supabase
+        .from('vendor_shipping_rules')
+        .select('min_quantity, shipping_schedule')
+        .eq('vendor_id', vendorId)
+        .eq('is_active', true)
+        .lte('min_quantity', group.quantity)
+        .order('min_quantity', { ascending: false })
+        .limit(1);
+
+      if (vendorRules && vendorRules.length > 0) {
+        result.hasVendorRules = true;
+        breakdown.schedule = vendorRules[0].shipping_schedule;
+        
+        result.vendorSchedules.push({
+          vendorId,
+          vendorName: breakdown.vendorName,
+          quantity: group.quantity,
+          schedule: breakdown.schedule,
+          estimatedDays: breakdown.estimatedDays,
+        });
+      }
+
+      result.vendorBreakdown.push(breakdown);
+    }
+
+    // Sum up all vendor shipping costs
+    result.weightBasedCost = result.vendorBreakdown.reduce((sum, b) => sum + b.shippingCost, 0);
+
+  } else {
+    // Fallback: Use global weight-based shipping rates (old behavior)
+    const { data: weightRates } = await supabase
+      .from('shipping_weight_rates')
+      .select('min_weight, max_weight, cost')
+      .order('min_weight', { ascending: true });
+
+    if (weightRates && weightRates.length > 0) {
+      const matchingRate = weightRates.find(
+        (rate) =>
+          result.totalWeight >= rate.min_weight &&
+          result.totalWeight < rate.max_weight
+      );
+
+      if (matchingRate) {
+        result.weightBasedCost = matchingRate.cost;
+      } else if (result.totalWeight >= weightRates[weightRates.length - 1].max_weight) {
+        result.weightBasedCost = weightRates[weightRates.length - 1].cost;
+      }
+    }
+
+    // Fetch vendor MOQ rules for delivery schedules
+    if (vendorIds.length > 0) {
+      const { data: vendorRules } = await supabase
+        .from('vendor_shipping_rules')
+        .select('vendor_id, min_quantity, shipping_schedule')
+        .in('vendor_id', vendorIds)
+        .eq('is_active', true)
+        .order('min_quantity', { ascending: false });
+
+      if (vendorRules && vendorRules.length > 0) {
+        result.hasVendorRules = true;
+
+        vendorIds.forEach((vendorId) => {
+          const quantity = vendorGroups[vendorId].quantity;
+          const matchingRule = vendorRules.find(
+            (rule) => rule.vendor_id === vendorId && quantity >= rule.min_quantity
+          );
+
+          if (matchingRule) {
+            result.vendorSchedules.push({
+              vendorId,
+              vendorName: vendorRegionMap[vendorId]?.name || 'Unknown Vendor',
+              quantity,
+              schedule: matchingRule.shipping_schedule,
+            });
+          }
+        });
+      }
     }
   }
 
-  // Step 3: Group cart items by vendor
-  const vendorQuantities: Record<string, { quantity: number; vendorId: string }> = {};
-  
-  cartItems.forEach((item) => {
-    const vendorId = item.product?.vendor_id;
-    if (vendorId) {
-      if (!vendorQuantities[vendorId]) {
-        vendorQuantities[vendorId] = { quantity: 0, vendorId };
-      }
-      vendorQuantities[vendorId].quantity += item.quantity;
-    }
-  });
-
-  // Step 4: Fetch vendor shipping rules for all vendors in the cart
-  const vendorIds = Object.keys(vendorQuantities);
-  
-  if (vendorIds.length > 0) {
-    const { data: vendorRules } = await supabase
-      .from('vendor_shipping_rules')
-      .select('vendor_id, min_quantity, shipping_schedule')
-      .in('vendor_id', vendorIds)
-      .eq('is_active', true)
-      .order('min_quantity', { ascending: false });
-
-    // Step 5: Fetch vendor names
-    const { data: vendors } = await supabase
-      .from('vendors')
-      .select('id, rep_full_name')
-      .in('id', vendorIds);
-
-    const vendorNameMap: Record<string, string> = {};
-    vendors?.forEach((v) => {
-      vendorNameMap[v.id] = v.rep_full_name;
-    });
-
-    // Step 6: Find the highest matching MOQ tier for each vendor
-    if (vendorRules && vendorRules.length > 0) {
-      result.hasVendorRules = true;
-
-      vendorIds.forEach((vendorId) => {
-        const quantity = vendorQuantities[vendorId].quantity;
-        
-        // Rules are sorted descending by min_quantity, so first match is highest tier
-        const matchingRule = vendorRules.find(
-          (rule) => rule.vendor_id === vendorId && quantity >= rule.min_quantity
-        );
-
-        if (matchingRule) {
-          result.vendorSchedules.push({
-            vendorId,
-            vendorName: vendorNameMap[vendorId] || 'Unknown Vendor',
-            quantity,
-            schedule: matchingRule.shipping_schedule,
-          });
-        }
-      });
-
-      // Step 7: Build consolidated schedule string
-      if (result.vendorSchedules.length > 0) {
-        result.consolidatedSchedule = result.vendorSchedules
-          .map((vs) => `${vs.vendorName}: ${vs.schedule}`)
-          .join(' | ');
-      }
-    }
+  // Build consolidated schedule string
+  if (result.vendorSchedules.length > 0) {
+    result.consolidatedSchedule = result.vendorSchedules
+      .map((vs) => `${vs.vendorName}: ${vs.schedule}`)
+      .join(' | ');
   }
 
   return result;
 }
 
 /**
- * Get just the weight-based shipping cost (simpler version)
+ * Get just the weight-based shipping cost (legacy fallback)
  */
 export async function getWeightBasedShippingCost(totalWeight: number): Promise<number> {
   const { data: weightRates } = await supabase
@@ -174,7 +301,6 @@ export async function getWeightBasedShippingCost(totalWeight: number): Promise<n
     return matchingRate.cost;
   }
 
-  // If weight exceeds all ranges, use the highest rate
   if (totalWeight >= weightRates[weightRates.length - 1].max_weight) {
     return weightRates[weightRates.length - 1].cost;
   }
@@ -203,4 +329,17 @@ export async function getVendorShippingSchedule(
   }
 
   return null;
+}
+
+/**
+ * Fetch all active shipping regions for dropdown selection
+ */
+export async function getShippingRegions(): Promise<Array<{ id: string; name: string }>> {
+  const { data } = await supabase
+    .from('shipping_regions')
+    .select('id, name')
+    .eq('is_active', true)
+    .order('name');
+
+  return data || [];
 }

@@ -16,8 +16,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { AuthFormContent } from '@/pages/Auth';
-import { Phone, Wallet, CreditCard, Loader2, Truck, Clock } from 'lucide-react';
-import { calculateShipping, ShippingCalculationResult } from '@/utils/shippingCalculator';
+import { Phone, Wallet, CreditCard, Loader2, Truck, Clock, MapPin } from 'lucide-react';
+import { calculateShipping, ShippingCalculationResult, getShippingRegions } from '@/utils/shippingCalculator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const checkoutSchema = z.object({
   fullName: z.string().min(2, 'Name must be at least 2 characters'),
@@ -48,6 +49,8 @@ export default function Checkout() {
   // Shipping calculation state
   const [shippingData, setShippingData] = useState<ShippingCalculationResult | null>(null);
   const [calculatingShipping, setCalculatingShipping] = useState(false);
+  const [shippingRegions, setShippingRegions] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedRegionId, setSelectedRegionId] = useState('');
 
   const form = useForm<CheckoutFormData>({
     resolver: zodResolver(checkoutSchema),
@@ -63,16 +66,22 @@ export default function Checkout() {
 
   useEffect(() => {
     fetchTerms();
+    loadShippingRegions();
   }, []);
 
-  // Calculate shipping when cart items change
+  const loadShippingRegions = async () => {
+    const regions = await getShippingRegions();
+    setShippingRegions(regions);
+  };
+
+  // Calculate shipping when cart items or region changes
   useEffect(() => {
     const fetchShipping = async () => {
       if (items.length === 0) return;
       
       setCalculatingShipping(true);
       try {
-        const result = await calculateShipping(items);
+        const result = await calculateShipping(items, selectedRegionId || undefined);
         setShippingData(result);
       } catch (error) {
         console.error('Failed to calculate shipping:', error);
@@ -82,7 +91,7 @@ export default function Checkout() {
     };
     
     fetchShipping();
-  }, [items]);
+  }, [items, selectedRegionId]);
 
   const fetchTerms = async () => {
     const { data } = await supabase
@@ -637,6 +646,29 @@ export default function Checkout() {
                           </FormItem>
                         )}
                       />
+                    </div>
+
+                    {/* Shipping Region Selection */}
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4" />
+                        Delivery Region
+                      </Label>
+                      <Select value={selectedRegionId} onValueChange={setSelectedRegionId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select your delivery region" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {shippingRegions.map((region) => (
+                            <SelectItem key={region.id} value={region.id}>
+                              {region.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Select your region for accurate shipping cost calculation
+                      </p>
                     </div>
 
                     {termsContent && (

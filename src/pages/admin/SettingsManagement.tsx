@@ -12,6 +12,8 @@ import { Switch } from '@/components/ui/switch';
 import { Loader2, Plus, Mail, Users, FileText, Image as ImageIcon, Link, Rocket, Upload, PieChart, TrendingUp, ExternalLink, Crown, Truck } from 'lucide-react';
 import { useBranding } from '@/hooks/useBranding';
 import { ShippingRateManager } from '@/components/admin/ShippingRateManager';
+import { ShippingRegionsManager } from '@/components/admin/shipping/ShippingRegionsManager';
+import { ShippingMatrixManager } from '@/components/admin/shipping/ShippingMatrixManager';
 
 // Preview Store Button Component
 function PreviewStoreButton({ isPrelaunchEnabled }: { isPrelaunchEnabled: boolean }) {
@@ -1845,7 +1847,11 @@ export default function SettingsManagement() {
           </TabsContent>
 
           <TabsContent value="shipping" className="p-6">
-            <ShippingRateManager />
+            <div className="space-y-6">
+              <ShippingRegionsManager />
+              <ShippingMatrixManager />
+              <ShippingRateManager />
+            </div>
           </TabsContent>
 
           <TabsContent value="profits" className="p-6">

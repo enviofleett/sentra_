@@ -84,22 +84,9 @@ export const Navbar = () => {
                 </NavigationMenuItem>
                 
                 <NavigationMenuItem>
-                  <NavigationMenuTrigger className="bg-transparent hover:bg-accent text-foreground/70 hover:text-foreground text-sm font-medium">
+                  <Link to="/products" className="px-4 py-2 text-sm font-medium text-foreground/70 hover:text-foreground transition-colors">
                     SHOP
-                  </NavigationMenuTrigger>
-                  <NavigationMenuContent>
-                    <div className="w-[400px] p-4 bg-background">
-                      <div className="grid grid-cols-2 gap-3">
-                        <Link to="/products" className="block p-3 rounded-lg hover:bg-accent transition-colors">
-                          <span className="font-medium text-sm">All Products</span>
-                          <p className="text-xs text-muted-foreground mt-1">Browse our full collection</p>
-                        </Link>
-                        {categories.map(category => <Link key={category.id} to={`/products?category=${category.slug}`} className="block p-3 rounded-lg hover:bg-accent transition-colors">
-                            <span className="font-medium text-sm">{category.name}</span>
-                          </Link>)}
-                      </div>
-                    </div>
-                  </NavigationMenuContent>
+                  </Link>
                 </NavigationMenuItem>
 
                 <NavigationMenuItem>

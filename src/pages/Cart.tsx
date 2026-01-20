@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
@@ -6,10 +7,49 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useCart } from '@/contexts/CartContext';
 import { useCartIncentive } from '@/hooks/useCartIncentive';
-import { Minus, Plus, Trash2, ShoppingBag, Gift } from 'lucide-react';
+import { calculateShipping, ShippingCalculationResult } from '@/utils/shippingCalculator';
+import { Minus, Plus, Trash2, ShoppingBag, Gift, Truck, Clock, Loader2 } from 'lucide-react';
 
 export default function Cart() {
   const { items, updateQuantity, removeFromCart, subtotal, totalItems } = useCart();
+  const [shippingData, setShippingData] = useState<ShippingCalculationResult | null>(null);
+  const [calculatingShipping, setCalculatingShipping] = useState(false);
+
+  // Calculate shipping when items change
+  useEffect(() => {
+    const calculateShippingCost = async () => {
+      if (items.length === 0) {
+        setShippingData(null);
+        return;
+      }
+
+      setCalculatingShipping(true);
+      try {
+        // Map to the CartItem format expected by the shipping calculator
+        const cartItems = items.map(item => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          product: item.product ? {
+            id: item.product_id,
+            name: item.product.name,
+            weight: (item.product as Record<string, unknown>).weight as number | undefined,
+            vendor_id: item.product.vendor_id
+          } : undefined
+        }));
+        const result = await calculateShipping(cartItems);
+        setShippingData(result);
+      } catch (error) {
+        console.error('Error calculating shipping:', error);
+      } finally {
+        setCalculatingShipping(false);
+      }
+    };
+
+    calculateShippingCost();
+  }, [items]);
+
+  const shippingCost = shippingData?.weightBasedCost || 0;
+  const estimatedTotal = subtotal + shippingCost;
 
   if (items.length === 0) {
     return (
@@ -153,22 +193,61 @@ export default function Cart() {
 
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Items ({totalItems})</span>
+                    <span className="text-muted-foreground">Subtotal ({totalItems} items)</span>
                     <span className="font-medium">₦{subtotal.toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Shipping</span>
-                    <span className="font-medium text-secondary">FREE</span>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground flex items-center gap-1">
+                      <Truck className="h-3.5 w-3.5" />
+                      Shipping
+                    </span>
+                    {calculatingShipping ? (
+                      <span className="flex items-center gap-1 text-muted-foreground">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Calculating...
+                      </span>
+                    ) : shippingCost === 0 ? (
+                      <span className="font-medium text-green-600 dark:text-green-400">FREE</span>
+                    ) : (
+                      <span className="font-medium">₦{shippingCost.toLocaleString()}</span>
+                    )}
                   </div>
                 </div>
 
+                {/* Vendor Delivery Schedules */}
+                {shippingData && shippingData.vendorSchedules.length > 0 && (
+                  <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <span>Estimated Delivery</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {shippingData.vendorSchedules.map((schedule, index) => (
+                        <div key={index} className="flex justify-between text-xs">
+                          <span className="text-muted-foreground truncate max-w-[120px]">
+                            {schedule.vendorName}
+                          </span>
+                          <span className="font-medium text-foreground">
+                            {schedule.schedule}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="border-t pt-4">
                   <div className="flex justify-between items-baseline">
-                    <span className="font-bold text-lg">Total</span>
+                    <span className="font-bold text-lg">Estimated Total</span>
                     <span className="font-bold text-2xl text-secondary">
-                      ₦{subtotal.toLocaleString()}
+                      ₦{estimatedTotal.toLocaleString()}
                     </span>
                   </div>
+                  {shippingCost > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Final shipping calculated at checkout
+                    </p>
+                  )}
                 </div>
 
                 <Button asChild size="lg" className="w-full">

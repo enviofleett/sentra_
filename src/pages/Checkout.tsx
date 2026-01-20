@@ -106,14 +106,14 @@ export default function Checkout() {
     }
   };
 
-  // Check user profile for missing phone number
+  // Check user profile for missing phone number and pre-populate region
   useEffect(() => {
     const checkProfile = async () => {
       if (!user || profileChecked) return;
       
       const { data: profile } = await supabase
         .from('profiles')
-        .select('phone, full_name')
+        .select('phone, full_name, default_shipping_address')
         .eq('id', user.id)
         .maybeSingle();
       
@@ -129,12 +129,36 @@ export default function Checkout() {
         // Show phone modal if no phone number
         setIsPhoneModalOpen(true);
       }
+      
+      // Pre-populate shipping address and region from saved default
+      const savedAddress = profile?.default_shipping_address as { 
+        street?: string; city?: string; state?: string; region_id?: string 
+      } | null;
+      
+      if (savedAddress) {
+        if (savedAddress.street) {
+          form.setValue('address', savedAddress.street);
+        }
+        if (savedAddress.city) {
+          form.setValue('city', savedAddress.city);
+        }
+        if (savedAddress.state) {
+          form.setValue('state', savedAddress.state);
+        }
+        // Pre-select the saved region for shipping calculation
+        if (savedAddress.region_id && shippingRegions.length > 0) {
+          const regionExists = shippingRegions.some(r => r.id === savedAddress.region_id);
+          if (regionExists) {
+            setSelectedRegionId(savedAddress.region_id);
+          }
+        }
+      }
     };
     
     if (user && !authLoading) {
       checkProfile();
     }
-  }, [user, authLoading, profileChecked, form]);
+  }, [user, authLoading, profileChecked, form, shippingRegions]);
 
   // Handle cart empty check
   useEffect(() => {

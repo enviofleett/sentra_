@@ -78,16 +78,9 @@ export default function ProductDetail() {
   };
 
   const handleAddToCart = async () => {
-    if (!user) {
-      toast({
-        title: 'Sign in required',
-        description: 'Please sign in to add items to cart',
-        variant: 'destructive'
-      });
-      navigate('/auth');
-      return;
-    }
-
+    // Guest cart is now supported - no auth check needed
+    // CartContext handles localStorage for guests and syncs on login
+    
     if (product.stock_quantity < quantity) {
       toast({
         title: 'Insufficient stock',

@@ -102,7 +102,7 @@ export function VendorsManagement() {
       phone: formData.get('phone') as string || null,
       store_location: formData.get('store_location') as string || null,
       bank_info: parsedBankInfo,
-      shipping_region_id: selectedRegionId || null
+      shipping_region_id: selectedRegionId && selectedRegionId !== 'none' ? selectedRegionId : null
     };
 
     if (editingVendor) {
@@ -155,7 +155,7 @@ export function VendorsManagement() {
   const openDialog = (vendor?: Vendor) => {
     setEditingVendor(vendor || null);
     setBankInfo(vendor?.bank_info ? JSON.stringify(vendor.bank_info, null, 2) : '');
-    setSelectedRegionId(vendor?.shipping_region_id || '');
+    setSelectedRegionId(vendor?.shipping_region_id || 'none');
     setIsDialogOpen(true);
   };
 
@@ -237,7 +237,7 @@ export function VendorsManagement() {
                     <SelectValue placeholder="Select shipping region" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No region assigned</SelectItem>
+                    <SelectItem value="none">No region assigned</SelectItem>
                     {shippingRegions.map((region) => (
                       <SelectItem key={region.id} value={region.id}>
                         {region.name}

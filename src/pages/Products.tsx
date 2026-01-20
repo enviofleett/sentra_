@@ -43,10 +43,13 @@ export default function Products() {
     addToCart(productId, 1);
   };
 
+  // Sync search query with URL params (handles direct navigation, browser back/forward)
   useEffect(() => {
     const urlQuery = searchParams.get('q') || '';
-    setSearchQuery(urlQuery);
-  }, []);
+    if (urlQuery !== searchQuery) {
+      setSearchQuery(urlQuery);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     loadData();

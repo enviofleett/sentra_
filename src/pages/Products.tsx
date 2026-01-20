@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
@@ -36,6 +36,7 @@ export default function Products() {
   const [minPrice, setMinPrice] = useState(0);
   const [maxPrice, setMaxPrice] = useState(1000000);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const { addToCart } = useCart();
 
   const handleQuickAdd = (e: React.MouseEvent, productId: string) => {
@@ -49,20 +50,30 @@ export default function Products() {
     const urlQuery = searchParams.get('q') || '';
     if (urlQuery !== searchQuery) {
       setSearchQuery(urlQuery);
+      setDebouncedSearchQuery(urlQuery);
     }
   }, [searchParams]);
+
+  // Debounce search query to avoid excessive API calls while typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   useEffect(() => {
     loadData();
     
     const newSearchParams = new URLSearchParams(searchParams.toString());
-    if (searchQuery) {
-      newSearchParams.set('q', searchQuery);
+    if (debouncedSearchQuery) {
+      newSearchParams.set('q', debouncedSearchQuery);
     } else {
       newSearchParams.delete('q');
     }
     setSearchParams(newSearchParams, { replace: true });
-  }, [selectedCategories, selectedBrands, sortBy, searchQuery]);
+  }, [selectedCategories, selectedBrands, sortBy, debouncedSearchQuery]);
 
   const loadData = async () => {
     setLoading(true);
@@ -111,12 +122,13 @@ export default function Products() {
     const { data } = await query;
     let filteredData = data || [];
 
-    if (searchQuery) {
-      const lowerCaseQuery = searchQuery.toLowerCase();
+    if (debouncedSearchQuery) {
+      const lowerCaseQuery = debouncedSearchQuery.toLowerCase();
       filteredData = filteredData.filter(p => 
         p.name.toLowerCase().includes(lowerCaseQuery) ||
         p.description?.toLowerCase().includes(lowerCaseQuery) ||
         p.scent_profile?.toLowerCase().includes(lowerCaseQuery) ||
+        p.brand?.toLowerCase().includes(lowerCaseQuery) ||
         p.vendors?.rep_full_name?.toLowerCase().includes(lowerCaseQuery)
       );
     }

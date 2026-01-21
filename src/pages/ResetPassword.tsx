@@ -136,9 +136,39 @@ export default function ResetPassword() {
 
   const handleResetPassword = async (data: ResetPasswordFormData) => {
     try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        toast({
+          title: 'Error',
+          description: 'Invalid session. Please request a new password reset link.',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      // Update password
       const { error } = await supabase.auth.updateUser({
         password: data.password
       });
+
+      // Log the password change attempt to audit table
+      const auditLog = {
+        user_id: user.id,
+        change_type: 'recovery_link',
+        change_source: 'reset_password_page',
+        success: !error,
+        error_message: error?.message || null,
+        ip_address: null, // Browser can't access this directly
+        user_agent: navigator.userAgent,
+      };
+
+      // Insert audit log (don't block on this)
+      await supabase
+        .from('password_change_audit')
+        .insert(auditLog)
+        .catch(err => console.error('Failed to log password change:', err));
 
       if (error) {
         toast({

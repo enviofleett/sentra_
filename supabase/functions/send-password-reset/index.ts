@@ -219,6 +219,23 @@ serve(async (req) => {
         });
 
         console.log(`[Password Reset] ✅ Email sent to ${email}`);
+
+        // Log admin-initiated password reset to audit table
+        if (adminId) {
+          await supabase
+            .from('password_change_audit')
+            .insert({
+              user_id: user.id,
+              change_type: 'admin_reset',
+              change_source: 'admin_action',
+              success: true,
+              initiated_by: adminId,
+            })
+            .catch(auditErr => {
+              console.error(`[Password Reset] Failed to log audit for ${email}:`, auditErr);
+            });
+        }
+
         results.push({ email, success: true });
 
       } catch (emailError: any) {

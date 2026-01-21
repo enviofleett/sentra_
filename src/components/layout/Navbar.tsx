@@ -133,7 +133,10 @@ export const Navbar = () => {
                       <Link to="/admin" className="cursor-pointer">Admin Dashboard</Link>
                     </DropdownMenuItem>}
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => signOut()} className="cursor-pointer">
+                  <DropdownMenuItem onClick={async () => {
+                    await signOut();
+                    window.location.href = '/';
+                  }} className="cursor-pointer">
                     Sign Out
                   </DropdownMenuItem>
                 </DropdownMenuContent>

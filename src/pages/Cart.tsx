@@ -11,7 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useCart } from '@/contexts/CartContext';
 import { useCartIncentive } from '@/hooks/useCartIncentive';
 import { calculateShipping, ShippingCalculationResult, getShippingRegions } from '@/utils/shippingCalculator';
-import { Minus, Plus, Trash2, ShoppingBag, Gift, Truck, Clock, Loader2, MapPin, AlertCircle } from 'lucide-react';
+import { Minus, Plus, Trash2, ShoppingBag, Gift, Truck, Clock, Loader2, MapPin, AlertCircle, Store } from 'lucide-react';
 
 interface ShippingRegion {
   id: string;
@@ -29,42 +29,57 @@ export default function Cart() {
   // Hook must be called before any conditional returns
   const { nextThreshold, amountToNext, itemsToNext, progressPercentage, unlockedThreshold } = useCartIncentive(subtotal, totalItems);
 
-  // MOQ Validation Logic
-  const moqValidation = useMemo(() => {
-    const errors: { vendorName: string; needed: number; moq: number }[] = [];
-    const vendorGroups: Record<string, { name: string; moq: number; count: number }> = {};
+  // MOQ Validation Logic - tracks per-vendor quantities
+  const vendorMoqData = useMemo(() => {
+    const vendorGroups: Record<string, { name: string; moq: number; count: number; needed: number; met: boolean }> = {};
 
     // Group items by vendor
     items.forEach(item => {
       const vendor = item.product?.vendor;
-      if (vendor && vendor.min_order_quantity > 1) {
+      if (vendor) {
         if (!vendorGroups[vendor.id]) {
           vendorGroups[vendor.id] = {
             name: vendor.rep_full_name,
-            moq: vendor.min_order_quantity,
-            count: 0
+            moq: vendor.min_order_quantity || 1,
+            count: 0,
+            needed: 0,
+            met: true
           };
         }
         vendorGroups[vendor.id].count += item.quantity;
       }
     });
 
-    // Check thresholds
-    Object.values(vendorGroups).forEach(group => {
+    // Calculate needed items for each vendor
+    Object.keys(vendorGroups).forEach(vendorId => {
+      const group = vendorGroups[vendorId];
       if (group.count < group.moq) {
-        errors.push({
-          vendorName: group.name,
-          needed: group.moq - group.count,
-          moq: group.moq
-        });
+        group.needed = group.moq - group.count;
+        group.met = false;
       }
     });
 
+    // Build errors array for checkout blocking
+    const errors = Object.values(vendorGroups)
+      .filter(g => !g.met && g.moq > 1)
+      .map(g => ({
+        vendorName: g.name,
+        needed: g.needed,
+        moq: g.moq
+      }));
+
     return {
+      groups: vendorGroups,
       errors,
       canCheckout: errors.length === 0
     };
   }, [items]);
+
+  // Helper to get vendor MOQ status for an item
+  const getVendorMoqStatus = (vendorId: string | undefined) => {
+    if (!vendorId) return null;
+    return vendorMoqData.groups[vendorId] || null;
+  };
 
   // Fetch shipping regions on mount
   useEffect(() => {
@@ -140,9 +155,9 @@ export default function Cart() {
         <h1 className="text-3xl md:text-4xl font-bold mb-6 md:mb-8">Shopping Cart</h1>
 
         {/* MOQ Validation Errors */}
-        {moqValidation.errors.length > 0 && (
+        {vendorMoqData.errors.length > 0 && (
           <div className="mb-6 space-y-3">
-            {moqValidation.errors.map((error, idx) => (
+            {vendorMoqData.errors.map((error, idx) => (
               <Alert key={idx} variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Minimum Order Not Met</AlertTitle>
@@ -188,8 +203,12 @@ export default function Cart() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
           {/* Cart Items */}
           <div className="lg:col-span-2 space-y-4">
-            {items.map((item) => (
-              <Card key={item.id}>
+            {items.map((item) => {
+              const vendorStatus = getVendorMoqStatus(item.product?.vendor?.id);
+              const showMoqWarning = vendorStatus && !vendorStatus.met && vendorStatus.moq > 1;
+              
+              return (
+              <Card key={item.id} className={showMoqWarning ? 'border-destructive/50' : ''}>
                 <CardContent className="p-3 sm:p-4">
                   <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                     <div className="w-full sm:w-24 h-48 sm:h-24 bg-accent rounded-lg overflow-hidden flex-shrink-0">
@@ -211,6 +230,39 @@ export default function Cart() {
                       >
                         {item.product?.name}
                       </Link>
+                      
+                      {/* Vendor Badge with MOQ Status */}
+                      {item.product?.vendor && (
+                        <div className="mt-1.5 space-y-1">
+                          <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Store className="h-3 w-3" />
+                            <span>{item.product.vendor.rep_full_name}</span>
+                          </div>
+                          
+                          {vendorStatus && vendorStatus.moq > 1 && (
+                            <div className={`flex items-center gap-2 text-xs ${vendorStatus.met ? 'text-green-600 dark:text-green-400' : 'text-destructive'}`}>
+                              {vendorStatus.met ? (
+                                <>
+                                  <span className="inline-flex items-center gap-1">
+                                    ✓ MOQ met ({vendorStatus.count}/{vendorStatus.moq})
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="font-medium">
+                                    Need {vendorStatus.needed} more ({vendorStatus.count}/{vendorStatus.moq})
+                                  </span>
+                                  <Progress 
+                                    value={(vendorStatus.count / vendorStatus.moq) * 100} 
+                                    className="h-1.5 w-16 bg-destructive/20" 
+                                  />
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      
                       <p className="text-secondary font-bold mt-1 text-lg sm:text-xl">
                         ₦{(item.product?.price || 0).toLocaleString()}
                       </p>
@@ -257,7 +309,8 @@ export default function Cart() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+              );
+            })}
           </div>
 
           {/* Order Summary */}
@@ -384,12 +437,12 @@ export default function Cart() {
                 </div>
 
                 <Button 
-                  asChild={moqValidation.canCheckout} 
+                  asChild={vendorMoqData.canCheckout} 
                   size="lg" 
                   className="w-full"
-                  disabled={!moqValidation.canCheckout}
+                  disabled={!vendorMoqData.canCheckout}
                 >
-                  {moqValidation.canCheckout ? (
+                  {vendorMoqData.canCheckout ? (
                     <Link to="/checkout">Proceed to Checkout</Link>
                   ) : (
                     <span>Checkout Disabled</span>

@@ -165,10 +165,17 @@ export default function ResetPassword() {
       };
 
       // Insert audit log (don't block on this)
-      await supabase
-        .from('password_change_audit')
-        .insert(auditLog)
-        .catch(err => console.error('Failed to log password change:', err));
+      // Note: password_change_audit table may not exist in types yet after migration
+      try {
+        const { error: auditError } = await supabase
+          .from('password_change_audit' as any)
+          .insert(auditLog);
+        if (auditError) {
+          console.error('Failed to log password change:', auditError);
+        }
+      } catch (auditErr) {
+        console.error('Failed to log password change:', auditErr);
+      }
 
       if (error) {
         toast({

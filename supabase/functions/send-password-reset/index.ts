@@ -40,12 +40,17 @@ serve(async (req) => {
       throw new Error('No emails provided');
     }
 
+    // Limit non-admin requests to single email (prevent abuse)
+    if (!adminId && emails.length > 1) {
+      throw new Error('Only one email allowed per request');
+    }
+
     // Initialize Supabase client with service role
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Validate admin permissions
+    // Validate admin permissions for bulk sends
     if (adminId) {
       const { data: isAdmin } = await supabase.rpc('has_role', {
         _user_id: adminId,

@@ -11,27 +11,43 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useCart } from '@/contexts/CartContext';
 import { useCartIncentive } from '@/hooks/useCartIncentive';
 import { calculateShipping, ShippingCalculationResult, getShippingRegions } from '@/utils/shippingCalculator';
-import { Minus, Plus, Trash2, ShoppingBag, Gift, Truck, Clock, Loader2, MapPin, AlertCircle, Store } from 'lucide-react';
-
+import { Minus, Plus, Trash2, ShoppingBag, Gift, Truck, Clock, Loader2, MapPin, AlertCircle } from 'lucide-react';
 interface ShippingRegion {
   id: string;
   name: string;
 }
-
 export default function Cart() {
-  const { items, updateQuantity, removeFromCart, subtotal, totalItems } = useCart();
+  const {
+    items,
+    updateQuantity,
+    removeFromCart,
+    subtotal,
+    totalItems
+  } = useCart();
   const [shippingData, setShippingData] = useState<ShippingCalculationResult | null>(null);
   const [calculatingShipping, setCalculatingShipping] = useState(false);
   const [regions, setRegions] = useState<ShippingRegion[]>([]);
   const [selectedRegionId, setSelectedRegionId] = useState<string>('');
   const [loadingRegions, setLoadingRegions] = useState(true);
-  
+
   // Hook must be called before any conditional returns
-  const { nextThreshold, amountToNext, itemsToNext, progressPercentage, unlockedThreshold } = useCartIncentive(subtotal, totalItems);
+  const {
+    nextThreshold,
+    amountToNext,
+    itemsToNext,
+    progressPercentage,
+    unlockedThreshold
+  } = useCartIncentive(subtotal, totalItems);
 
   // MOQ Validation Logic - tracks per-vendor quantities
   const vendorMoqData = useMemo(() => {
-    const vendorGroups: Record<string, { name: string; moq: number; count: number; needed: number; met: boolean }> = {};
+    const vendorGroups: Record<string, {
+      name: string;
+      moq: number;
+      count: number;
+      needed: number;
+      met: boolean;
+    }> = {};
 
     // Group items by vendor
     items.forEach(item => {
@@ -60,14 +76,11 @@ export default function Cart() {
     });
 
     // Build errors array for checkout blocking
-    const errors = Object.values(vendorGroups)
-      .filter(g => !g.met && g.moq > 1)
-      .map(g => ({
-        vendorName: g.name,
-        needed: g.needed,
-        moq: g.moq
-      }));
-
+    const errors = Object.values(vendorGroups).filter(g => !g.met && g.moq > 1).map(g => ({
+      vendorName: g.name,
+      needed: g.needed,
+      moq: g.moq
+    }));
     return {
       groups: vendorGroups,
       errors,
@@ -99,7 +112,6 @@ export default function Cart() {
         setShippingData(null);
         return;
       }
-
       setCalculatingShipping(true);
       try {
         const cartItems = items.map(item => ({
@@ -121,16 +133,12 @@ export default function Cart() {
         setCalculatingShipping(false);
       }
     };
-
     calculateShippingCost();
   }, [items, selectedRegionId]);
-
   const shippingCost = shippingData?.weightBasedCost || 0;
   const estimatedTotal = subtotal + shippingCost;
-
   if (items.length === 0) {
-    return (
-      <div className="min-h-screen bg-background">
+    return <div className="min-h-screen bg-background">
         <Navbar />
         <div className="container mx-auto px-4 py-20">
           <div className="text-center space-y-6">
@@ -143,125 +151,85 @@ export default function Cart() {
           </div>
         </div>
         <Footer />
-      </div>
-    );
+      </div>;
   }
-
-  return (
-    <div className="min-h-screen bg-background">
+  return <div className="min-h-screen bg-background">
       <Navbar />
 
       <div className="container mx-auto px-4 py-6 md:py-12">
         <h1 className="text-3xl md:text-4xl font-bold mb-6 md:mb-8">Shopping Cart</h1>
 
         {/* MOQ Validation Errors */}
-        {vendorMoqData.errors.length > 0 && (
-          <div className="mb-6 space-y-3">
-            {vendorMoqData.errors.map((error, idx) => (
-              <Alert key={idx} variant="destructive">
+        {vendorMoqData.errors.length > 0 && <div className="mb-6 space-y-3">
+            {vendorMoqData.errors.map((error, idx) => <Alert key={idx} variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Minimum Order Not Met</AlertTitle>
                 <AlertDescription>
                   You need <strong>{error.needed} more item{error.needed > 1 ? 's' : ''}</strong> from <strong>{error.vendorName}</strong> to meet the minimum order of {error.moq}.
                 </AlertDescription>
-              </Alert>
-            ))}
-          </div>
-        )}
+              </Alert>)}
+          </div>}
 
         {/* Cart Incentive Progress Bar */}
-        {nextThreshold && (
-          <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 rounded-xl border border-green-200 dark:border-green-800">
+        {nextThreshold && <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 rounded-xl border border-green-200 dark:border-green-800">
             <div className="flex items-center gap-3 mb-2">
               <Gift className="h-5 w-5 text-green-600" />
               <p className="text-sm font-medium text-green-800 dark:text-green-300">
-                {nextThreshold.type === 'value' 
-                  ? `Add ₦${amountToNext.toLocaleString()} more to unlock ${nextThreshold.discount_type === 'percentage' ? `${nextThreshold.discount_value}% OFF` : `₦${nextThreshold.discount_value} OFF`}!`
-                  : `Add ${itemsToNext} more item${itemsToNext > 1 ? 's' : ''} to unlock ${nextThreshold.discount_type === 'percentage' ? `${nextThreshold.discount_value}% OFF` : `₦${nextThreshold.discount_value} OFF`}!`
-                }
+                {nextThreshold.type === 'value' ? `Add ₦${amountToNext.toLocaleString()} more to unlock ${nextThreshold.discount_type === 'percentage' ? `${nextThreshold.discount_value}% OFF` : `₦${nextThreshold.discount_value} OFF`}!` : `Add ${itemsToNext} more item${itemsToNext > 1 ? 's' : ''} to unlock ${nextThreshold.discount_type === 'percentage' ? `${nextThreshold.discount_value}% OFF` : `₦${nextThreshold.discount_value} OFF`}!`}
               </p>
             </div>
             <Progress value={progressPercentage} className="h-2" />
             <p className="text-xs text-green-600 dark:text-green-400 mt-1">
               {Math.round(progressPercentage)}% to next reward
             </p>
-          </div>
-        )}
+          </div>}
 
         {/* Show unlocked discount */}
-        {unlockedThreshold && !nextThreshold && (
-          <div className="mb-6 p-4 bg-gradient-to-r from-green-100 to-emerald-100 dark:from-green-900/30 dark:to-emerald-900/30 rounded-xl border border-green-300 dark:border-green-700">
+        {unlockedThreshold && !nextThreshold && <div className="mb-6 p-4 bg-gradient-to-r from-green-100 to-emerald-100 dark:from-green-900/30 dark:to-emerald-900/30 rounded-xl border border-green-300 dark:border-green-700">
             <div className="flex items-center gap-3">
               <Gift className="h-5 w-5 text-green-600" />
               <p className="text-sm font-medium text-green-800 dark:text-green-300">
                 🎉 You've unlocked {unlockedThreshold.discount_type === 'percentage' ? `${unlockedThreshold.discount_value}% OFF` : `₦${unlockedThreshold.discount_value} OFF`}!
               </p>
             </div>
-          </div>
-        )}
+          </div>}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
           {/* Cart Items */}
           <div className="lg:col-span-2 space-y-4">
-            {items.map((item) => {
-              const vendorStatus = getVendorMoqStatus(item.product?.vendor?.id);
-              const showMoqWarning = vendorStatus && !vendorStatus.met && vendorStatus.moq > 1;
-              
-              return (
-              <Card key={item.id} className={showMoqWarning ? 'border-destructive/50' : ''}>
+            {items.map(item => {
+            const vendorStatus = getVendorMoqStatus(item.product?.vendor?.id);
+            const showMoqWarning = vendorStatus && !vendorStatus.met && vendorStatus.moq > 1;
+            return <Card key={item.id} className={showMoqWarning ? 'border-destructive/50' : ''}>
                 <CardContent className="p-3 sm:p-4">
                   <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                     <div className="w-full sm:w-24 h-48 sm:h-24 bg-accent rounded-lg overflow-hidden flex-shrink-0">
-                      {item.product?.image_url ? (
-                        <img
-                          src={item.product.image_url}
-                          alt={item.product.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-gradient-primary" />
-                      )}
+                      {item.product?.image_url ? <img src={item.product.image_url} alt={item.product.name} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gradient-primary" />}
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <Link
-                        to={`/products/${item.product_id}`}
-                        className="font-semibold text-base sm:text-lg hover:text-secondary transition-smooth block truncate"
-                      >
+                      <Link to={`/products/${item.product_id}`} className="font-semibold text-base sm:text-lg hover:text-secondary transition-smooth block truncate">
                         {item.product?.name}
                       </Link>
                       
                       {/* Vendor Badge with MOQ Status */}
-                      {item.product?.vendor && (
-                        <div className="mt-1.5 space-y-1">
+                      {item.product?.vendor && <div className="mt-1.5 space-y-1">
                           <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <Store className="h-3 w-3" />
-                            <span>{item.product.vendor.rep_full_name}</span>
+                            
+                            
                           </div>
                           
-                          {vendorStatus && vendorStatus.moq > 1 && (
-                            <div className={`flex items-center gap-2 text-xs ${vendorStatus.met ? 'text-green-600 dark:text-green-400' : 'text-destructive'}`}>
-                              {vendorStatus.met ? (
-                                <>
-                                  <span className="inline-flex items-center gap-1">
-                                    ✓ MOQ met ({vendorStatus.count}/{vendorStatus.moq})
-                                  </span>
-                                </>
-                              ) : (
-                                <>
+                          {vendorStatus && vendorStatus.moq > 1 && <div className={`flex items-center gap-2 text-xs ${vendorStatus.met ? 'text-green-600 dark:text-green-400' : 'text-destructive'}`}>
+                              {vendorStatus.met ? <>
+                                  
+                                </> : <>
                                   <span className="font-medium">
                                     Need {vendorStatus.needed} more ({vendorStatus.count}/{vendorStatus.moq})
                                   </span>
-                                  <Progress 
-                                    value={(vendorStatus.count / vendorStatus.moq) * 100} 
-                                    className="h-1.5 w-16 bg-destructive/20" 
-                                  />
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
+                                  <Progress value={vendorStatus.count / vendorStatus.moq * 100} className="h-1.5 w-16 bg-destructive/20" />
+                                </>}
+                            </div>}
+                        </div>}
                       
                       <p className="text-secondary font-bold mt-1 text-lg sm:text-xl">
                         ₦{(item.product?.price || 0).toLocaleString()}
@@ -269,32 +237,16 @@ export default function Cart() {
 
                       <div className="flex flex-wrap items-center gap-3 sm:gap-4 mt-3 sm:mt-4">
                         <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                          >
+                          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
                             <Minus className="h-3 w-3" />
                           </Button>
                           <span className="w-12 text-center font-medium">{item.quantity}</span>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                            disabled={item.quantity >= (item.product?.stock_quantity || 0)}
-                          >
+                          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => updateQuantity(item.id, item.quantity + 1)} disabled={item.quantity >= (item.product?.stock_quantity || 0)}>
                             <Plus className="h-3 w-3" />
                           </Button>
                         </div>
 
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeFromCart(item.id)}
-                          className="text-destructive hover:text-destructive"
-                        >
+                        <Button variant="ghost" size="sm" onClick={() => removeFromCart(item.id)} className="text-destructive hover:text-destructive">
                           <Trash2 className="h-4 w-4 mr-2" />
                           Remove
                         </Button>
@@ -308,9 +260,8 @@ export default function Cart() {
                     </div>
                   </div>
                 </CardContent>
-              </Card>
-              );
-            })}
+              </Card>;
+          })}
           </div>
 
           {/* Order Summary */}
@@ -330,18 +281,14 @@ export default function Cart() {
                       <SelectValue placeholder={loadingRegions ? "Loading regions..." : "Select your region"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {regions.map(region => (
-                        <SelectItem key={region.id} value={region.id}>
+                      {regions.map(region => <SelectItem key={region.id} value={region.id}>
                           {region.name}
-                        </SelectItem>
-                      ))}
+                        </SelectItem>)}
                     </SelectContent>
                   </Select>
-                  {!selectedRegionId && (
-                    <p className="text-xs text-muted-foreground">
+                  {!selectedRegionId && <p className="text-xs text-muted-foreground">
                       Select your region for accurate shipping estimate
-                    </p>
-                  )}
+                    </p>}
                 </div>
 
                 <div className="space-y-2 text-sm">
@@ -354,33 +301,23 @@ export default function Cart() {
                       <Truck className="h-3.5 w-3.5" />
                       Shipping
                     </span>
-                    {calculatingShipping ? (
-                      <span className="flex items-center gap-1 text-muted-foreground">
+                    {calculatingShipping ? <span className="flex items-center gap-1 text-muted-foreground">
                         <Loader2 className="h-3 w-3 animate-spin" />
                         Calculating...
-                      </span>
-                    ) : !selectedRegionId ? (
-                      <span className="text-muted-foreground text-xs">Select region above</span>
-                    ) : shippingCost === 0 ? (
-                      <span className="font-medium text-green-600 dark:text-green-400">FREE</span>
-                    ) : (
-                      <span className="font-medium">₦{shippingCost.toLocaleString()}</span>
-                    )}
+                      </span> : !selectedRegionId ? <span className="text-muted-foreground text-xs">Select region above</span> : shippingCost === 0 ? <span className="font-medium text-green-600 dark:text-green-400">FREE</span> : <span className="font-medium">₦{shippingCost.toLocaleString()}</span>}
                   </div>
                 </div>
 
                 {/* Vendor Breakdown with Location-Based Pricing */}
-                {shippingData && shippingData.hasLocationBasedPricing && shippingData.vendorBreakdown.length > 0 && (
-                  <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                {shippingData && shippingData.hasLocationBasedPricing && shippingData.vendorBreakdown.length > 0 && <div className="bg-muted/50 rounded-lg p-3 space-y-2">
                     <div className="flex items-center gap-2 text-sm font-medium">
                       <Truck className="h-4 w-4 text-muted-foreground" />
                       <span>Shipping Breakdown</span>
                     </div>
                     <div className="space-y-2">
                       {shippingData.vendorBreakdown.map((breakdown, index) => {
-                        const hasRoute = breakdown.shippingCost > 0 || breakdown.estimatedDays;
-                        return (
-                          <div key={index} className="text-xs border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                    const hasRoute = breakdown.shippingCost > 0 || breakdown.estimatedDays;
+                    return <div key={index} className="text-xs border-b border-border/50 pb-2 last:border-0 last:pb-0">
                             <div className="flex justify-between">
                               <span className="text-muted-foreground truncate max-w-[140px]">
                                 {breakdown.vendorName}
@@ -393,41 +330,31 @@ export default function Cart() {
                               <span>{breakdown.vendorRegionName || 'Unknown'} → Your Region</span>
                               <span>{breakdown.totalWeight.toFixed(2)}kg</span>
                             </div>
-                            {breakdown.estimatedDays ? (
-                              <span className="text-xs text-primary">{breakdown.estimatedDays}</span>
-                            ) : !hasRoute && (
-                              <span className="text-xs text-amber-600 dark:text-amber-400">
+                            {breakdown.estimatedDays ? <span className="text-xs text-primary">{breakdown.estimatedDays}</span> : !hasRoute && <span className="text-xs text-amber-600 dark:text-amber-400">
                                 Shipping will be calculated at checkout
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
+                              </span>}
+                          </div>;
+                  })}
                     </div>
-                  </div>
-                )}
+                  </div>}
 
                 {/* Vendor Delivery Schedules (MOQ-based) */}
-                {shippingData && shippingData.vendorSchedules.length > 0 && (
-                  <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                {shippingData && shippingData.vendorSchedules.length > 0 && <div className="bg-muted/50 rounded-lg p-3 space-y-2">
                     <div className="flex items-center gap-2 text-sm font-medium">
                       <Clock className="h-4 w-4 text-muted-foreground" />
                       <span>Estimated Delivery</span>
                     </div>
                     <div className="space-y-1.5">
-                      {shippingData.vendorSchedules.map((schedule, index) => (
-                        <div key={index} className="flex justify-between text-xs">
+                      {shippingData.vendorSchedules.map((schedule, index) => <div key={index} className="flex justify-between text-xs">
                           <span className="text-muted-foreground truncate max-w-[120px]">
                             {schedule.vendorName}
                           </span>
                           <span className="font-medium text-foreground">
                             {schedule.schedule}
                           </span>
-                        </div>
-                      ))}
+                        </div>)}
                     </div>
-                  </div>
-                )}
+                  </div>}
 
                 <div className="border-t pt-4">
                   <div className="flex justify-between items-baseline">
@@ -436,24 +363,13 @@ export default function Cart() {
                       ₦{estimatedTotal.toLocaleString()}
                     </span>
                   </div>
-                  {!selectedRegionId && (
-                    <p className="text-xs text-muted-foreground mt-1">
+                  {!selectedRegionId && <p className="text-xs text-muted-foreground mt-1">
                       Final shipping calculated at checkout
-                    </p>
-                  )}
+                    </p>}
                 </div>
 
-                <Button 
-                  asChild={vendorMoqData.canCheckout} 
-                  size="lg" 
-                  className="w-full"
-                  disabled={!vendorMoqData.canCheckout}
-                >
-                  {vendorMoqData.canCheckout ? (
-                    <Link to="/checkout">Proceed to Checkout</Link>
-                  ) : (
-                    <span>Checkout Disabled</span>
-                  )}
+                <Button asChild={vendorMoqData.canCheckout} size="lg" className="w-full" disabled={!vendorMoqData.canCheckout}>
+                  {vendorMoqData.canCheckout ? <Link to="/checkout">Proceed to Checkout</Link> : <span>Checkout Disabled</span>}
                 </Button>
 
                 <Button asChild variant="outline" className="w-full">
@@ -466,6 +382,5 @@ export default function Cart() {
       </div>
 
       <Footer />
-    </div>
-  );
+    </div>;
 }

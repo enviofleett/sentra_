@@ -24,6 +24,9 @@ export default function Cart() {
   const [regions, setRegions] = useState<ShippingRegion[]>([]);
   const [selectedRegionId, setSelectedRegionId] = useState<string>('');
   const [loadingRegions, setLoadingRegions] = useState(true);
+  
+  // Hook must be called before any conditional returns
+  const { nextThreshold, amountToNext, itemsToNext, progressPercentage, unlockedThreshold } = useCartIncentive(subtotal, totalItems);
 
   // Fetch shipping regions on mount
   useEffect(() => {
@@ -90,8 +93,6 @@ export default function Cart() {
       </div>
     );
   }
-
-  const { nextThreshold, amountToNext, itemsToNext, progressPercentage, unlockedThreshold } = useCartIncentive(subtotal, totalItems);
 
   return (
     <div className="min-h-screen bg-background">

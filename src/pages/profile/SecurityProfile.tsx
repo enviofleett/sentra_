@@ -35,24 +35,64 @@ export default function SecurityProfile() {
   const onSubmit = async (data: PasswordFormData) => {
     setLoading(true);
 
-    const { error } = await supabase.auth.updateUser({
-      password: data.newPassword
-    });
+    try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
 
-    setLoading(false);
+      if (!user) {
+        toast({
+          title: 'Error',
+          description: 'You must be logged in to change your password',
+          variant: 'destructive',
+        });
+        setLoading(false);
+        return;
+      }
 
-    if (error) {
+      // Update password
+      const { error } = await supabase.auth.updateUser({
+        password: data.newPassword
+      });
+
+      // Log the password change attempt to audit table
+      const auditLog = {
+        user_id: user.id,
+        change_type: 'user_initiated',
+        change_source: 'profile_page',
+        success: !error,
+        error_message: error?.message || null,
+        ip_address: null, // Browser can't access this directly
+        user_agent: navigator.userAgent,
+      };
+
+      // Insert audit log (don't block on this)
+      await supabase
+        .from('password_change_audit')
+        .insert(auditLog)
+        .catch(err => console.error('Failed to log password change:', err));
+
+      setLoading(false);
+
+      if (error) {
+        toast({
+          title: 'Error',
+          description: error.message,
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Success',
+          description: 'Password updated successfully',
+        });
+        reset();
+      }
+    } catch (err: any) {
+      setLoading(false);
       toast({
         title: 'Error',
-        description: error.message,
+        description: 'An unexpected error occurred. Please try again.',
         variant: 'destructive',
       });
-    } else {
-      toast({
-        title: 'Success',
-        description: 'Password updated successfully',
-      });
-      reset();
     }
   };
 

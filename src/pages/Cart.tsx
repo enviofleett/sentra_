@@ -377,25 +377,32 @@ export default function Cart() {
                       <span>Shipping Breakdown</span>
                     </div>
                     <div className="space-y-2">
-                      {shippingData.vendorBreakdown.map((breakdown, index) => (
-                        <div key={index} className="text-xs border-b border-border/50 pb-2 last:border-0 last:pb-0">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground truncate max-w-[140px]">
-                              {breakdown.vendorName}
-                            </span>
-                            <span className="font-medium">
-                              ₦{breakdown.shippingCost.toLocaleString()}
-                            </span>
+                      {shippingData.vendorBreakdown.map((breakdown, index) => {
+                        const hasRoute = breakdown.shippingCost > 0 || breakdown.estimatedDays;
+                        return (
+                          <div key={index} className="text-xs border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground truncate max-w-[140px]">
+                                {breakdown.vendorName}
+                              </span>
+                              <span className="font-medium">
+                                {hasRoute ? `₦${breakdown.shippingCost.toLocaleString()}` : 'No route'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-muted-foreground mt-0.5">
+                              <span>{breakdown.vendorRegionName || 'Unknown'} → Your Region</span>
+                              <span>{breakdown.totalWeight.toFixed(2)}kg</span>
+                            </div>
+                            {breakdown.estimatedDays ? (
+                              <span className="text-xs text-primary">{breakdown.estimatedDays}</span>
+                            ) : !hasRoute && (
+                              <span className="text-xs text-amber-600 dark:text-amber-400">
+                                Shipping will be calculated at checkout
+                              </span>
+                            )}
                           </div>
-                          <div className="flex justify-between text-muted-foreground mt-0.5">
-                            <span>{breakdown.vendorRegionName || 'Unknown'} → Your Region</span>
-                            <span>{breakdown.totalWeight.toFixed(2)}kg</span>
-                          </div>
-                          {breakdown.estimatedDays && (
-                            <span className="text-xs text-primary">{breakdown.estimatedDays}</span>
-                          )}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}

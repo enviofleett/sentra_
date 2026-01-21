@@ -13,7 +13,7 @@ interface BulkEmailRequest {
   textContent?: string;
   recipientFilter: 'all' | 'verified' | 'pending';
   campaignId?: string;
-  testEmail?: string; // For sending test emails
+  testEmail?: string;
 }
 
 interface WaitlistEntry {
@@ -22,13 +22,42 @@ interface WaitlistEntry {
   full_name: string | null;
 }
 
-// Helper to strip HTML tags for plain text fallback
+/**
+ * Minifies HTML content to prevent quoted-printable encoding issues
+ * Removes unnecessary whitespace that can cause =20 artifacts in emails
+ */
+function minifyHtml(html: string): string {
+  return html
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/>\s+</g, '><')
+    .replace(/^\s+/gm, '')
+    .replace(/\s+$/gm, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\n/g, '')
+    .trim();
+}
+
+/**
+ * Strips HTML tags for plain text email version
+ */
 function stripHtml(html: string): string {
   return html
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/h[1-6]>/gi, '\n\n')
     .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
     .replace(/\s+/g, ' ')
+    .replace(/\n\s+/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
@@ -79,6 +108,9 @@ serve(async (req) => {
         .replace(/{{name}}/g, 'Test User')
         .replace(/{{email}}/g, testEmail);
       
+      // Minify HTML to prevent =20 encoding artifacts
+      const minifiedHtml = minifyHtml(personalizedHtml);
+      
       // Generate plain text from HTML if not provided
       const plainText = textContent 
         ? textContent.replace(/{{name}}/g, 'Test User').replace(/{{email}}/g, testEmail)
@@ -89,20 +121,17 @@ serve(async (req) => {
         console.log(`📧 From: Sentra <${gmailEmail}>`);
         console.log(`📧 Subject: [TEST] ${subject.replace(/{{name}}/g, 'Test User')}`);
         
-        const sendResult = await client.send({
+        await client.send({
           from: `Sentra <${gmailEmail}>`,
           to: testEmail,
           subject: `[TEST] ${subject.replace(/{{name}}/g, 'Test User')}`,
           content: plainText,
-          html: personalizedHtml,
+          html: minifiedHtml,
         });
-        
-        console.log('📧 SMTP send result:', JSON.stringify(sendResult));
         
         await client.close();
         
         console.log('✅ Test email sent successfully to:', testEmail);
-        console.log('📧 Check spam/junk folder if not in inbox');
         
         return new Response(
           JSON.stringify({ 
@@ -118,7 +147,6 @@ serve(async (req) => {
         );
       } catch (err: any) {
         console.error('❌ Test email SMTP error:', err);
-        console.error('❌ Error details:', JSON.stringify(err, Object.getOwnPropertyNames(err)));
         try {
           await client.close();
         } catch (closeErr) {
@@ -185,7 +213,7 @@ serve(async (req) => {
 
     // Send emails in batches to avoid rate limiting
     const BATCH_SIZE = 10;
-    const DELAY_BETWEEN_BATCHES = 2000; // 2 seconds
+    const DELAY_BETWEEN_BATCHES = 2000;
 
     for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
       const batch = recipients.slice(i, i + BATCH_SIZE);
@@ -221,6 +249,9 @@ serve(async (req) => {
             );
           }
           
+          // Minify HTML to prevent =20 encoding artifacts
+          const minifiedHtml = minifyHtml(personalizedHtml);
+          
           // Generate plain text from HTML if not provided
           const personalizedText = textContent
             ? textContent.replace(/{{name}}/g, recipientName).replace(/{{email}}/g, recipient.email)
@@ -231,7 +262,7 @@ serve(async (req) => {
             to: recipient.email,
             subject: subject.replace(/{{name}}/g, recipientName),
             content: personalizedText,
-            html: personalizedHtml,
+            html: minifiedHtml,
           });
 
           // Record sent event

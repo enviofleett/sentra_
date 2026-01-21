@@ -13,6 +13,57 @@ interface EmailRequest {
   data: { [key: string]: string | number };
 }
 
+/**
+ * Minifies HTML content to prevent quoted-printable encoding issues
+ * Removes unnecessary whitespace that can cause =20 artifacts in emails
+ */
+function minifyHtml(html: string): string {
+  return html
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/>\s+</g, '><')
+    .replace(/^\s+/gm, '')
+    .replace(/\s+$/gm, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\n/g, '')
+    .trim();
+}
+
+/**
+ * Strips HTML tags for plain text email version
+ */
+function stripHtml(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/h[1-6]>/gi, '\n\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .replace(/\n\s+/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
+ * Sanitizes user input for safe inclusion in emails
+ */
+function sanitizeInput(input: string): string {
+  return String(input)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -43,21 +94,27 @@ serve(async (req) => {
 
     console.log('✅ Template fetched:', template.subject);
 
-    // Compile template with data
+    // Compile template with data - sanitize all inputs
     let compiledHtml = template.html_content;
     let compiledSubject = template.subject;
     let compiledText = template.text_content || '';
 
     Object.entries(data).forEach(([key, value]) => {
       const regex = new RegExp(`{{${key}}}`, 'g');
-      compiledHtml = compiledHtml.replace(regex, String(value));
+      // Sanitize values to prevent injection
+      const sanitizedValue = sanitizeInput(String(value));
+      compiledHtml = compiledHtml.replace(regex, sanitizedValue);
       compiledSubject = compiledSubject.replace(regex, String(value));
       compiledText = compiledText.replace(regex, String(value));
     });
 
+    // Minify HTML to prevent =20 encoding artifacts
+    const minifiedHtml = minifyHtml(compiledHtml);
+    const plainText = compiledText || stripHtml(compiledHtml);
+
     console.log('✅ Template compiled for:', to);
 
-    // Configure nodemailer with Gmail SMTP
+    // Configure SMTP with Gmail
     const gmailEmail = Deno.env.get('GMAIL_EMAIL');
     const gmailPassword = Deno.env.get('GMAIL_APP_PASSWORD');
 
@@ -80,12 +137,12 @@ serve(async (req) => {
     console.log('✅ SMTP client created');
 
     // Send email with Sentra branding
-    const sendResult = await client.send({
+    await client.send({
       from: `Sentra <${gmailEmail}>`,
       to: to,
       subject: compiledSubject,
-      content: compiledText,
-      html: compiledHtml,
+      content: plainText,
+      html: minifiedHtml,
     });
 
     await client.close();

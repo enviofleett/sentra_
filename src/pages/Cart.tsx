@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
@@ -7,10 +7,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useCart } from '@/contexts/CartContext';
 import { useCartIncentive } from '@/hooks/useCartIncentive';
 import { calculateShipping, ShippingCalculationResult, getShippingRegions } from '@/utils/shippingCalculator';
-import { Minus, Plus, Trash2, ShoppingBag, Gift, Truck, Clock, Loader2, MapPin } from 'lucide-react';
+import { Minus, Plus, Trash2, ShoppingBag, Gift, Truck, Clock, Loader2, MapPin, AlertCircle } from 'lucide-react';
 
 interface ShippingRegion {
   id: string;
@@ -27,6 +28,43 @@ export default function Cart() {
   
   // Hook must be called before any conditional returns
   const { nextThreshold, amountToNext, itemsToNext, progressPercentage, unlockedThreshold } = useCartIncentive(subtotal, totalItems);
+
+  // MOQ Validation Logic
+  const moqValidation = useMemo(() => {
+    const errors: { vendorName: string; needed: number; moq: number }[] = [];
+    const vendorGroups: Record<string, { name: string; moq: number; count: number }> = {};
+
+    // Group items by vendor
+    items.forEach(item => {
+      const vendor = item.product?.vendor;
+      if (vendor && vendor.min_order_quantity > 1) {
+        if (!vendorGroups[vendor.id]) {
+          vendorGroups[vendor.id] = {
+            name: vendor.rep_full_name,
+            moq: vendor.min_order_quantity,
+            count: 0
+          };
+        }
+        vendorGroups[vendor.id].count += item.quantity;
+      }
+    });
+
+    // Check thresholds
+    Object.values(vendorGroups).forEach(group => {
+      if (group.count < group.moq) {
+        errors.push({
+          vendorName: group.name,
+          needed: group.moq - group.count,
+          moq: group.moq
+        });
+      }
+    });
+
+    return {
+      errors,
+      canCheckout: errors.length === 0
+    };
+  }, [items]);
 
   // Fetch shipping regions on mount
   useEffect(() => {
@@ -100,6 +138,21 @@ export default function Cart() {
 
       <div className="container mx-auto px-4 py-6 md:py-12">
         <h1 className="text-3xl md:text-4xl font-bold mb-6 md:mb-8">Shopping Cart</h1>
+
+        {/* MOQ Validation Errors */}
+        {moqValidation.errors.length > 0 && (
+          <div className="mb-6 space-y-3">
+            {moqValidation.errors.map((error, idx) => (
+              <Alert key={idx} variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Minimum Order Not Met</AlertTitle>
+                <AlertDescription>
+                  You need <strong>{error.needed} more item{error.needed > 1 ? 's' : ''}</strong> from <strong>{error.vendorName}</strong> to meet the minimum order of {error.moq}.
+                </AlertDescription>
+              </Alert>
+            ))}
+          </div>
+        )}
 
         {/* Cart Incentive Progress Bar */}
         {nextThreshold && (
@@ -330,8 +383,17 @@ export default function Cart() {
                   )}
                 </div>
 
-                <Button asChild size="lg" className="w-full">
-                  <Link to="/checkout">Proceed to Checkout</Link>
+                <Button 
+                  asChild={moqValidation.canCheckout} 
+                  size="lg" 
+                  className="w-full"
+                  disabled={!moqValidation.canCheckout}
+                >
+                  {moqValidation.canCheckout ? (
+                    <Link to="/checkout">Proceed to Checkout</Link>
+                  ) : (
+                    <span>Checkout Disabled</span>
+                  )}
                 </Button>
 
                 <Button asChild variant="outline" className="w-full">

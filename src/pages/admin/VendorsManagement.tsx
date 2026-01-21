@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Pencil, Trash2, Plus, Store, Truck, MapPin } from 'lucide-react';
+import { Pencil, Trash2, Plus, Store, Truck, MapPin, ShoppingBasket } from 'lucide-react';
 import { VendorShippingRulesDialog } from '@/components/admin/VendorShippingRulesDialog';
 
 interface ShippingRegion {
@@ -26,6 +26,7 @@ interface Vendor {
   store_location: string | null;
   shipping_region_id: string | null;
   shipping_region?: ShippingRegion | null;
+  min_order_quantity: number;
   created_at: string;
   updated_at: string;
 }
@@ -102,7 +103,8 @@ export function VendorsManagement() {
       phone: formData.get('phone') as string || null,
       store_location: formData.get('store_location') as string || null,
       bank_info: parsedBankInfo,
-      shipping_region_id: selectedRegionId && selectedRegionId !== 'none' ? selectedRegionId : null
+      shipping_region_id: selectedRegionId && selectedRegionId !== 'none' ? selectedRegionId : null,
+      min_order_quantity: parseInt(formData.get('min_order_quantity') as string) || 1
     };
 
     if (editingVendor) {
@@ -229,6 +231,24 @@ export function VendorsManagement() {
                 </div>
               </div>
 
+              {/* MOQ Input */}
+              <div>
+                <Label htmlFor="min_order_quantity" className="flex items-center gap-2">
+                  <ShoppingBasket className="h-4 w-4" />
+                  MOQ (Minimum Order Quantity)
+                </Label>
+                <Input 
+                  id="min_order_quantity" 
+                  name="min_order_quantity" 
+                  type="number"
+                  min="1"
+                  defaultValue={editingVendor?.min_order_quantity || 1} 
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Minimum total items a customer must buy from this vendor to checkout
+                </p>
+              </div>
+
               {/* Shipping Region Selection */}
               <div>
                 <Label htmlFor="shipping_region">Shipping Region</Label>
@@ -290,6 +310,7 @@ export function VendorsManagement() {
                 <TableHead>Email</TableHead>
                 <TableHead>Phone</TableHead>
                 <TableHead>Location</TableHead>
+                <TableHead>MOQ</TableHead>
                 <TableHead>Region</TableHead>
                 <TableHead>Shipping</TableHead>
                 <TableHead>Actions</TableHead>
@@ -302,6 +323,12 @@ export function VendorsManagement() {
                   <TableCell>{vendor.email}</TableCell>
                   <TableCell>{vendor.phone || '-'}</TableCell>
                   <TableCell>{vendor.store_location || '-'}</TableCell>
+                  <TableCell>
+                    <span className="inline-flex items-center gap-1 text-sm font-medium">
+                      <ShoppingBasket className="h-3 w-3 text-muted-foreground" />
+                      {vendor.min_order_quantity}
+                    </span>
+                  </TableCell>
                   <TableCell>
                     {vendor.shipping_region ? (
                       <span className="inline-flex items-center gap-1 text-sm">

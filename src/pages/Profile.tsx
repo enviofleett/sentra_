@@ -469,7 +469,10 @@ function DesktopSidebar({ currentPath }: { currentPath: string }) {
           <Button 
             variant="ghost" 
             className="w-full justify-start gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-            onClick={() => signOut()}
+            onClick={async () => {
+              await signOut();
+              window.location.href = '/';
+            }}
           >
             <LogOut className="h-5 w-5" />
             Sign Out

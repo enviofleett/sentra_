@@ -14,6 +14,11 @@ export interface CartItem {
     image_url?: string;
     stock_quantity: number;
     vendor_id?: string;
+    vendor?: {
+      id: string;
+      rep_full_name: string;
+      min_order_quantity: number;
+    };
   };
 }
 
@@ -113,7 +118,10 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       .from('cart_items')
       .select(`
         *,
-        product:products(id, name, price, image_url, stock_quantity, vendor_id)
+        product:products(
+          id, name, price, image_url, stock_quantity, vendor_id,
+          vendor:vendors(id, rep_full_name, min_order_quantity)
+        )
       `)
       .eq('user_id', user.id);
 
@@ -132,11 +140,14 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    // Fetch product details for guest cart items
+    // Fetch product details for guest cart items including vendor MOQ
     const productIds = localItems.map(i => i.product_id);
     const { data: products } = await supabase
       .from('products')
-      .select('id, name, price, image_url, stock_quantity, vendor_id')
+      .select(`
+        id, name, price, image_url, stock_quantity, vendor_id,
+        vendor:vendors(id, rep_full_name, min_order_quantity)
+      `)
       .in('id', productIds);
 
     if (products) {
@@ -183,7 +194,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       const { data, error } = await supabase
         .from('cart_items')
         .insert({ user_id: user.id, product_id: productId, quantity })
-        .select(`*, product:products(id, name, price, image_url, stock_quantity, vendor_id)`)
+        .select(`
+          *,
+          product:products(
+            id, name, price, image_url, stock_quantity, vendor_id,
+            vendor:vendors(id, rep_full_name, min_order_quantity)
+          )
+        `)
         .single();
 
       if (error) {

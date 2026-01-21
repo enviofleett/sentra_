@@ -78,14 +78,26 @@ export const AuthFormContent: React.FC<AuthFormContentProps> = ({
 
     setSendingResetEmail(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(forgotPasswordEmail.trim(), {
-        redirectTo: `${window.location.origin}/reset-password`,
+      // Use custom edge function for better-looking emails that avoid spam filters
+      const { data, error } = await supabase.functions.invoke('send-password-reset', {
+        body: {
+          emails: [forgotPasswordEmail.trim()]
+        }
       });
 
       if (error) {
         toast({
           title: 'Error',
           description: error.message,
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      if (data && !data.success) {
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to send password reset email',
           variant: 'destructive'
         });
         return;

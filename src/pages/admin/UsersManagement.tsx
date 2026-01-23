@@ -125,13 +125,22 @@ export function UsersManagement() {
     setBulkResetProgress({ sent: 0, total: emails.length });
 
     try {
-      // Get current admin user
+      // Get current admin user and their email
       const { data: { user: adminUser } } = await supabase.auth.getUser();
+      
+      // Get admin's email from profile
+      const { data: adminProfile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', adminUser?.id)
+        .single();
 
       const { data, error } = await supabase.functions.invoke('send-password-reset', {
         body: {
           emails,
-          adminId: adminUser?.id
+          adminId: adminUser?.id,
+          adminEmail: adminProfile?.email,
+          sendConfirmation: true
         }
       });
 

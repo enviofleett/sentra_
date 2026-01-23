@@ -735,6 +735,45 @@ export type Database = {
           },
         ]
       }
+      password_change_audit: {
+        Row: {
+          change_source: string
+          change_type: string
+          created_at: string
+          error_message: string | null
+          id: string
+          initiated_by: string | null
+          ip_address: string | null
+          success: boolean
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          change_source: string
+          change_type: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          initiated_by?: string | null
+          ip_address?: string | null
+          success?: boolean
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          change_source?: string
+          change_type?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          initiated_by?: string | null
+          ip_address?: string | null
+          success?: boolean
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       pre_launch_settings: {
         Row: {
           badge_1_icon: string | null

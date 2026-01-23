@@ -176,7 +176,7 @@ serve(async (req) => {
 
     const { data: products, error: productsError } = await supabase
       .from('products')
-      .select('id, price, cost_price, stock_quantity, name')
+      .select('id, price, cost_price, stock_quantity, name, vendor_id, vendor:vendors(id, rep_full_name, min_order_quantity)')
       .in('id', productIds);
 
     if (productsError) {
@@ -186,6 +186,54 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // MOQ VALIDATION: Check minimum order quantities per vendor
+    const vendorQuantities: Record<string, {
+      vendorName: string;
+      moq: number;
+      totalQty: number;
+    }> = {};
+
+    for (const item of orderItems) {
+      const product = products?.find(p => p.id === item.product_id);
+      if (!product) continue;
+
+      const vendorId = product.vendor_id;
+      const vendor = (product as any).vendor;
+
+      if (vendorId && vendor) {
+        if (!vendorQuantities[vendorId]) {
+          vendorQuantities[vendorId] = {
+            vendorName: vendor.rep_full_name || 'Unknown Vendor',
+            moq: vendor.min_order_quantity || 1,
+            totalQty: 0
+          };
+        }
+        vendorQuantities[vendorId].totalQty += item.quantity;
+      }
+    }
+
+    // Check if any vendor's MOQ is not met
+    const moqViolations: string[] = [];
+    for (const [vendorId, data] of Object.entries(vendorQuantities)) {
+      if (data.totalQty < data.moq) {
+        const shortage = data.moq - data.totalQty;
+        moqViolations.push(`${data.vendorName}: need ${shortage} more item(s) to meet minimum of ${data.moq}`);
+        console.error(`[Initialize Payment] MOQ violation - ${data.vendorName}: ${data.totalQty}/${data.moq}`);
+      }
+    }
+
+    if (moqViolations.length > 0) {
+      return new Response(JSON.stringify({
+        error: 'Minimum order quantity not met',
+        details: moqViolations.join('; ')
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log('[Initialize Payment] MOQ validation passed');
 
     // Recalculate total from current database prices
     let verifiedTotal = 0;

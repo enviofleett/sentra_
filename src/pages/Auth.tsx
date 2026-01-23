@@ -3,17 +3,17 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
 import { sendEmail } from '@/utils/emailService';
 import { supabase } from '@/integrations/supabase/client';
-import { useBranding } from '@/hooks/useBranding';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Gift } from 'lucide-react';
+import sentraLogo from '@/assets/sentra-logo.png';
 
 // Validation schemas
 const signInSchema = z.object({
@@ -405,7 +405,6 @@ export default function Auth() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  const { logoUrl } = useBranding();
   
   // Capture referral code from URL (?ref=CODE)
   const referralCode = searchParams.get('ref') || searchParams.get('referral') || undefined;
@@ -418,13 +417,9 @@ export default function Auth() {
     <div className="min-h-screen bg-gradient-primary flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          {logoUrl ? (
-            <div className="flex justify-center mb-2">
-              <img src={logoUrl} alt="Logo" className="h-12 max-w-[200px] object-contain" />
-            </div>
-          ) : (
-            <CardTitle className="text-2xl text-center gradient-gold bg-clip-text text-transparent">Sentra</CardTitle>
-          )}
+          <div className="flex justify-center mb-2">
+            <img src={sentraLogo} alt="Sentra" className="h-10 w-auto object-contain" />
+          </div>
           <CardDescription className="text-center">Sign in to your account or create a new one</CardDescription>
         </CardHeader>
         <CardContent>

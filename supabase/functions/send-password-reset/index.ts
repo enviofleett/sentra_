@@ -155,24 +155,30 @@ serve(async (req) => {
       }
 
       try {
-        // Check if user exists
-        const { data: userData } = await supabase.auth.admin.listUsers();
-        const user = userData?.users?.find((u: any) => u.email === email);
+        // Look up user by email directly (more reliable than listUsers which can have pagination issues)
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .eq('email', email)
+          .single();
 
-        if (!user) {
-          console.log(`[Password Reset] User not found: ${email}`);
+        if (!profile) {
+          console.log(`[Password Reset] Profile not found: ${email}`);
           results.push({ email, success: false, error: 'User not found' });
           continue;
         }
 
-        // Get user profile for name
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('full_name')
-          .eq('id', user.id)
-          .single();
+        // Verify auth user exists
+        const { data: authUserData, error: authError } = await supabase.auth.admin.getUserById(profile.id);
+        
+        if (authError || !authUserData?.user) {
+          console.log(`[Password Reset] Auth user not found for profile: ${email} (${profile.id})`, authError?.message);
+          results.push({ email, success: false, error: 'Auth account not found' });
+          continue;
+        }
 
-        const userName = profile?.full_name || email.split('@')[0];
+        const user = authUserData.user;
+        const userName = profile.full_name || email.split('@')[0];
 
         // Generate custom password reset token (bypasses Supabase auth URL)
         const { data: tokenData, error: tokenError } = await supabase.rpc('generate_password_reset_token', {

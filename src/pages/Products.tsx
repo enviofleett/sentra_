@@ -141,7 +141,7 @@ export default function Products() {
       <div>
         
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          
           
         </div>
       </div>
@@ -166,18 +166,10 @@ export default function Products() {
         <CollapsibleContent className="mt-4">
           <div className="relative mb-3">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input 
-              type="text" 
-              placeholder="Search brands..." 
-              value={brandSearchQuery} 
-              onChange={(e) => setBrandSearchQuery(e.target.value)} 
-              className="pl-9 h-9 text-sm rounded-full"
-            />
+            <Input type="text" placeholder="Search brands..." value={brandSearchQuery} onChange={e => setBrandSearchQuery(e.target.value)} className="pl-9 h-9 text-sm rounded-full" />
           </div>
           <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
-            {brands
-              .filter(brand => brand.toLowerCase().includes(brandSearchQuery.toLowerCase()))
-              .map(brand => <div key={brand} className="flex items-center space-x-3">
+            {brands.filter(brand => brand.toLowerCase().includes(brandSearchQuery.toLowerCase())).map(brand => <div key={brand} className="flex items-center space-x-3">
                 <Checkbox id={`brand-${brand}`} checked={selectedBrands.includes(brand)} onCheckedChange={() => toggleBrand(brand)} />
                 <Label htmlFor={`brand-${brand}`} className="cursor-pointer text-sm font-normal">
                   {brand}

@@ -177,7 +177,7 @@ serve(async (req) => {
         // Generate custom password reset token (bypasses Supabase auth URL)
         const { data: tokenData, error: tokenError } = await supabase.rpc('generate_password_reset_token', {
           p_user_id: user.id,
-          p_expires_in_minutes: 10
+          p_expires_in_minutes: 60
         });
 
         if (tokenError || !tokenData) {

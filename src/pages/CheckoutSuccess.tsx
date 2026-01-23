@@ -68,18 +68,13 @@ export default function CheckoutSuccess() {
             successNotificationShown.current = true;
           }
         } else if (commitment.status === 'committed_unpaid') {
-          // Payment might still be processing
-          if (retryCount < 5) {
-            setRetryCount(prev => prev + 1);
-            setTimeout(verifyPayment, 2000);
-          } else {
-            setVerificationStatus('pending');
-          }
+          // Payment might still be processing - wait for real-time subscription
+          setVerificationStatus('pending');
         } else {
           setVerificationStatus('failed');
         }
       } else if (orderId) {
-        // First check current order status
+        // Check current order status from database
         const { data: order, error } = await supabase
           .from('orders')
           .select('id, total_amount, payment_status, status, customer_email, items, payment_reference')
@@ -94,8 +89,9 @@ export default function CheckoutSuccess() {
 
         setOrderDetails(order as OrderDetails);
 
-        // If already paid, we're done
+        // If already paid, we're done - show success immediately
         if (order.payment_status === 'paid') {
+          console.log('[CheckoutSuccess] Order already paid, showing success');
           setVerificationStatus('success');
           await clearCart();
           if (!successNotificationShown.current) {
@@ -108,62 +104,10 @@ export default function CheckoutSuccess() {
           return;
         }
 
-        // If still pending, call verify-payment edge function to check with Paystack directly
-        // Note: verify-payment is now READ-ONLY - it reports Paystack status but doesn't update DB
-        if (order.payment_status === 'pending' && retryCount < 5) {
-          console.log(`[CheckoutSuccess] Calling verify-payment API (attempt ${retryCount + 1})`);
-          
-          try {
-            const { data: verifyResult, error: verifyError } = await supabase.functions.invoke('verify-payment', {
-              body: { orderId: orderId }
-            });
-            
-            console.log('[CheckoutSuccess] Verify result:', verifyResult);
-            
-            if (verifyError) {
-              console.error('[CheckoutSuccess] Verify API error:', verifyError);
-              // Continue with retry - don't fail immediately
-            } else if (verifyResult?.verified && verifyResult?.status === 'success') {
-              // Paystack confirms payment - now wait for webhook to update DB
-              // Re-check the database to see if webhook has processed
-              const { data: refreshedOrder } = await supabase
-                .from('orders')
-                .select('id, total_amount, payment_status, status, customer_email, items')
-                .eq('id', orderId)
-                .single();
-              
-              if (refreshedOrder?.payment_status === 'paid') {
-                // Webhook has updated the order
-                setOrderDetails(refreshedOrder as OrderDetails);
-                setVerificationStatus('success');
-                await clearCart();
-                if (!successNotificationShown.current) {
-                  toast.success('Payment Successful!', {
-                    description: `Your order #${refreshedOrder.id.slice(0, 8).toUpperCase()} has been confirmed.`,
-                    duration: 5000,
-                  });
-                  successNotificationShown.current = true;
-                }
-                return;
-              } else {
-                // Paystack says success but webhook hasn't processed yet
-                // Continue retrying to give webhook time
-                console.log('[CheckoutSuccess] Paystack confirmed but waiting for webhook...');
-              }
-            } else if (verifyResult?.status === 'failed' || verifyResult?.status === 'abandoned') {
-              setVerificationStatus('failed');
-              return;
-            }
-          } catch (e) {
-            console.error('[CheckoutSuccess] Verify API call failed:', e);
-          }
-          
-          // Still pending, retry with increasing delay
-          setRetryCount(prev => prev + 1);
-          const delay = Math.min(2000 + retryCount * 1000, 5000); // 2s, 3s, 4s, 5s, 5s
-          setTimeout(verifyPayment, delay);
-        } else if (order.payment_status === 'pending') {
-          // After retries exhausted, show pending state
+        // If still pending, set to pending state and let real-time subscription handle updates
+        // The webhook will update the order, and the subscription will catch it
+        if (order.payment_status === 'pending') {
+          console.log('[CheckoutSuccess] Order pending, waiting for webhook via real-time subscription');
           setVerificationStatus('pending');
         } else {
           setVerificationStatus('failed');
@@ -173,7 +117,7 @@ export default function CheckoutSuccess() {
       console.error('Payment verification error:', error);
       setVerificationStatus('failed');
     }
-  }, [orderId, commitmentId, isGroupBuy, retryCount, clearCart, successNotificationShown]);
+  }, [orderId, commitmentId, isGroupBuy, clearCart, successNotificationShown]);
 
   // Set up real-time subscription for order updates (if orderId exists)
   useEffect(() => {
@@ -227,17 +171,14 @@ export default function CheckoutSuccess() {
   }, [orderId, clearCart]);
 
   useEffect(() => {
-    // Start verification after a short delay to allow webhook to process
+    // Start verification immediately - webhook should have processed by now
     if (!orderId && !commitmentId) {
       setVerificationStatus('failed');
       return;
     }
     
-    const timer = setTimeout(() => {
-      verifyPayment();
-    }, 1500);
-    
-    return () => clearTimeout(timer);
+    // Check immediately since Paystack redirects after successful payment
+    verifyPayment();
   }, [orderId, commitmentId, verifyPayment]);
 
   const displayId = orderId?.slice(0, 8) || commitmentId?.slice(0, 8) || 'N/A';

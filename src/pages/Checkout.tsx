@@ -428,82 +428,41 @@ export default function Checkout() {
 
       if (orderError) throw orderError;
 
-      // Generate unique payment reference
-      const paymentReference = `order_${order.id}_${Date.now()}`;
+      console.log('[Checkout] Order created:', order.id);
 
-      // Update order with payment reference BEFORE initiating payment
-      const { error: updateError } = await supabase
-        .from('orders')
-        .update({ payment_reference: paymentReference })
-        .eq('id', order.id);
-
-      if (updateError) {
-        console.error('Failed to save payment reference:', updateError);
-        throw new Error('Failed to initialize payment. Please try again.');
-      }
-
-      // Get Paystack public key from environment
-      const paystackPublicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
-      
-      // Validate Paystack configuration - check for ad blockers or network issues
-      // @ts-ignore - PaystackPop is loaded from script in index.html
-      if (typeof window.PaystackPop === 'undefined') {
-        console.error('[Checkout] PaystackPop script not loaded. Possible causes: ad blocker, network issue, or missing script tag.');
-        toast({
-          title: 'Payment Service Unavailable',
-          description: 'The payment service could not load. This may be due to an ad blocker or network issue. Please disable ad blockers, refresh the page, and try again.',
-          variant: 'destructive'
-        });
-        setProcessing(false);
-        return;
-      }
-      
-      if (!paystackPublicKey || paystackPublicKey === 'pk_live_YOUR_PAYSTACK_PUBLIC_KEY') {
-        console.error('Paystack public key not configured or is placeholder value.');
-        throw new Error('Payment service is not properly configured. Please contact support.');
-      }
-
-      // Build callback URL for Paystack redirect
-      const callbackUrl = `${window.location.origin}/checkout/success?order_id=${order.id}&type=standard_order`;
-
-      // @ts-ignore
-      const handler = PaystackPop.setup({
-        key: paystackPublicKey,
-        email: data.email,
-        amount: totalAmount * 100,
-        ref: paymentReference,
-        callback_url: callbackUrl,
-        metadata: {
-          order_id: order.id,
-          customer_name: data.fullName,
-          type: 'standard_order'
-        },
-        onSuccess: (transaction: any) => {
-          // SECURITY: Do NOT update database here - webhook is the single source of truth
-          // Do NOT assume payment was successful - let the verification page confirm
-          console.log('[Checkout] Payment popup closed with reference:', transaction.reference);
-          
-          toast({
-            title: 'Processing payment...',
-            description: 'Redirecting to verify your payment.'
-          });
-
-          // Immediately redirect to verification page - do not write to database
-          navigate(`/checkout/success?order_id=${order.id}&type=standard_order`);
-        },
-        onCancel: () => {
-          console.log('Payment cancelled');
-          toast({
-            title: 'Payment cancelled',
-            description: 'Your order has been saved. You can complete payment later.',
-            variant: 'destructive'
-          });
-          
-          navigate('/profile/orders');
+      // Use server-side payment initialization for reliable redirect-based checkout
+      // This eliminates popup blockers and ensures consistent callback URL
+      const { data: paymentResult, error: paymentError } = await supabase.functions.invoke('initialize-standard-payment', {
+        body: {
+          orderId: order.id,
+          customerEmail: data.email,
+          customerName: data.fullName
         }
       });
 
-      handler.openIframe();
+      if (paymentError) {
+        console.error('[Checkout] Payment initialization error:', paymentError);
+        throw new Error('Failed to initialize payment. Please try again.');
+      }
+
+      if (!paymentResult?.paymentUrl) {
+        console.error('[Checkout] No payment URL returned:', paymentResult);
+        throw new Error(paymentResult?.error || 'Payment service unavailable. Please try again.');
+      }
+
+      console.log('[Checkout] Redirecting to Paystack:', paymentResult.paymentUrl);
+
+      // Show processing toast before redirect
+      toast({
+        title: 'Redirecting to Payment...',
+        description: 'You will be redirected to complete your payment securely.',
+      });
+
+      // Small delay to allow toast to show, then redirect to Paystack
+      setTimeout(() => {
+        window.location.href = paymentResult.paymentUrl;
+      }, 500);
+
     } catch (error: any) {
       console.error('Checkout error:', error);
       toast({
@@ -511,7 +470,6 @@ export default function Checkout() {
         description: error.message || 'Failed to place order',
         variant: 'destructive'
       });
-    } finally {
       setProcessing(false);
     }
   };

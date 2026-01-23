@@ -65,7 +65,13 @@ serve(async (req) => {
     console.log('[Verify Waitlist] Admin verified');
     
     const body = await req.json();
-    const { entryId, migrateAll } = body;
+    const { entryId, migrateAll, verifyAllPending } = body;
+
+    // Handle bulk verification and migration of all pending users
+    if (verifyAllPending) {
+      console.log('[Verify Waitlist] Starting bulk verification and migration of pending users');
+      return await handleBulkVerifyPending(supabase, user.id, corsHeaders);
+    }
 
     // Handle bulk migration of all verified users
     if (migrateAll) {
@@ -305,13 +311,97 @@ async function processWaitlistEntry(
   }
 }
 
-async function handleBulkMigration(supabase: any, corsHeaders: Record<string, string>) {
+async function handleBulkVerifyPending(supabase: any, adminId: string, corsHeaders: Record<string, string>) {
   try {
-    // Get all verified waitlist entries that haven't been fully processed
+    // Get all unverified waitlist entries
     const { data: entries, error: fetchError } = await supabase
       .from('waiting_list')
       .select('*')
-      .eq('is_social_verified', true);
+      .eq('is_social_verified', false);
+    
+    if (fetchError) {
+      console.error('[Bulk Verify Pending] Failed to fetch entries:', fetchError);
+      return new Response(JSON.stringify({ error: 'Failed to fetch pending waitlist entries' }), { 
+        status: 500, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+    
+    if (!entries || entries.length === 0) {
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: 'No pending entries to process',
+        processed: 0
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+    
+    console.log('[Bulk Verify Pending] Found', entries.length, 'pending entries to process');
+    
+    // Get reward amount
+    const { data: settings } = await supabase
+      .from('pre_launch_settings')
+      .select('waitlist_reward_amount')
+      .maybeSingle();
+    
+    const rewardAmount = settings?.waitlist_reward_amount || 100000;
+    
+    let successCount = 0;
+    const errors: string[] = [];
+    
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      
+      // Add delay between users to respect Supabase API rate limits (skip first iteration)
+      if (i > 0) {
+        console.log('[Bulk Verify Pending] Rate limiting: waiting 1.2s before next user...');
+        await new Promise(resolve => setTimeout(resolve, 1200));
+      }
+      
+      // Log progress every 10 users
+      if (i > 0 && i % 10 === 0) {
+        console.log(`[Bulk Verify Pending] Progress: ${i}/${entries.length} entries processed (${successCount} success, ${errors.length} errors)`);
+      }
+      
+      // Process the entry (will create user if needed and credit wallet)
+      const result = await processWaitlistEntry(supabase, entry, rewardAmount, adminId);
+      
+      if (result.success) {
+        successCount++;
+      } else {
+        errors.push(`${entry.email}: ${result.error}`);
+      }
+    }
+    
+    console.log('[Bulk Verify Pending] Completed. Success:', successCount, 'Errors:', errors.length);
+    
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: `All pending users processed! ${successCount} verified and credited`,
+      processed: successCount,
+      errors: errors.length > 0 ? errors : undefined
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+    
+  } catch (error) {
+    console.error('[Bulk Verify Pending] Error:', error);
+    return new Response(JSON.stringify({ error: 'Bulk verification failed' }), { 
+      status: 500, 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  }
+}
+
+async function handleBulkMigration(supabase: any, corsHeaders: Record<string, string>) {
+  try {
+    // Get all verified waitlist entries that haven't been fully processed (check reward_credited flag)
+    const { data: entries, error: fetchError } = await supabase
+      .from('waiting_list')
+      .select('*')
+      .eq('is_social_verified', true)
+      .eq('reward_credited', false);
     
     if (fetchError) {
       console.error('[Bulk Migration] Failed to fetch entries:', fetchError);
@@ -324,7 +414,7 @@ async function handleBulkMigration(supabase: any, corsHeaders: Record<string, st
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ 
         success: true, 
-        message: 'No verified entries to migrate',
+        message: 'No verified entries need migration - all already processed',
         processed: 0
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -342,7 +432,6 @@ async function handleBulkMigration(supabase: any, corsHeaders: Record<string, st
     const rewardAmount = settings?.waitlist_reward_amount || 100000;
     
     let successCount = 0;
-    let skipCount = 0;
     const errors: string[] = [];
     
     for (let i = 0; i < entries.length; i++) {
@@ -356,26 +445,7 @@ async function handleBulkMigration(supabase: any, corsHeaders: Record<string, st
       
       // Log progress every 10 users
       if (i > 0 && i % 10 === 0) {
-        console.log(`[Bulk Migration] Progress: ${i}/${entries.length} entries processed (${successCount} success, ${skipCount} skipped, ${errors.length} errors)`);
-      }
-      
-      // Check if user already has a wallet with promo balance (already migrated)
-      const { data: existingUsers } = await supabase.auth.admin.listUsers();
-      const existingUser = existingUsers?.users?.find((u: any) => u.email === entry.email);
-      
-      if (existingUser) {
-        // Check if wallet already has this reward
-        const { data: wallet } = await supabase
-          .from('user_wallets')
-          .select('balance_promo')
-          .eq('user_id', existingUser.id)
-          .maybeSingle();
-        
-        if (wallet && wallet.balance_promo >= rewardAmount) {
-          console.log('[Bulk Migration] Skipping already migrated user:', entry.email);
-          skipCount++;
-          continue;
-        }
+        console.log(`[Bulk Migration] Progress: ${i}/${entries.length} entries processed (${successCount} success, ${errors.length} errors)`);
       }
       
       // Process the entry (will create user if needed and credit wallet)
@@ -388,13 +458,12 @@ async function handleBulkMigration(supabase: any, corsHeaders: Record<string, st
       }
     }
     
-    console.log('[Bulk Migration] Completed. Success:', successCount, 'Skipped:', skipCount, 'Errors:', errors.length);
+    console.log('[Bulk Migration] Completed. Success:', successCount, 'Errors:', errors.length);
     
     return new Response(JSON.stringify({ 
       success: true, 
-      message: `Migration complete! ${successCount} users created/credited, ${skipCount} already migrated`,
+      message: `Migration complete! ${successCount} users created/credited`,
       processed: successCount,
-      skipped: skipCount,
       errors: errors.length > 0 ? errors : undefined
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

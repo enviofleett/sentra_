@@ -54,6 +54,7 @@ export default function WaitlistManagement() {
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
   const [migrating, setMigrating] = useState(false);
+  const [verifyingAllPending, setVerifyingAllPending] = useState(false);
   const [rewardAmount, setRewardAmount] = useState('100000');
   
   // Bulk email state
@@ -174,6 +175,45 @@ export default function WaitlistManagement() {
     }
     
     setMigrating(false);
+  };
+
+  const verifyAndMigrateAllPending = async () => {
+    const pendingCount = list.filter(e => !e.is_social_verified).length;
+    if (pendingCount === 0) {
+      toast.error('No pending entries to process');
+      return;
+    }
+    
+    if (!confirm(`This will verify ${pendingCount} pending waitlist entries, create user accounts, and credit ₦${parseInt(rewardAmount).toLocaleString()} to each wallet. Continue?`)) {
+      return;
+    }
+    
+    setVerifyingAllPending(true);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('verify-waitlist-social', {
+        body: { verifyAllPending: true }
+      });
+
+      if (error) {
+        console.error('Verify all pending error:', error);
+        toast.error('Failed: ' + error.message);
+      } else if (data?.error) {
+        toast.error(data.error);
+      } else {
+        toast.success(data.message || 'All pending users verified and credited!');
+        if (data.errors && data.errors.length > 0) {
+          console.warn('Processing errors:', data.errors);
+          toast.warning(`${data.errors.length} entries had errors - check console`);
+        }
+        fetchData();
+      }
+    } catch (err) {
+      console.error('Verify all pending error:', err);
+      toast.error('Failed to process pending entries');
+    }
+    
+    setVerifyingAllPending(false);
   };
 
   const saveSettings = async () => {
@@ -655,7 +695,7 @@ export default function WaitlistManagement() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card className="bg-card/50 backdrop-blur-sm border-border/50">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Signups</CardTitle>
@@ -700,6 +740,25 @@ export default function WaitlistManagement() {
             >
               {migrating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserPlus className="h-4 w-4 mr-2" />}
               Create Users & Credit
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card/50 backdrop-blur-sm border-border/50 border-amber-500/50">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Verify All Pending</CardTitle>
+            <CheckCircle className="h-4 w-4 text-amber-500" />
+          </CardHeader>
+          <CardContent>
+            <Button 
+              onClick={verifyAndMigrateAllPending} 
+              disabled={verifyingAllPending || list.filter(e => !e.is_social_verified).length === 0}
+              size="sm"
+              variant="outline"
+              className="w-full border-amber-500/50 hover:bg-amber-500/10"
+            >
+              {verifyingAllPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
+              Verify & Credit ({list.filter(e => !e.is_social_verified).length})
             </Button>
           </CardContent>
         </Card>

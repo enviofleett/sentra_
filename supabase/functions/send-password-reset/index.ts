@@ -174,23 +174,21 @@ serve(async (req) => {
 
         const userName = profile?.full_name || email.split('@')[0];
 
-        // Generate password reset link
-        const { data: resetData, error: resetError } = await supabase.auth.admin.generateLink({
-          type: 'recovery',
-          email: email,
-          options: {
-            redirectTo: `${resolvedBaseUrl}/reset-password`
-          }
+        // Generate custom password reset token (bypasses Supabase auth URL)
+        const { data: tokenData, error: tokenError } = await supabase.rpc('generate_password_reset_token', {
+          p_user_id: user.id,
+          p_expires_in_minutes: 10
         });
 
-        if (resetError) {
-          console.error(`[Password Reset] Failed to generate link for ${email}:`, resetError);
-          results.push({ email, success: false, error: resetError.message });
+        if (tokenError || !tokenData) {
+          console.error(`[Password Reset] Failed to generate token for ${email}:`, tokenError);
+          results.push({ email, success: false, error: tokenError?.message || 'Failed to generate token' });
           continue;
         }
 
-        const resetUrl = resetData?.properties?.action_link || `${resolvedBaseUrl}/auth`;
-        console.log(`[Password Reset] Generated reset link for ${email}`);
+        // Create direct reset URL pointing to trusted domain (no Supabase redirect)
+        const resetUrl = `${resolvedBaseUrl}/reset-password?token=${tokenData}`;
+        console.log(`[Password Reset] Generated custom reset link for ${email}`);
 
         // Build email content
         let htmlContent: string;

@@ -774,6 +774,33 @@ export type Database = {
         }
         Relationships: []
       }
+      password_reset_tokens: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          token: string
+          used_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          token: string
+          used_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          token?: string
+          used_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       pre_launch_settings: {
         Row: {
           badge_1_icon: string | null
@@ -2070,6 +2097,10 @@ export type Database = {
         }[]
       }
       cleanup_expired_campaigns: { Args: never; Returns: undefined }
+      consume_password_reset_token: {
+        Args: { p_token: string }
+        Returns: boolean
+      }
       credit_membership_wallet: {
         Args: {
           p_amount: number
@@ -2095,6 +2126,10 @@ export type Database = {
       ensure_membership_wallet: { Args: { p_user_id: string }; Returns: string }
       ensure_user_wallet: { Args: { p_user_id: string }; Returns: string }
       generate_affiliate_code: { Args: { p_user_id: string }; Returns: string }
+      generate_password_reset_token: {
+        Args: { p_expires_in_minutes?: number; p_user_id: string }
+        Returns: string
+      }
       get_active_reseller_access_id: {
         Args: { p_user_id: string }
         Returns: string
@@ -2138,6 +2173,15 @@ export type Database = {
       user_has_reseller_access: {
         Args: { p_user_id: string }
         Returns: boolean
+      }
+      validate_password_reset_token: {
+        Args: { p_token: string }
+        Returns: {
+          email: string
+          error_message: string
+          is_valid: boolean
+          user_id: string
+        }[]
       }
       verify_and_reward_user: {
         Args: { admin_id: string; entry_id: string }

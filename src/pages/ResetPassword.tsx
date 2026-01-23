@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +10,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { KeyRound, CheckCircle, AlertCircle } from 'lucide-react';
+import { KeyRound, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
 const resetPasswordSchema = z.object({
   password: z.string()
@@ -26,11 +26,18 @@ const resetPasswordSchema = z.object({
 
 type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
 
+type TokenType = 'custom' | 'supabase' | null;
+
 export default function ResetPassword() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { logoUrl } = useBranding();
   const [isValidSession, setIsValidSession] = useState<boolean | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [tokenType, setTokenType] = useState<TokenType>(null);
+  const [customToken, setCustomToken] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const form = useForm<ResetPasswordFormData>({
     resolver: zodResolver(resetPasswordSchema),
@@ -38,29 +45,53 @@ export default function ResetPassword() {
   });
 
   useEffect(() => {
-    // Handle the recovery token from URL hash parameters
-    const handleRecoveryToken = async () => {
-      // Check for hash parameters (Supabase includes tokens in hash)
+    const validateToken = async () => {
+      // Check for custom token in query params first (our new secure flow)
+      const token = searchParams.get('token');
+      
+      if (token) {
+        console.log('[ResetPassword] Custom token found, validating...');
+        
+        try {
+          const { data, error } = await supabase.functions.invoke('reset-password-with-token', {
+            body: { token }
+          });
+
+          if (error) {
+            console.error('[ResetPassword] Token validation error:', error);
+            setErrorMessage('Unable to validate reset link. Please try again.');
+            setIsValidSession(false);
+            return;
+          }
+
+          if (data?.isValid) {
+            console.log('[ResetPassword] Custom token is valid');
+            setTokenType('custom');
+            setCustomToken(token);
+            setUserEmail(data.email);
+            setIsValidSession(true);
+            return;
+          } else {
+            console.log('[ResetPassword] Custom token is invalid:', data?.error);
+            setErrorMessage(data?.error || 'This reset link is invalid or has expired.');
+            setIsValidSession(false);
+            return;
+          }
+        } catch (err) {
+          console.error('[ResetPassword] Error validating token:', err);
+          setErrorMessage('Unable to validate reset link. Please try again.');
+          setIsValidSession(false);
+          return;
+        }
+      }
+
+      // Fallback: Check for Supabase hash tokens (legacy support)
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
       const accessToken = hashParams.get('access_token');
       const refreshToken = hashParams.get('refresh_token');
-      const type = hashParams.get('type');
       
-      // Also check query parameters as fallback
-      const queryParams = new URLSearchParams(window.location.search);
-      const tokenHash = queryParams.get('token_hash') || queryParams.get('token');
-      const tokenType = queryParams.get('type');
-      
-      console.log('[ResetPassword] URL analysis:', {
-        hasHashToken: !!accessToken,
-        hasRefreshToken: !!refreshToken,
-        type,
-        hasQueryToken: !!tokenHash,
-        tokenType
-      });
-      
-      // If we have access_token in hash, set the session directly
       if (accessToken && refreshToken) {
+        console.log('[ResetPassword] Supabase hash tokens found');
         try {
           const { data, error } = await supabase.auth.setSession({
             access_token: accessToken,
@@ -69,22 +100,28 @@ export default function ResetPassword() {
           
           if (error) {
             console.error('[ResetPassword] Failed to set session:', error);
+            setErrorMessage('This reset link is invalid or has expired.');
             setIsValidSession(false);
           } else if (data.session) {
             console.log('[ResetPassword] Session established from hash tokens');
+            setTokenType('supabase');
             setIsValidSession(true);
-            // Clear the hash from URL for cleaner UX
             window.history.replaceState(null, '', window.location.pathname);
           }
         } catch (err) {
           console.error('[ResetPassword] Error setting session:', err);
+          setErrorMessage('This reset link is invalid or has expired.');
           setIsValidSession(false);
         }
         return;
       }
       
-      // If we have a token_hash in query params (direct Supabase link format)
-      if (tokenHash && tokenType === 'recovery') {
+      // Fallback: Check for token_hash in query params (Supabase direct link format)
+      const tokenHash = searchParams.get('token_hash');
+      const tokenQueryType = searchParams.get('type');
+      
+      if (tokenHash && tokenQueryType === 'recovery') {
+        console.log('[ResetPassword] Supabase token_hash found');
         try {
           const { data, error } = await supabase.auth.verifyOtp({
             token_hash: tokenHash,
@@ -93,110 +130,134 @@ export default function ResetPassword() {
           
           if (error) {
             console.error('[ResetPassword] Failed to verify OTP:', error);
+            setErrorMessage('This reset link is invalid or has expired.');
             setIsValidSession(false);
           } else if (data.session) {
             console.log('[ResetPassword] Session established from OTP verification');
+            setTokenType('supabase');
             setIsValidSession(true);
           }
         } catch (err) {
           console.error('[ResetPassword] Error verifying OTP:', err);
+          setErrorMessage('This reset link is invalid or has expired.');
           setIsValidSession(false);
         }
         return;
       }
       
-      // Fallback: check existing session
+      // Fallback: Check existing session
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         console.log('[ResetPassword] Existing session found');
+        setTokenType('supabase');
         setIsValidSession(true);
       } else {
-        console.log('[ResetPassword] No valid session or token found');
+        console.log('[ResetPassword] No valid token or session found');
+        setErrorMessage('No reset link detected. Please request a new password reset.');
         setIsValidSession(false);
       }
     };
 
-    // Listen for auth state changes (handles the recovery link redirect)
+    // Listen for Supabase auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('[ResetPassword] Auth state change:', event);
       if (event === 'PASSWORD_RECOVERY') {
+        setTokenType('supabase');
         setIsValidSession(true);
-      } else if (event === 'SIGNED_IN' && session) {
-        // Only set valid if we're on this page intentionally
-        if (isValidSession === null) {
-          setIsValidSession(true);
-        }
       }
     });
 
-    handleRecoveryToken();
+    validateToken();
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [searchParams]);
 
   const handleResetPassword = async (data: ResetPasswordFormData) => {
     try {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
+      if (tokenType === 'custom' && customToken) {
+        // Use custom token reset flow (our secure edge function)
+        console.log('[ResetPassword] Using custom token reset flow');
+        
+        const { data: resetData, error: resetError } = await supabase.functions.invoke(
+          'reset-password-with-token?action=reset',
+          {
+            body: { 
+              token: customToken, 
+              newPassword: data.password 
+            }
+          }
+        );
 
-      if (!user) {
-        toast({
-          title: 'Error',
-          description: 'Invalid session. Please request a new password reset link.',
-          variant: 'destructive'
-        });
-        return;
-      }
-
-      // Update password
-      const { error } = await supabase.auth.updateUser({
-        password: data.password
-      });
-
-      // Log the password change attempt to audit table
-      const auditLog = {
-        user_id: user.id,
-        change_type: 'recovery_link',
-        change_source: 'reset_password_page',
-        success: !error,
-        error_message: error?.message || null,
-        ip_address: null, // Browser can't access this directly
-        user_agent: navigator.userAgent,
-      };
-
-      // Insert audit log (don't block on this)
-      // Note: password_change_audit table may not exist in types yet after migration
-      try {
-        const { error: auditError } = await supabase
-          .from('password_change_audit' as any)
-          .insert(auditLog);
-        if (auditError) {
-          console.error('Failed to log password change:', auditError);
+        if (resetError || !resetData?.success) {
+          toast({
+            title: 'Error',
+            description: resetData?.error || resetError?.message || 'Failed to reset password',
+            variant: 'destructive'
+          });
+          return;
         }
-      } catch (auditErr) {
-        console.error('Failed to log password change:', auditErr);
-      }
 
-      if (error) {
+        setIsSuccess(true);
         toast({
-          title: 'Error',
-          description: error.message,
-          variant: 'destructive'
+          title: 'Password Updated',
+          description: 'Your password has been reset successfully.'
         });
-        return;
-      }
 
-      setIsSuccess(true);
-      toast({
-        title: 'Password Updated',
-        description: 'Your password has been reset successfully.'
-      });
+        // Redirect after success
+        setTimeout(() => navigate('/auth'), 2000);
 
-      // Redirect to appropriate page after a delay
-      setTimeout(async () => {
-        // Check if user is admin
+      } else if (tokenType === 'supabase') {
+        // Use Supabase session-based reset flow (legacy)
+        console.log('[ResetPassword] Using Supabase session reset flow');
+        
         const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
+
+        if (!user) {
+          toast({
+            title: 'Error',
+            description: 'Session expired. Please request a new password reset link.',
+            variant: 'destructive'
+          });
+          return;
+        }
+
+        const { error } = await supabase.auth.updateUser({
+          password: data.password
+        });
+
+        // Log audit (non-blocking)
+        try {
+          await supabase
+            .from('password_change_audit' as any)
+            .insert({
+              user_id: user.id,
+              change_type: 'recovery_link',
+              change_source: 'reset_password_page',
+              success: !error,
+              error_message: error?.message || null,
+              user_agent: navigator.userAgent,
+            });
+        } catch (auditErr) {
+          console.error('Failed to log password change:', auditErr);
+        }
+
+        if (error) {
+          toast({
+            title: 'Error',
+            description: error.message,
+            variant: 'destructive'
+          });
+          return;
+        }
+
+        setIsSuccess(true);
+        toast({
+          title: 'Password Updated',
+          description: 'Your password has been reset successfully.'
+        });
+
+        // Redirect based on user role
+        setTimeout(async () => {
           const { data: roles } = await supabase
             .from('user_roles')
             .select('role')
@@ -206,11 +267,11 @@ export default function ResetPassword() {
 
           if (roles) {
             navigate('/admin');
-            return;
+          } else {
+            navigate('/');
           }
-        }
-        navigate('/');
-      }, 2000);
+        }, 2000);
+      }
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -220,13 +281,15 @@ export default function ResetPassword() {
     }
   };
 
+  // Loading state
   if (isValidSession === null) {
     return (
       <div className="min-h-screen bg-gradient-primary flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardContent className="pt-6">
-            <div className="flex justify-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">Validating reset link...</p>
             </div>
           </CardContent>
         </Card>
@@ -234,6 +297,7 @@ export default function ResetPassword() {
     );
   }
 
+  // Invalid/expired token state
   if (!isValidSession) {
     return (
       <div className="min-h-screen bg-gradient-primary flex items-center justify-center p-4">
@@ -251,7 +315,7 @@ export default function ResetPassword() {
             <AlertCircle className="h-12 w-12 text-destructive mx-auto" />
             <h2 className="text-xl font-semibold">Invalid or Expired Link</h2>
             <p className="text-muted-foreground">
-              This password reset link is invalid or has expired. Please request a new one.
+              {errorMessage || 'This password reset link is invalid or has expired. Please request a new one.'}
             </p>
             <Button onClick={() => navigate('/auth')} className="w-full">
               Back to Sign In
@@ -262,6 +326,7 @@ export default function ResetPassword() {
     );
   }
 
+  // Success state
   if (isSuccess) {
     return (
       <div className="min-h-screen bg-gradient-primary flex items-center justify-center p-4">
@@ -287,6 +352,7 @@ export default function ResetPassword() {
     );
   }
 
+  // Password reset form
   return (
     <div className="min-h-screen bg-gradient-primary flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
@@ -298,7 +364,13 @@ export default function ResetPassword() {
           ) : (
             <CardTitle className="text-2xl text-center gradient-gold bg-clip-text text-transparent">Sentra</CardTitle>
           )}
-          <CardDescription className="text-center">Enter your new password</CardDescription>
+          <CardDescription className="text-center">
+            {userEmail ? (
+              <>Reset password for <span className="font-medium">{userEmail}</span></>
+            ) : (
+              'Enter your new password'
+            )}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex justify-center mb-6">
@@ -362,7 +434,14 @@ export default function ResetPassword() {
                 className="w-full"
                 disabled={form.formState.isSubmitting}
               >
-                {form.formState.isSubmitting ? 'Updating...' : 'Reset Password'}
+                {form.formState.isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  'Reset Password'
+                )}
               </Button>
             </form>
           </Form>

@@ -10,6 +10,8 @@ const corsHeaders = {
 interface PasswordResetRequest {
   emails: string[];
   adminId?: string;
+  adminEmail?: string;
+  sendConfirmation?: boolean;
 }
 
 /**
@@ -58,11 +60,13 @@ serve(async (req) => {
   }
 
   try {
-    const { emails, adminId }: PasswordResetRequest = await req.json();
+    const { emails, adminId, adminEmail, sendConfirmation }: PasswordResetRequest = await req.json();
 
     console.log('[Password Reset] Request received:', { 
       emailCount: emails?.length, 
-      adminId 
+      adminId,
+      adminEmail: adminEmail ? '***' : undefined,
+      sendConfirmation
     });
 
     if (!emails || emails.length === 0) {
@@ -209,13 +213,20 @@ serve(async (req) => {
         const minifiedHtml = minifyHtml(htmlContent);
         const plainText = stripHtml(htmlContent);
 
-        // Send email
+        // Generate unique Message-ID for better deliverability
+        const messageId = `<${crypto.randomUUID()}@sentra.africa>`;
+
+        // Send email with improved headers
         await client.send({
           from: `Sentra <${gmailEmail}>`,
           to: email,
           subject: subject,
           content: plainText,
           html: minifiedHtml,
+          headers: {
+            'Message-ID': messageId,
+            'X-Mailer': 'Sentra Notifications',
+          },
         });
 
         console.log(`[Password Reset] ✅ Email sent to ${email}`);
@@ -248,12 +259,33 @@ serve(async (req) => {
       }
     }
 
-    await client.close();
-
     const successCount = results.filter(r => r.success).length;
     const failCount = results.filter(r => !r.success).length;
+    const failedEmails = results.filter(r => !r.success);
 
     console.log(`[Password Reset] Complete: ${successCount} sent, ${failCount} failed`);
+
+    // Send confirmation email to admin if requested
+    if (adminId && adminEmail && sendConfirmation !== false) {
+      try {
+        const confirmationHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;"><div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 20px; border-radius: 8px 8px 0 0; text-align: center;"><h1 style="color: #d4af37; margin: 0; font-size: 24px;">SENTRA</h1><p style="color: #a0a0a0; margin: 5px 0 0; font-size: 11px;">ADMIN NOTIFICATION</p></div><div style="background: #fff; padding: 30px; border: 1px solid #eee; border-top: none; border-radius: 0 0 8px 8px;"><h2 style="color: #1a1a2e; margin-top: 0;">Bulk Password Reset Complete</h2><p>Your bulk password reset operation has finished processing.</p><table style="width: 100%; border-collapse: collapse; margin: 20px 0;"><tr><td style="padding: 12px; border: 1px solid #eee; background: #f9f9f9;"><strong>Total Requested</strong></td><td style="padding: 12px; border: 1px solid #eee; text-align: right;">${emails.length}</td></tr><tr><td style="padding: 12px; border: 1px solid #eee; background: #f9f9f9;"><strong>Successfully Sent</strong></td><td style="padding: 12px; border: 1px solid #eee; text-align: right; color: #22c55e;">${successCount}</td></tr><tr><td style="padding: 12px; border: 1px solid #eee; background: #f9f9f9;"><strong>Failed</strong></td><td style="padding: 12px; border: 1px solid #eee; text-align: right; color: ${failCount > 0 ? '#ef4444' : '#888'};">${failCount}</td></tr></table>${failCount > 0 ? `<div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 15px; margin-top: 20px;"><h3 style="color: #dc2626; margin: 0 0 10px;">Failed Emails:</h3><ul style="margin: 0; padding-left: 20px;">${failedEmails.map(f => `<li style="margin: 5px 0;">${f.email}: ${f.error || 'Unknown error'}</li>`).join('')}</ul></div>` : ''}<p style="color: #888; font-size: 12px; margin-top: 30px; text-align: center;">Sent from Sentra Admin System</p></div></body></html>`;
+
+        await client.send({
+          from: `Sentra Admin <${gmailEmail}>`,
+          to: adminEmail,
+          subject: `Password Reset Summary: ${successCount}/${emails.length} Sent Successfully`,
+          content: `Bulk Password Reset Complete\n\nTotal: ${emails.length}\nSent: ${successCount}\nFailed: ${failCount}${failCount > 0 ? '\n\nFailed emails:\n' + failedEmails.map(f => `- ${f.email}: ${f.error}`).join('\n') : ''}`,
+          html: confirmationHtml,
+        });
+
+        console.log(`[Password Reset] ✅ Confirmation email sent to admin: ${adminEmail}`);
+      } catch (confirmError: any) {
+        console.error('[Password Reset] Failed to send admin confirmation:', confirmError);
+        // Don't fail the whole operation if confirmation fails
+      }
+    }
+
+    await client.close();
 
     return new Response(
       JSON.stringify({

@@ -566,9 +566,10 @@ IMPORTANT RULES:
       console.log(`[enrich-product-details] Using ${imageSource} image: ${enrichment.image_url}`);
     }
 
-    // Store fragrance notes if extracted
-    if (enrichment.notes) {
-      updateData.scent_notes = enrichment.notes;
+    // Note: scent_notes column doesn't exist in products table
+    // Fragrance notes are extracted but stored in description for now
+    if (enrichment.notes && Object.keys(enrichment.notes).length > 0) {
+      console.log(`[enrich-product-details] Extracted fragrance notes:`, enrichment.notes);
     }
 
     if (categoryId) {

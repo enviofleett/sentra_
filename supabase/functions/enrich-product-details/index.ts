@@ -6,6 +6,7 @@ const corsHeaders = {
 };
 
 interface EnrichmentResult {
+  official_name: string;  // The official perfume name from manufacturer
   description: string;
   gender: "Men" | "Women" | "Unisex";
   brand: string | null;
@@ -50,6 +51,54 @@ function isManufacturerUrl(url: string): boolean {
   } catch {
     return false;
   }
+}
+
+// Check if an image URL is likely a clean product shot (single bottle, no lifestyle)
+function isCleanProductImage(url: string): boolean {
+  const lowerUrl = url.toLowerCase();
+  
+  // Reject lifestyle/marketing images and multi-product shots
+  const rejectPatterns = [
+    'lifestyle', 'model', 'campaign', 'hero', 'banner',
+    'background', 'set', 'collection', 'gift', 'coffret',
+    'kit', 'bundle', 'pack-', '-pack', 'miniature', 'mini-set',
+    'travel-set', 'discovery', 'sampler', 'trio', 'duo',
+    'group', 'range', 'family', 'line-up', 'lineup',
+    'editorial', 'lookbook', 'mood', 'ambient', 'scene'
+  ];
+  
+  if (rejectPatterns.some(pattern => lowerUrl.includes(pattern))) {
+    return false;
+  }
+  
+  return true;
+}
+
+// Normalize size to consistent format (ml)
+function normalizeSize(size: string): string {
+  if (!size || size === 'N/A' || size === 'Unknown' || size.toLowerCase() === 'n/a') return '';
+  
+  // Convert oz to ml if needed
+  const ozMatch = size.match(/([\d.]+)\s*(?:fl\.?\s*)?oz/i);
+  if (ozMatch) {
+    const oz = parseFloat(ozMatch[1]);
+    const ml = Math.round(oz * 29.5735);
+    return `${ml}ml`;
+  }
+  
+  // Normalize ml format
+  const mlMatch = size.match(/([\d.]+)\s*ml/i);
+  if (mlMatch) {
+    return `${Math.round(parseFloat(mlMatch[1]))}ml`;
+  }
+  
+  // If it's just a number, assume ml
+  const numMatch = size.match(/^(\d+)$/);
+  if (numMatch) {
+    return `${numMatch[1]}ml`;
+  }
+  
+  return size;
 }
 
 function extractBrandFromProductName(productName: string): string | null {
@@ -220,6 +269,7 @@ Deno.serve(async (req) => {
               manufacturerContent += "\n";
               
               // Extract image URLs from manufacturer - these are PRIORITY
+              // Apply strict filtering for clean product shots only
               if (result.links) {
                 const imageLinks = result.links.filter((link: string) => 
                   /\.(jpg|jpeg|png|webp)(\?|$)/i.test(link) && 
@@ -227,6 +277,8 @@ Deno.serve(async (req) => {
                   !link.includes('logo') &&
                   !link.includes('sprite') &&
                   !link.includes('thumb') &&
+                  !link.includes('thumbnail') &&
+                  isCleanProductImage(link) &&
                   (link.includes('product') || link.includes('fragrance') || link.includes('perfume') || !link.includes('menu'))
                 );
                 manufacturerImageUrls.push(...imageLinks);
@@ -311,7 +363,7 @@ Deno.serve(async (req) => {
               generalSearchContent += "\n";
             }
             
-            // Collect image URLs, prioritizing manufacturer URLs
+            // Collect image URLs, prioritizing manufacturer URLs and filtering for clean shots
             if (result.links) {
               const imageLinks = result.links.filter((link: string) => 
                 /\.(jpg|jpeg|png|webp)(\?|$)/i.test(link) && 
@@ -319,6 +371,8 @@ Deno.serve(async (req) => {
                 !link.includes('logo') &&
                 !link.includes('sprite') &&
                 !link.includes('thumb') &&
+                !link.includes('thumbnail') &&
+                isCleanProductImage(link) &&
                 link.length > 20
               );
               
@@ -353,14 +407,14 @@ Deno.serve(async (req) => {
       searchContext += generalSearchContent;
     }
 
-    // Compile image URLs with manufacturer priority
+    // Compile image URLs with manufacturer priority - all filtered for clean shots
     const prioritizedImageUrls = [
       ...manufacturerImageUrls.slice(0, 5),  // Manufacturer images first
       ...generalImageUrls.slice(0, 3)        // Fallback to general images
     ];
     
     if (prioritizedImageUrls.length > 0) {
-      searchContext += `\n=== PRODUCT IMAGE URLs (MANUFACTURER IMAGES LISTED FIRST) ===\n`;
+      searchContext += `\n=== PRODUCT IMAGE URLs (MANUFACTURER IMAGES LISTED FIRST - CLEAN PRODUCT SHOTS ONLY) ===\n`;
       searchContext += prioritizedImageUrls.join("\n");
       searchContext += "\n";
     }
@@ -382,6 +436,7 @@ CRITICAL INSTRUCTIONS:
 1. ONLY use information from OFFICIAL MANUFACTURER sources or FRAGRANTICA for accuracy
 2. For image_url, you MUST prioritize URLs from the manufacturer's official website
 3. Never use images from random retailers or blogs if manufacturer images are available
+4. Extract the OFFICIAL product name as it appears on the manufacturer's website
 
 EXISTING BRAND: ${existingBrand || "Not provided - you must extract it"}
 DETECTED BRAND DOMAIN: ${brandDomain || "Unknown"}
@@ -391,26 +446,39 @@ ${searchContext}
 
 Based on the above information, provide the following in JSON format:
 {
+  "official_name": "The EXACT official product name as listed on the manufacturer's website. Include the fragrance concentration type (Eau de Parfum, Eau de Toilette, Parfum, Elixir, Cologne, etc.) but do NOT include the size or brand name in this field. Examples: 'Sauvage Elixir', 'Bleu de Chanel Eau de Parfum', 'Miss Dior Blooming Bouquet Eau de Toilette'. This should be the precise nomenclature used by the brand.",
   "description": "A 2-3 sentence luxury marketing description for this fragrance. Mention the key scent notes and character. Be evocative and sophisticated.",
   "gender": "Men" or "Women" or "Unisex" (determine the target audience based on fragrance type and marketing),
   "brand": ${existingBrand ? 'null (brand already provided)' : '"The brand name extracted from the product name"'},
-  "size": "The bottle size if found (e.g., '100ml', '3.4oz', '50ml'), or 'N/A' if not found",
-  "image_url": "The BEST high-quality product image URL. MUST PRIORITIZE manufacturer/official brand URLs. Only use other URLs if no manufacturer images available. Must be a direct image URL ending in .jpg, .jpeg, .png, or .webp. Return null if no suitable image found.",
+  "size": "The bottle size in ml format ONLY (e.g., '100ml', '50ml', '75ml'). If found in oz, convert to ml (1 oz = ~30ml). Search thoroughly for size information. Return 'N/A' only if truly not found.",
+  "image_url": "A CLEAN product image showing ONLY the single perfume bottle. CRITICAL IMAGE REQUIREMENTS - see below.",
   "notes": {
-    "top": ["array of top/head notes if found, e.g., 'Bergamot', 'Pink Pepper'"],
-    "heart": ["array of heart/middle notes if found, e.g., 'Rose', 'Jasmine'"],
-    "base": ["array of base notes if found, e.g., 'Musk', 'Sandalwood'"]
+    "top": ["array of top/head notes from Fragrantica, e.g., 'Bergamot', 'Pink Pepper'"],
+    "heart": ["array of heart/middle notes from Fragrantica, e.g., 'Rose', 'Jasmine'"],
+    "base": ["array of base notes from Fragrantica, e.g., 'Musk', 'Sandalwood'"]
   }
 }
 
 ${brandInstruction}
 
+IMAGE REQUIREMENTS (CRITICAL - MUST FOLLOW):
+1. MUST show a SINGLE perfume bottle only - NO other products in the image
+2. NO lifestyle images with people, models, or hands holding the bottle
+3. NO gift sets, coffrets, or multiple bottles
+4. NO promotional/campaign imagery or editorial shots
+5. NO travel sets, miniatures, or discovery sets
+6. PREFER white, neutral, or clean studio backgrounds
+7. PREFER official product photography from manufacturer website
+8. The image URL must end in .jpg, .jpeg, .png, or .webp
+9. PRIORITIZE URLs from manufacturer domains (${brandDomain || 'official brand site'}) over third-party sources
+10. If no suitable clean product image is available, return null for image_url
+
 IMPORTANT RULES:
 1. Return ONLY valid JSON, no markdown code blocks or extra text.
-2. For image_url, you MUST select from manufacturer/official brand URLs first (check if URL contains the brand domain like ${brandDomain || 'brand domain'}).
-3. Avoid small thumbnails, icons, or placeholder images.
-4. The description should be elegant and compelling, suitable for a luxury perfume store.
-5. Extract fragrance notes accurately from Fragrantica or manufacturer descriptions.`;
+2. The official_name should be the manufacturer's exact product nomenclature (without brand or size).
+3. The description should be elegant and compelling, suitable for a luxury perfume store.
+4. Extract fragrance notes accurately from Fragrantica.
+5. Size must be normalized to ml format (e.g., '100ml' not '3.4 oz').`;
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -421,7 +489,7 @@ IMPORTANT RULES:
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
         messages: [
-          { role: "system", content: "You are a luxury fragrance expert assistant. Always respond with valid JSON only. Prioritize official manufacturer sources for all information." },
+          { role: "system", content: "You are a luxury fragrance expert assistant. Always respond with valid JSON only. Prioritize official manufacturer sources for all information. Be extremely strict about image selection - only accept clean, single-bottle product photography." },
           { role: "user", content: aiPrompt },
         ],
         temperature: 0.5, // Lower temperature for more consistent/accurate extraction
@@ -474,24 +542,47 @@ IMPORTANT RULES:
       
       enrichment = JSON.parse(cleanContent);
       
-      // Validate that the image URL is from a manufacturer if we have manufacturer URLs
+      // Validate and filter the image URL
+      if (enrichment.image_url) {
+        // Check if the selected image passes our clean product shot filter
+        if (!isCleanProductImage(enrichment.image_url)) {
+          console.log(`[enrich-product-details] AI selected lifestyle/set image, rejecting: ${enrichment.image_url}`);
+          enrichment.image_url = null;
+        }
+      }
+      
+      // If AI didn't select a valid image but we have manufacturer URLs, use the first clean one
+      if (!enrichment.image_url && manufacturerImageUrls.length > 0) {
+        const cleanManufacturerImage = manufacturerImageUrls.find(url => isCleanProductImage(url));
+        if (cleanManufacturerImage) {
+          console.log(`[enrich-product-details] Using filtered manufacturer image: ${cleanManufacturerImage}`);
+          enrichment.image_url = cleanManufacturerImage;
+        }
+      }
+      
+      // Final check: validate that the image URL is from a manufacturer if we have manufacturer URLs
       if (enrichment.image_url && manufacturerImageUrls.length > 0) {
         const isFromManufacturer = isManufacturerUrl(enrichment.image_url);
         if (!isFromManufacturer) {
-          console.log(`[enrich-product-details] AI selected non-manufacturer image, overriding with manufacturer URL`);
-          enrichment.image_url = manufacturerImageUrls[0]; // Force use of manufacturer image
+          const cleanManufacturerImage = manufacturerImageUrls.find(url => isCleanProductImage(url));
+          if (cleanManufacturerImage) {
+            console.log(`[enrich-product-details] AI selected non-manufacturer image, overriding with manufacturer URL`);
+            enrichment.image_url = cleanManufacturerImage;
+          }
         }
       }
       
     } catch (parseError) {
       console.error(`[enrich-product-details] Failed to parse AI response: ${aiContent}`);
       // Fallback to basic enrichment with manufacturer image if available
+      const cleanManufacturerImage = manufacturerImageUrls.find(url => isCleanProductImage(url));
       enrichment = {
+        official_name: product_name,
         description: `${product_name} - A sophisticated fragrance for discerning tastes. Experience luxury in every spray.`,
         gender: "Unisex",
         brand: existingBrand ? null : (detectedBrand || product_name.split(" ")[0] || "Unknown"),
         size: "N/A",
-        image_url: manufacturerImageUrls[0] || null,
+        image_url: cleanManufacturerImage || null,
       };
     }
 
@@ -539,14 +630,32 @@ IMPORTANT RULES:
     // Only activate products that have images - products without images stay inactive
     const hasImage = !!enrichment.image_url;
     
+    // Build the official product name with brand
+    let officialFullName = product_name; // Default to original name
+    if (enrichment.official_name && enrichment.official_name !== product_name) {
+      const brandToUse = existingBrand || enrichment.brand || detectedBrand;
+      if (brandToUse) {
+        // Check if official_name already starts with the brand
+        if (!enrichment.official_name.toLowerCase().startsWith(brandToUse.toLowerCase())) {
+          officialFullName = `${brandToUse} ${enrichment.official_name}`;
+        } else {
+          officialFullName = enrichment.official_name;
+        }
+      } else {
+        officialFullName = enrichment.official_name;
+      }
+      console.log(`[enrich-product-details] Updating name from "${product_name}" to "${officialFullName}"`);
+    }
+    
     const updateData: Record<string, any> = {
+      name: officialFullName,
       description: enrichment.description,
       gender: normalizedGender,
       is_active: hasImage, // Only activate if image was found
     };
     
     if (!hasImage) {
-      console.log(`[enrich-product-details] No image found for ${product_name} - keeping product INACTIVE`);
+      console.log(`[enrich-product-details] No clean product image found for ${product_name} - keeping product INACTIVE`);
     }
 
     // Only update brand if CSV didn't provide one and AI extracted one
@@ -554,8 +663,11 @@ IMPORTANT RULES:
       updateData.brand = enrichment.brand;
     }
 
-    if (enrichment.size && enrichment.size !== "N/A") {
-      updateData.size = enrichment.size;
+    // Normalize and store size
+    const normalizedSize = normalizeSize(enrichment.size);
+    if (normalizedSize) {
+      updateData.size = normalizedSize;
+      console.log(`[enrich-product-details] Storing normalized size: ${normalizedSize}`);
     }
 
     // Handle image URL - manufacturer images are prioritized
@@ -563,7 +675,7 @@ IMPORTANT RULES:
       updateData.image_url = enrichment.image_url;
       updateData.images = [enrichment.image_url]; // Store in images array as well
       const imageSource = isManufacturerUrl(enrichment.image_url) ? "MANUFACTURER" : "THIRD-PARTY";
-      console.log(`[enrich-product-details] Using ${imageSource} image: ${enrichment.image_url}`);
+      console.log(`[enrich-product-details] Using ${imageSource} clean product image: ${enrichment.image_url}`);
     }
 
     // Store fragrance notes in scent_notes JSONB column
@@ -589,13 +701,15 @@ IMPORTANT RULES:
       );
     }
 
-    console.log(`[enrich-product-details] Successfully enriched product: ${product_name}`);
+    console.log(`[enrich-product-details] Successfully enriched product: ${officialFullName}`);
 
     return new Response(
       JSON.stringify({
         success: true,
         enrichment: {
           ...enrichment,
+          official_full_name: officialFullName,
+          normalized_size: normalizedSize || null,
           category_id: categoryId,
           brand_updated: !existingBrand && enrichment.brand ? true : false,
           image_source: enrichment.image_url ? (isManufacturerUrl(enrichment.image_url) ? "manufacturer" : "third-party") : null,

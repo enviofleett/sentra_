@@ -536,11 +536,18 @@ IMPORTANT RULES:
     // Normalize gender to lowercase to match database constraint (men, women, unisex)
     const normalizedGender = enrichment.gender?.toLowerCase() || "unisex";
     
+    // Only activate products that have images - products without images stay inactive
+    const hasImage = !!enrichment.image_url;
+    
     const updateData: Record<string, any> = {
       description: enrichment.description,
       gender: normalizedGender,
-      is_active: true, // Mark as active after enrichment
+      is_active: hasImage, // Only activate if image was found
     };
+    
+    if (!hasImage) {
+      console.log(`[enrich-product-details] No image found for ${product_name} - keeping product INACTIVE`);
+    }
 
     // Only update brand if CSV didn't provide one and AI extracted one
     if (!existingBrand && enrichment.brand) {

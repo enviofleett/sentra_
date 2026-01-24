@@ -566,10 +566,10 @@ IMPORTANT RULES:
       console.log(`[enrich-product-details] Using ${imageSource} image: ${enrichment.image_url}`);
     }
 
-    // Note: scent_notes column doesn't exist in products table
-    // Fragrance notes are extracted but stored in description for now
+    // Store fragrance notes in scent_notes JSONB column
     if (enrichment.notes && Object.keys(enrichment.notes).length > 0) {
-      console.log(`[enrich-product-details] Extracted fragrance notes:`, enrichment.notes);
+      updateData.scent_notes = enrichment.notes;
+      console.log(`[enrich-product-details] Storing fragrance notes:`, enrichment.notes);
     }
 
     if (categoryId) {

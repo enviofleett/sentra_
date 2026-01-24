@@ -1051,6 +1051,7 @@ export type Database = {
           name: string
           original_price: number | null
           price: number
+          scent_notes: Json | null
           scent_profile: string | null
           size: string | null
           sku: string | null
@@ -1077,6 +1078,7 @@ export type Database = {
           name: string
           original_price?: number | null
           price: number
+          scent_notes?: Json | null
           scent_profile?: string | null
           size?: string | null
           sku?: string | null
@@ -1103,6 +1105,7 @@ export type Database = {
           name?: string
           original_price?: number | null
           price?: number
+          scent_notes?: Json | null
           scent_profile?: string | null
           size?: string | null
           sku?: string | null

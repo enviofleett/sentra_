@@ -548,6 +548,84 @@ function MembershipSettingsManager() {
   );
 }
 
+// Promo Credit Settings Manager
+function PromoSettingsManager() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [promoPercentage, setPromoPercentage] = useState(50);
+
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  const loadSettings = async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from('app_config')
+      .select('value')
+      .eq('key', 'promo_margin_percentage')
+      .maybeSingle();
+    
+    if (data?.value && typeof data.value === 'object' && 'percentage' in data.value) {
+      setPromoPercentage(data.value.percentage as number);
+    }
+    setLoading(false);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    const { error } = await supabase
+      .from('app_config')
+      .upsert({
+        key: 'promo_margin_percentage',
+        value: { percentage: promoPercentage },
+        description: 'Percentage of gross profit margin that can be paid using promo credits',
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'key' });
+
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Success', description: 'Promo settings updated.' });
+    }
+    setSaving(false);
+  };
+
+  if (loading) {
+    return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="p-4 bg-muted/30 rounded-lg border">
+        <h3 className="font-semibold text-foreground mb-2">Promo Credit Usage</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Control how much of the product profit margin customers can pay using their promo/waitlist credits.
+        </p>
+        <div className="space-y-4">
+          <div className="flex items-center gap-4">
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              value={promoPercentage}
+              onChange={(e) => setPromoPercentage(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+              className="w-24"
+            />
+            <span className="text-sm text-muted-foreground">% of profit margin</span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Example: If a product has ₦5,000 profit margin and this is set to 50%, customers can use up to ₦2,500 in promo credits for that item.
+          </p>
+        </div>
+      </div>
+      <Button onClick={handleSave} disabled={saving}>
+        {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : 'Save Promo Settings'}
+      </Button>
+    </div>
+  );
+}
+
 function TermsAndConditionsManager() {
   const T_AND_C_KEY = 'terms_and_conditions';
   const [content, setContent] = useState('');
@@ -1838,8 +1916,12 @@ export default function SettingsManagement() {
             </TabsList>
           </CardHeader>
 
-          <TabsContent value="membership" className="p-6">
+          <TabsContent value="membership" className="p-6 space-y-8">
             <MembershipSettingsManager />
+            <div className="border-t pt-6">
+              <h3 className="text-lg font-semibold mb-4">Promo Credit Settings</h3>
+              <PromoSettingsManager />
+            </div>
           </TabsContent>
 
           <TabsContent value="prelaunch" className="p-6">

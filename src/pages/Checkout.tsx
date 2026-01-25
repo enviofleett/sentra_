@@ -16,7 +16,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { AuthFormContent } from '@/pages/Auth';
-import { Phone, Wallet, CreditCard, Loader2, Truck, Clock, MapPin } from 'lucide-react';
+import { Phone, Wallet, CreditCard, Loader2, Truck, Clock, MapPin, Gift } from 'lucide-react';
 import { calculateShipping, ShippingCalculationResult, getShippingRegions } from '@/utils/shippingCalculator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -52,6 +52,22 @@ export default function Checkout() {
   const [calculatingShipping, setCalculatingShipping] = useState(false);
   const [shippingRegions, setShippingRegions] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedRegionId, setSelectedRegionId] = useState('');
+  
+  // Promo discount state
+  interface PromoCalculation {
+    eligible_discount: number;
+    applicable_discount: number;
+    promo_balance: number;
+    promo_percentage: number;
+    breakdown: Array<{
+      product_id: string;
+      name: string;
+      gross_margin: number;
+      max_discount: number;
+    }>;
+  }
+  const [promoData, setPromoData] = useState<PromoCalculation | null>(null);
+  const [calculatingPromo, setCalculatingPromo] = useState(false);
 
   const form = useForm<CheckoutFormData>({
     resolver: zodResolver(checkoutSchema),
@@ -93,6 +109,37 @@ export default function Checkout() {
     
     fetchShipping();
   }, [items, selectedRegionId]);
+
+  // Calculate promo discount when cart items change
+  useEffect(() => {
+    const fetchPromoDiscount = async () => {
+      if (!user || items.length === 0) {
+        setPromoData(null);
+        return;
+      }
+      
+      setCalculatingPromo(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('calculate-promo-discount', {
+          body: { items: items.map(item => ({ product_id: item.product_id, quantity: item.quantity })) }
+        });
+        
+        if (error) {
+          console.error('Promo calculation error:', error);
+          setPromoData(null);
+        } else {
+          setPromoData(data);
+        }
+      } catch (error) {
+        console.error('Failed to calculate promo discount:', error);
+        setPromoData(null);
+      } finally {
+        setCalculatingPromo(false);
+      }
+    };
+    
+    fetchPromoDiscount();
+  }, [user, items]);
 
   const fetchTerms = async () => {
     const { data } = await supabase
@@ -245,7 +292,9 @@ export default function Checkout() {
     return null;
   }
   const shippingCost = shippingData?.weightBasedCost || 0;
-  const totalAmount = subtotal + shippingCost;
+  const promoDiscount = promoData?.applicable_discount || 0;
+  const totalBeforePromo = subtotal + shippingCost;
+  const totalAmount = Math.max(0, totalBeforePromo - promoDiscount);
   const canPayWithMembership = membershipEnabled && isMember && balance >= totalAmount;
 
   const handleMembershipPayment = async (data: CheckoutFormData) => {
@@ -289,24 +338,30 @@ export default function Checkout() {
       // Call pay-with-membership edge function
       const { data: result, error } = await supabase.functions.invoke('pay-with-membership', {
         body: {
-          items: items.map(item => ({
-            product_id: item.product_id,
-            name: item.product?.name,
-            price: item.product?.price,
-            quantity: item.quantity,
-            vendor_id: item.product?.vendor_id
-          })),
-          total_amount: totalAmount,
-          shipping_cost: shippingCost,
-          shipping_address: {
-            fullName: data.fullName,
-            phone: data.phone,
-            address: data.address,
-            city: data.city,
-            state: data.state,
+          orderData: {
+            items: items.map(item => ({
+              product_id: item.product_id,
+              name: item.product?.name,
+              price: item.product?.price,
+              quantity: item.quantity,
+              vendor_id: item.product?.vendor_id
+            })),
+            subtotal: subtotal,
+            tax: 0,
+            shipping_cost: shippingCost,
+            total_amount: totalBeforePromo,
+            shipping_address: {
+              fullName: data.fullName,
+              phone: data.phone,
+              address: data.address,
+              city: data.city,
+              state: data.state,
+            },
+            customer_email: data.email,
+            notes: shippingData?.consolidatedSchedule ? `Delivery: ${shippingData.consolidatedSchedule}` : null
           },
-          customer_email: data.email,
-          delivery_schedule: shippingData?.consolidatedSchedule || null
+          cartTotal: totalBeforePromo,
+          promoDiscount: promoDiscount
         }
       });
 
@@ -436,13 +491,26 @@ export default function Checkout() {
         body: {
           orderId: order.id,
           customerEmail: data.email,
-          customerName: data.fullName
+          customerName: data.fullName,
+          promoDiscount: promoDiscount
         }
       });
 
       if (paymentError) {
         console.error('[Checkout] Payment initialization error:', paymentError);
         throw new Error('Failed to initialize payment. Please try again.');
+      }
+
+      // Check if order was fully paid with promo credit
+      if (paymentResult?.success && paymentResult?.paymentUrl === null) {
+        // Order fully covered by promo credit
+        clearCart();
+        toast({
+          title: 'Order Placed!',
+          description: 'Your order has been paid with your promo credit.',
+        });
+        navigate(`/checkout/success?order_id=${order.id}&type=promo_payment`);
+        return;
       }
 
       if (!paymentResult?.paymentUrl) {
@@ -772,6 +840,41 @@ export default function Checkout() {
                     )}
                   </div>
                   
+                  {/* Promo Credit Applied */}
+                  {promoDiscount > 0 && (
+                    <div className="flex justify-between items-center text-secondary">
+                      <span className="flex items-center gap-1">
+                        <Gift className="h-4 w-4" />
+                        Promo Credit
+                      </span>
+                      <span className="font-medium">-₦{promoDiscount.toLocaleString()}</span>
+                    </div>
+                  )}
+                  
+                  {/* Promo credit info when user has balance but it's calculating */}
+                  {calculatingPromo && (
+                    <div className="flex justify-between items-center text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Gift className="h-4 w-4" />
+                        Promo Credit
+                      </span>
+                      <span className="text-sm">Calculating...</span>
+                    </div>
+                  )}
+                  
+                  {/* Show promo balance info if user has promo but none applicable */}
+                  {!calculatingPromo && promoData && promoData.promo_balance > 0 && promoDiscount === 0 && (
+                    <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2">
+                      <span className="flex items-center gap-1">
+                        <Gift className="h-3 w-3" />
+                        You have ₦{promoData.promo_balance.toLocaleString()} in promo credits
+                      </span>
+                      <span className="block mt-1">
+                        (Not applicable to items in your cart)
+                      </span>
+                    </div>
+                  )}
+                  
                   {/* Vendor Delivery Schedules */}
                   {shippingData?.hasVendorRules && shippingData.vendorSchedules.length > 0 && (
                     <div className="bg-muted/50 rounded-lg p-3 space-y-2">
@@ -794,6 +897,13 @@ export default function Checkout() {
                     <span>Total</span>
                     <span className="text-primary">₦{totalAmount.toLocaleString()}</span>
                   </div>
+                  
+                  {/* Show savings if promo applied */}
+                  {promoDiscount > 0 && (
+                    <div className="text-xs text-secondary text-center">
+                      You're saving ₦{promoDiscount.toLocaleString()} with promo credit!
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

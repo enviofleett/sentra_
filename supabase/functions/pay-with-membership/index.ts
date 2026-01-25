@@ -36,7 +36,7 @@ serve(async (req: Request) => {
       });
     }
 
-    const { orderData, cartTotal } = await req.json();
+    const { orderData, cartTotal, promoDiscount } = await req.json();
 
     if (!orderData || !cartTotal || cartTotal <= 0) {
       return new Response(JSON.stringify({ error: "Invalid order data" }), {
@@ -45,7 +45,7 @@ serve(async (req: Request) => {
       });
     }
 
-    console.log(`[Pay with Membership] User: ${user.id}, Cart Total: ${cartTotal}`);
+    console.log(`[Pay with Membership] User: ${user.id}, Cart Total: ${cartTotal}, Promo Discount: ${promoDiscount || 0}`);
 
     // MOQ VALIDATION: Verify minimum order quantities per vendor
     const orderItems = orderData.items as any[];
@@ -119,6 +119,24 @@ serve(async (req: Request) => {
 
     console.log('[Pay with Membership] MOQ validation passed');
 
+    // Handle promo discount if provided
+    let actualPromoDiscount = 0;
+    if (promoDiscount && promoDiscount > 0) {
+      // Verify user has sufficient promo balance
+      const { data: promoWallet } = await supabase
+        .from('user_wallets')
+        .select('balance_promo')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      const promoBalance = promoWallet?.balance_promo || 0;
+      actualPromoDiscount = Math.min(promoDiscount, promoBalance, cartTotal);
+      console.log(`[Pay with Membership] Promo balance: ₦${promoBalance}, Applying: ₦${actualPromoDiscount}`);
+    }
+
+    // Calculate final amount to charge from membership
+    const finalMembershipCharge = Math.max(0, cartTotal - actualPromoDiscount);
+
     // Check membership balance
     const { data: wallet, error: walletError } = await supabase
       .from("membership_wallets")
@@ -133,11 +151,11 @@ serve(async (req: Request) => {
       });
     }
 
-    if (wallet.balance < cartTotal) {
+    if (wallet.balance < finalMembershipCharge) {
       return new Response(JSON.stringify({ 
         error: "Insufficient membership balance",
         balance: wallet.balance,
-        required: cartTotal
+        required: finalMembershipCharge
       }), { 
         status: 400, 
         headers: { ...corsHeaders, "Content-Type": "application/json" } 
@@ -155,8 +173,9 @@ serve(async (req: Request) => {
         user_id: user.id,
         status: 'processing',
         payment_status: 'paid',
-        paystack_status: 'membership_wallet',
+        paystack_status: actualPromoDiscount > 0 ? 'membership_wallet_with_promo' : 'membership_wallet',
         payment_reference: paymentReference,
+        promo_discount_applied: actualPromoDiscount,
       }])
       .select("id")
       .single();
@@ -171,28 +190,52 @@ serve(async (req: Request) => {
 
     console.log(`[Pay with Membership] Order created: ${newOrder.id}`);
 
-    // Debit the membership wallet atomically
-    const { data: transactionId, error: debitError } = await supabase
-      .rpc('debit_membership_wallet', {
+    // Debit promo wallet first if applicable
+    if (actualPromoDiscount > 0) {
+      const { error: promoDebitError } = await supabase.rpc('debit_promo_wallet', {
         p_user_id: user.id,
-        p_amount: cartTotal,
+        p_amount: actualPromoDiscount,
         p_order_id: newOrder.id,
-        p_description: `Purchase - Order #${newOrder.id.slice(0, 8)}`
+        p_description: `Promo credit applied to order #${newOrder.id.slice(0, 8)}`
       });
 
-    if (debitError) {
-      console.error("[Pay with Membership] Wallet debit failed:", debitError);
-      // Rollback: delete the order since payment failed
-      await supabase.from("orders").delete().eq("id", newOrder.id);
-      return new Response(JSON.stringify({ error: "Failed to process payment" }), { 
-        status: 500, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
-      });
+      if (promoDebitError) {
+        console.error("[Pay with Membership] Promo debit failed:", promoDebitError);
+        // Rollback: delete the order since payment failed
+        await supabase.from("orders").delete().eq("id", newOrder.id);
+        return new Response(JSON.stringify({ error: "Failed to apply promo credit" }), { 
+          status: 500, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        });
+      }
+      console.log(`[Pay with Membership] Promo debited: ₦${actualPromoDiscount}`);
     }
 
-    console.log(`[Pay with Membership] Wallet debited - Transaction: ${transactionId}`);
+    // Debit the membership wallet atomically (only if there's remaining amount)
+    let transactionId = null;
+    if (finalMembershipCharge > 0) {
+      const { data: txId, error: debitError } = await supabase
+        .rpc('debit_membership_wallet', {
+          p_user_id: user.id,
+          p_amount: finalMembershipCharge,
+          p_order_id: newOrder.id,
+          p_description: `Purchase - Order #${newOrder.id.slice(0, 8)}`
+        });
 
-    // Record profit split
+      if (debitError) {
+        console.error("[Pay with Membership] Wallet debit failed:", debitError);
+        // Rollback: delete the order since payment failed
+        await supabase.from("orders").delete().eq("id", newOrder.id);
+        return new Response(JSON.stringify({ error: "Failed to process payment" }), { 
+          status: 500, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        });
+      }
+      transactionId = txId;
+      console.log(`[Pay with Membership] Membership debited: ₦${finalMembershipCharge} - Transaction: ${transactionId}`);
+    }
+
+    // Record profit split (based on original cart total, not discounted)
     await supabase.rpc('record_profit_split', {
       p_order_id: newOrder.id,
       p_commitment_id: null,

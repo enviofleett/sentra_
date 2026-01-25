@@ -668,6 +668,7 @@ export type Database = {
           payment_reference: string | null
           payment_status: Database["public"]["Enums"]["payment_status"] | null
           paystack_status: string | null
+          promo_discount_applied: number | null
           reseller_access_id: string | null
           shipping_address: Json | null
           shipping_cost: number | null
@@ -691,6 +692,7 @@ export type Database = {
           payment_reference?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"] | null
           paystack_status?: string | null
+          promo_discount_applied?: number | null
           reseller_access_id?: string | null
           shipping_address?: Json | null
           shipping_cost?: number | null
@@ -714,6 +716,7 @@ export type Database = {
           payment_reference?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"] | null
           paystack_status?: string | null
+          promo_discount_applied?: number | null
           reseller_access_id?: string | null
           shipping_address?: Json | null
           shipping_cost?: number | null
@@ -2118,6 +2121,15 @@ export type Database = {
         Returns: boolean
       }
       debit_membership_wallet: {
+        Args: {
+          p_amount: number
+          p_description?: string
+          p_order_id: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      debit_promo_wallet: {
         Args: {
           p_amount: number
           p_description?: string

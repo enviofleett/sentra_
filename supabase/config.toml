@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.reset-password-with-token]
 verify_jwt = false
+
+[functions.calculate-promo-discount]
+verify_jwt = false

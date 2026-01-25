@@ -10,6 +10,7 @@ interface PaymentRequest {
   orderId: string;
   customerEmail: string;
   customerName: string;
+  promoDiscount?: number;
 }
 
 interface SplitConfig {
@@ -139,9 +140,9 @@ serve(async (req) => {
       });
     }
 
-    const { orderId, customerEmail, customerName }: PaymentRequest = await req.json();
+    const { orderId, customerEmail, customerName, promoDiscount }: PaymentRequest = await req.json();
 
-    console.log(`[Initialize Payment] Processing order: ${orderId} for user: ${user.id}`);
+    console.log(`[Initialize Payment] Processing order: ${orderId} for user: ${user.id}, Promo discount: ${promoDiscount || 0}`);
 
     // Fetch order and verify ownership
     const { data: order, error: orderError } = await supabase
@@ -276,16 +277,60 @@ serve(async (req) => {
 
     console.log(`[Initialize Payment] Verified total: ${verifiedTotal}, Order total: ${order.total_amount}`);
 
-    // Update order with verified amount if different (handles price changes since order creation)
+    // Handle promo discount if provided
+    let actualPromoDiscount = 0;
+    if (promoDiscount && promoDiscount > 0) {
+      // Verify user has sufficient promo balance
+      const { data: wallet } = await supabase
+        .from('user_wallets')
+        .select('balance_promo')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      const promoBalance = wallet?.balance_promo || 0;
+      actualPromoDiscount = Math.min(promoDiscount, promoBalance, verifiedTotal);
+      
+      if (actualPromoDiscount > 0) {
+        // Debit promo wallet using the RPC
+        const { error: debitError } = await supabase.rpc('debit_promo_wallet', {
+          p_user_id: user.id,
+          p_amount: actualPromoDiscount,
+          p_order_id: orderId,
+          p_description: `Promo credit applied to order #${orderId.slice(0, 8)}`
+        });
+
+        if (debitError) {
+          console.error('[Initialize Payment] Promo debit error:', debitError);
+          // Continue without promo if debit fails
+          actualPromoDiscount = 0;
+        } else {
+          console.log(`[Initialize Payment] Promo debit successful: ₦${actualPromoDiscount}`);
+        }
+      }
+    }
+
+    // Calculate final amount after promo discount
+    const finalAmount = Math.max(0, verifiedTotal - actualPromoDiscount);
+
+    // Update order with verified amount and promo discount
+    const orderUpdateData: any = {
+      updated_at: new Date().toISOString()
+    };
+
     if (Math.abs(verifiedTotal - Number(order.total_amount)) > 0.01) {
       console.log(`[Initialize Payment] Price discrepancy detected, updating order`);
+      orderUpdateData.total_amount = verifiedTotal;
+      orderUpdateData.subtotal = verifiedTotal - shippingCost - tax;
+    }
+
+    if (actualPromoDiscount > 0) {
+      orderUpdateData.promo_discount_applied = actualPromoDiscount;
+    }
+
+    if (Object.keys(orderUpdateData).length > 1) {
       await supabase
         .from('orders')
-        .update({ 
-          total_amount: verifiedTotal,
-          subtotal: verifiedTotal - shippingCost - tax,
-          updated_at: new Date().toISOString()
-        })
+        .update(orderUpdateData)
         .eq('id', orderId);
     }
 
@@ -361,10 +406,45 @@ serve(async (req) => {
       });
     }
 
-    // Customer pays exact order total - merchant absorbs Paystack fees
-    const amountInKobo = Math.round(verifiedTotal * 100);
+    // Customer pays final amount (after promo discount) - merchant absorbs Paystack fees
+    const amountInKobo = Math.round(finalAmount * 100);
     
-    console.log(`[Initialize Payment] Amount: ₦${verifiedTotal}, Kobo: ${amountInKobo}`);
+    console.log(`[Initialize Payment] Final Amount: ₦${finalAmount} (Original: ₦${verifiedTotal}, Promo: ₦${actualPromoDiscount}), Kobo: ${amountInKobo}`);
+
+    // If entire order is covered by promo, mark as paid immediately
+    if (finalAmount <= 0) {
+      console.log('[Initialize Payment] Order fully covered by promo credit');
+      
+      await supabase
+        .from('orders')
+        .update({
+          status: 'processing',
+          payment_status: 'paid',
+          paystack_status: 'promo_credit',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId);
+
+      // Record profit split
+      await supabase.rpc('record_profit_split', {
+        p_order_id: orderId,
+        p_commitment_id: null,
+        p_payment_reference: paymentReference || `promo_${orderId}`,
+        p_total_amount: verifiedTotal
+      });
+
+      return new Response(JSON.stringify({
+        success: true,
+        paymentUrl: null,
+        reference: paymentReference,
+        amount: 0,
+        promoApplied: actualPromoDiscount,
+        message: 'Order fully paid with promo credit'
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Build Paystack payload
     const paystackPayload: any = {
@@ -375,7 +455,8 @@ serve(async (req) => {
         order_id: orderId,
         user_id: user.id,
         customer_name: customerName,
-        type: 'standard_order'
+        type: 'standard_order',
+        promo_discount: actualPromoDiscount
       },
       callback_url: `${appBaseUrl}/checkout/success?order_id=${orderId}&type=standard_order`
     };

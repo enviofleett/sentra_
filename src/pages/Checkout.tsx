@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMembership } from '@/hooks/useMembership';
@@ -16,7 +17,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { AuthFormContent } from '@/pages/Auth';
-import { Phone, Wallet, CreditCard, Loader2, Truck, Clock, MapPin, Gift } from 'lucide-react';
+import { Phone, Wallet, CreditCard, Loader2, Truck, Clock, MapPin, Gift, AlertCircle } from 'lucide-react';
 import { calculateShipping, ShippingCalculationResult, getShippingRegions } from '@/utils/shippingCalculator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -35,7 +36,7 @@ type CheckoutFormData = z.infer<typeof checkoutSchema>;
 export default function Checkout() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
-  const { items, subtotal, clearCart } = useCart();
+  const { items, subtotal, clearCart, totalItems } = useCart();
   const { isMember, balance, isEnabled: membershipEnabled, isLoading: membershipLoading, refetch: refetchMembership } = useMembership();
   const [processing, setProcessing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'paystack' | 'membership'>('paystack');
@@ -69,6 +70,74 @@ export default function Checkout() {
   const [promoData, setPromoData] = useState<PromoCalculation | null>(null);
   const [calculatingPromo, setCalculatingPromo] = useState(false);
 
+  // MOQ Validation Logic - tracks per-vendor quantities
+  const vendorMoqData = useMemo(() => {
+    const vendorGroups: Record<string, {
+      name: string;
+      moq: number;
+      count: number;
+      needed: number;
+      met: boolean;
+    }> = {};
+
+    // Group items by vendor
+    items.forEach(item => {
+      const vendor = item.product?.vendor;
+      const vendorId = item.product?.vendor_id;
+      
+      // Use vendor object if available, otherwise try to get vendor_id
+      if (vendor && vendor.id) {
+        if (!vendorGroups[vendor.id]) {
+          vendorGroups[vendor.id] = {
+            name: vendor.rep_full_name || 'Unknown Vendor',
+            moq: Math.max(1, vendor.min_order_quantity || 1),
+            count: 0,
+            needed: 0,
+            met: true
+          };
+        }
+        vendorGroups[vendor.id].count += item.quantity;
+      } else if (vendorId) {
+        // Fallback: if we have vendor_id but no vendor object, still track it
+        if (!vendorGroups[vendorId]) {
+          vendorGroups[vendorId] = {
+            name: 'Unknown Vendor',
+            moq: 1, // Default to 1 if we can't get MOQ
+            count: 0,
+            needed: 0,
+            met: true
+          };
+        }
+        vendorGroups[vendorId].count += item.quantity;
+      }
+    });
+
+    // Calculate needed items for each vendor
+    Object.keys(vendorGroups).forEach(vendorId => {
+      const group = vendorGroups[vendorId];
+      if (group.count < group.moq) {
+        group.needed = group.moq - group.count;
+        group.met = false;
+      }
+    });
+
+    // Build errors array for checkout blocking
+    // Only show errors for vendors with MOQ > 1 that aren't met
+    const errors = Object.values(vendorGroups)
+      .filter(g => !g.met && g.moq > 1)
+      .map(g => ({
+        vendorName: g.name,
+        needed: g.needed,
+        moq: g.moq
+      }));
+    
+    return {
+      groups: vendorGroups,
+      errors,
+      canCheckout: errors.length === 0
+    };
+  }, [items]);
+
   const form = useForm<CheckoutFormData>({
     resolver: zodResolver(checkoutSchema),
     defaultValues: {
@@ -94,14 +163,36 @@ export default function Checkout() {
   // Calculate shipping when cart items or region changes
   useEffect(() => {
     const fetchShipping = async () => {
-      if (items.length === 0) return;
+      if (items.length === 0) {
+        setShippingData(null);
+        return;
+      }
       
       setCalculatingShipping(true);
       try {
-        const result = await calculateShipping(items, selectedRegionId || undefined);
+        // Map cart items to format expected by calculateShipping
+        const cartItems = items.map(item => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          product: item.product ? {
+            id: item.product_id,
+            name: item.product.name,
+            weight: (item.product as any).weight as number | undefined,
+            size: (item.product as any).size as string | undefined,
+            vendor_id: item.product.vendor_id || undefined
+          } : undefined
+        }));
+        
+        const result = await calculateShipping(cartItems, selectedRegionId || undefined);
         setShippingData(result);
       } catch (error) {
         console.error('Failed to calculate shipping:', error);
+        toast({
+          title: 'Shipping Calculation Error',
+          description: 'Failed to calculate shipping costs. Please try again.',
+          variant: 'destructive'
+        });
+        setShippingData(null);
       } finally {
         setCalculatingShipping(false);
       }
@@ -305,6 +396,60 @@ export default function Checkout() {
       return;
     }
 
+    // --- BEGIN VALIDATION CHECKS BEFORE ORDER CREATION ---
+    
+    // 1. Global minimum order validation (4 units)
+    if (totalItems < 4) {
+      toast({
+        title: 'Minimum Order Required',
+        description: `You need a minimum of 4 items to proceed. You currently have ${totalItems} item${totalItems !== 1 ? 's' : ''}. Please add ${4 - totalItems} more item${4 - totalItems > 1 ? 's' : ''} to your cart.`,
+        variant: 'destructive'
+      });
+      return;
+    }
+    
+    // 2. Shipping region validation
+    if (!selectedRegionId) {
+      toast({
+        title: 'Shipping Region Required',
+        description: 'Please select a delivery region to calculate shipping costs.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // 3. Shipping calculation validation
+    if (calculatingShipping) {
+      toast({
+        title: 'Shipping Calculation In Progress',
+        description: 'Please wait for shipping calculation to complete before proceeding.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    
+    if (!shippingData) {
+      toast({
+        title: 'Shipping Calculation Required',
+        description: 'Shipping costs could not be calculated. Please try selecting the region again or refresh the page.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // 4. MOQ validation
+    if (!vendorMoqData.canCheckout) {
+      const moqErrors = vendorMoqData.errors.map(e => 
+        `${e.vendorName}: need ${e.needed} more item(s) to meet minimum of ${e.moq}`
+      ).join('; ');
+      toast({
+        title: 'Minimum Order Quantity Not Met',
+        description: moqErrors,
+        variant: 'destructive'
+      });
+      return;
+    }
+
     setProcessing(true);
 
     try {
@@ -406,6 +551,60 @@ export default function Checkout() {
       toast({
         title: 'Session Expired',
         description: 'Please sign in again to complete your order.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // --- BEGIN VALIDATION CHECKS BEFORE ORDER CREATION ---
+    
+    // 1. Global minimum order validation (4 units)
+    if (totalItems < 4) {
+      toast({
+        title: 'Minimum Order Required',
+        description: `You need a minimum of 4 items to proceed. You currently have ${totalItems} item${totalItems !== 1 ? 's' : ''}. Please add ${4 - totalItems} more item${4 - totalItems > 1 ? 's' : ''} to your cart.`,
+        variant: 'destructive'
+      });
+      return;
+    }
+    
+    // 2. Shipping region validation
+    if (!selectedRegionId) {
+      toast({
+        title: 'Shipping Region Required',
+        description: 'Please select a delivery region to calculate shipping costs.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // 3. Shipping calculation validation
+    if (calculatingShipping) {
+      toast({
+        title: 'Shipping Calculation In Progress',
+        description: 'Please wait for shipping calculation to complete before proceeding.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    
+    if (!shippingData) {
+      toast({
+        title: 'Shipping Calculation Required',
+        description: 'Shipping costs could not be calculated. Please try selecting the region again or refresh the page.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // 4. MOQ validation
+    if (!vendorMoqData.canCheckout) {
+      const moqErrors = vendorMoqData.errors.map(e => 
+        `${e.vendorName}: need ${e.needed} more item(s) to meet minimum of ${e.moq}`
+      ).join('; ');
+      toast({
+        title: 'Minimum Order Quantity Not Met',
+        description: moqErrors,
         variant: 'destructive'
       });
       return;
@@ -699,15 +898,16 @@ export default function Checkout() {
                       />
                     </div>
 
-                    {/* Shipping Region Selection */}
+                    {/* Shipping Region Selection - REQUIRED */}
                     <div className="space-y-2">
                       <Label className="flex items-center gap-2">
                         <MapPin className="h-4 w-4" />
-                        Delivery Region
+                        Delivery Region <span className="text-destructive font-bold">*</span>
+                        <span className="text-xs text-muted-foreground font-normal">(Required)</span>
                       </Label>
-                      <Select value={selectedRegionId} onValueChange={setSelectedRegionId}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select your delivery region" />
+                      <Select value={selectedRegionId} onValueChange={setSelectedRegionId} required>
+                        <SelectTrigger className={!selectedRegionId ? 'border-destructive border-2' : 'border-green-500 border-2'}>
+                          <SelectValue placeholder="Select your delivery region (required)" />
                         </SelectTrigger>
                         <SelectContent>
                           {shippingRegions.map((region) => (
@@ -717,10 +917,59 @@ export default function Checkout() {
                           ))}
                         </SelectContent>
                       </Select>
-                      <p className="text-xs text-muted-foreground">
-                        Select your region for accurate shipping cost calculation
-                      </p>
+                      {!selectedRegionId && (
+                        <div className="flex items-center gap-2 text-xs text-destructive bg-destructive/10 p-2 rounded border border-destructive/20">
+                          <AlertCircle className="h-3 w-3" />
+                          <span className="font-medium">Please select a delivery region to calculate shipping costs and continue checkout</span>
+                        </div>
+                      )}
+                      {selectedRegionId && !calculatingShipping && shippingData && (
+                        <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/20 p-2 rounded border border-green-200 dark:border-green-800">
+                          <div className="h-2 w-2 rounded-full bg-green-500" />
+                          <span>Shipping cost calculated: ₦{shippingCost.toLocaleString()}</span>
+                        </div>
+                      )}
+                      {selectedRegionId && calculatingShipping && (
+                        <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <span>Calculating shipping for selected region...</span>
+                        </div>
+                      )}
                     </div>
+
+                    {/* MOQ Validation Warnings - Always show prominently */}
+                    {vendorMoqData.errors.length > 0 && (
+                      <div className="space-y-3 border-2 border-destructive rounded-lg p-4 bg-destructive/10">
+                        <div className="flex items-center gap-2 text-destructive font-semibold">
+                          <AlertCircle className="h-5 w-5" />
+                          <span>Minimum Order Quantity (MOQ) Not Met</span>
+                        </div>
+                        <div className="space-y-2">
+                          {vendorMoqData.errors.map((error, idx) => (
+                            <Alert key={idx} variant="destructive" className="border-destructive">
+                              <AlertCircle className="h-4 w-4" />
+                              <AlertTitle className="font-semibold">Action Required</AlertTitle>
+                              <AlertDescription className="font-medium">
+                                You need <strong className="text-destructive">{error.needed} more item{error.needed > 1 ? 's' : ''}</strong> from <strong>{error.vendorName}</strong> to meet the minimum order quantity of <strong>{error.moq}</strong>.
+                                <span className="block mt-1 text-sm font-normal">
+                                  Please add more items from this vendor to your cart to proceed with checkout.
+                                </span>
+                              </AlertDescription>
+                            </Alert>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* MOQ Status - Show even when met for transparency */}
+                    {vendorMoqData.errors.length === 0 && vendorMoqData.groups && Object.keys(vendorMoqData.groups).length > 0 && (
+                      <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
+                        <div className="flex items-center gap-2 text-sm text-green-800 dark:text-green-200">
+                          <div className="h-2 w-2 rounded-full bg-green-500" />
+                          <span className="font-medium">All minimum order quantities (MOQ) are met</span>
+                        </div>
+                      </div>
+                    )}
 
                     {termsContent && (
                       <div className="rounded-md border p-4 bg-muted/50">
@@ -784,11 +1033,64 @@ export default function Checkout() {
                       </div>
                     )}
 
-                    <Button type="submit" size="lg" className="w-full" disabled={processing || calculatingShipping}>
+                    {/* Validation Status Messages */}
+                    {(!selectedRegionId || calculatingShipping || !vendorMoqData.canCheckout) && (
+                      <div className="space-y-2 p-3 bg-muted/50 rounded-lg border border-border">
+                        <div className="text-sm font-medium text-foreground">Checkout Requirements:</div>
+                        <div className="space-y-1 text-xs">
+                          {!selectedRegionId && (
+                            <div className="flex items-center gap-2 text-destructive">
+                              <AlertCircle className="h-3 w-3" />
+                              <span>Please select a delivery region</span>
+                            </div>
+                          )}
+                          {calculatingShipping && (
+                            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              <span>Calculating shipping costs...</span>
+                            </div>
+                          )}
+                          {!vendorMoqData.canCheckout && (
+                            <div className="flex items-center gap-2 text-destructive">
+                              <AlertCircle className="h-3 w-3" />
+                              <span>Minimum order quantities not met (see warnings above)</span>
+                            </div>
+                          )}
+                          {selectedRegionId && !calculatingShipping && vendorMoqData.canCheckout && (
+                            <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                              <div className="h-2 w-2 rounded-full bg-green-500" />
+                              <span>All requirements met - ready to checkout</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    <Button 
+                      type="submit" 
+                      size="lg" 
+                      className="w-full" 
+                      disabled={processing || calculatingShipping || !vendorMoqData.canCheckout || !selectedRegionId}
+                    >
                       {processing ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Processing...
+                        </>
+                      ) : !selectedRegionId ? (
+                        <>
+                          <MapPin className="mr-2 h-4 w-4" />
+                          Select Delivery Region to Continue
+                        </>
+                      ) : calculatingShipping ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Calculating Shipping...
+                        </>
+                      ) : !vendorMoqData.canCheckout ? (
+                        <>
+                          <AlertCircle className="mr-2 h-4 w-4" />
+                          Fix MOQ Requirements to Continue
                         </>
                       ) : paymentMethod === 'membership' ? (
                         <>
@@ -875,6 +1177,71 @@ export default function Checkout() {
                     </div>
                   )}
                   
+                  {/* Shipping Breakdown - Always show when region is selected */}
+                  {selectedRegionId ? (
+                    <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <Truck className="h-4 w-4 text-muted-foreground" />
+                        <span>Shipping Breakdown</span>
+                      </div>
+                      {calculatingShipping ? (
+                        <div className="text-xs text-muted-foreground flex items-center gap-2">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Calculating shipping breakdown...
+                        </div>
+                      ) : shippingData && shippingData.hasLocationBasedPricing && shippingData.vendorBreakdown.length > 0 ? (
+                        <div className="space-y-2">
+                          {shippingData.vendorBreakdown.map((breakdown, index) => {
+                            const hasRoute = breakdown.shippingCost > 0 || breakdown.estimatedDays;
+                            return (
+                              <div key={index} className="text-xs border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground truncate max-w-[140px]">
+                                    {breakdown.vendorName}
+                                  </span>
+                                  <span className="font-medium">
+                                    {hasRoute ? `₦${breakdown.shippingCost.toLocaleString()}` : 'No route'}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between text-muted-foreground mt-0.5">
+                                  <span>{breakdown.vendorRegionName || 'Unknown'} → Your Region</span>
+                                  <span>{breakdown.totalWeight.toFixed(2)}kg</span>
+                                </div>
+                                {breakdown.estimatedDays ? (
+                                  <span className="text-xs text-primary">{breakdown.estimatedDays} days</span>
+                                ) : !hasRoute && (
+                                  <span className="text-xs text-amber-600 dark:text-amber-400">
+                                    Shipping will be calculated at checkout
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : shippingData ? (
+                        <div className="text-xs text-muted-foreground space-y-1">
+                          <p>Shipping cost calculated based on total weight: {shippingData.totalWeight.toFixed(2)}kg</p>
+                          {shippingData.hasLocationBasedPricing && shippingData.vendorBreakdown.length === 0 && (
+                            <p className="text-amber-600 dark:text-amber-400">
+                              Vendor-specific routes not available. Using standard shipping rates.
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-muted-foreground">
+                          Waiting for shipping calculation...
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                      <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
+                        <AlertCircle className="h-4 w-4" />
+                        <span>Select a delivery region above to see shipping breakdown</span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Vendor Delivery Schedules */}
                   {shippingData?.hasVendorRules && shippingData.vendorSchedules.length > 0 && (
                     <div className="bg-muted/50 rounded-lg p-3 space-y-2">

@@ -88,6 +88,10 @@ export default function Cart() {
     };
   }, [items]);
 
+  // Global Store Minimum Order Check (4 units total)
+  const meetsGlobalMinimum = totalItems >= 4;
+  const globalMinimumNeeded = Math.max(0, 4 - totalItems);
+
   // Helper to get vendor MOQ status for an item
   const getVendorMoqStatus = (vendorId: string | undefined) => {
     if (!vendorId) return null;
@@ -158,6 +162,17 @@ export default function Cart() {
 
       <div className="container mx-auto px-4 py-6 md:py-12">
         <h1 className="text-3xl md:text-4xl font-bold mb-6 md:mb-8">Shopping Cart</h1>
+
+        {/* Global Store Minimum Order Validation */}
+        {!meetsGlobalMinimum && <div className="mb-6">
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Minimum Order Required</AlertTitle>
+              <AlertDescription>
+                You need a minimum of <strong>4 items</strong> to proceed to checkout. Please add <strong>{globalMinimumNeeded} more item{globalMinimumNeeded > 1 ? 's' : ''}</strong> to your cart.
+              </AlertDescription>
+            </Alert>
+          </div>}
 
         {/* MOQ Validation Errors */}
         {vendorMoqData.errors.length > 0 && <div className="mb-6 space-y-3">
@@ -270,15 +285,16 @@ export default function Cart() {
               <CardContent className="p-6 space-y-4">
                 <h3 className="text-xl font-bold">Order Summary</h3>
 
-                {/* Region Selector for Shipping Estimate */}
+                {/* Region Selector for Shipping Estimate - REQUIRED */}
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2 text-sm font-medium">
                     <MapPin className="h-4 w-4 text-muted-foreground" />
-                    Delivery Region
+                    Delivery Region <span className="text-destructive font-bold">*</span>
+                    <span className="text-xs text-muted-foreground font-normal">(Required)</span>
                   </Label>
-                  <Select value={selectedRegionId} onValueChange={setSelectedRegionId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder={loadingRegions ? "Loading regions..." : "Select your region"} />
+                  <Select value={selectedRegionId} onValueChange={setSelectedRegionId} required>
+                    <SelectTrigger className={!selectedRegionId ? 'border-destructive border-2' : 'border-green-500 border-2'}>
+                      <SelectValue placeholder={loadingRegions ? "Loading regions..." : "Select your delivery region (required)"} />
                     </SelectTrigger>
                     <SelectContent>
                       {regions.map(region => <SelectItem key={region.id} value={region.id}>
@@ -286,9 +302,24 @@ export default function Cart() {
                         </SelectItem>)}
                     </SelectContent>
                   </Select>
-                  {!selectedRegionId && <p className="text-xs text-muted-foreground">
-                      Select your region for accurate shipping estimate
-                    </p>}
+                  {!selectedRegionId && (
+                    <div className="flex items-center gap-2 text-xs text-destructive bg-destructive/10 p-2 rounded border border-destructive/20">
+                      <AlertCircle className="h-3 w-3" />
+                      <span className="font-medium">Please select a delivery region to calculate shipping costs and proceed to checkout</span>
+                    </div>
+                  )}
+                  {selectedRegionId && !calculatingShipping && shippingData && (
+                    <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/20 p-2 rounded border border-green-200 dark:border-green-800">
+                      <div className="h-2 w-2 rounded-full bg-green-500" />
+                      <span>Shipping cost calculated: ₦{shippingCost.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {selectedRegionId && calculatingShipping && (
+                    <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <span>Calculating shipping for selected region...</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2 text-sm">
@@ -368,8 +399,62 @@ export default function Cart() {
                     </p>}
                 </div>
 
-                <Button asChild={vendorMoqData.canCheckout} size="lg" className="w-full" disabled={!vendorMoqData.canCheckout}>
-                  {vendorMoqData.canCheckout ? <Link to="/checkout">Proceed to Checkout</Link> : <span>Checkout Disabled</span>}
+                {/* Validation Status Messages */}
+                {(!selectedRegionId || calculatingShipping || !meetsGlobalMinimum || !vendorMoqData.canCheckout) && (
+                  <div className="space-y-2 p-3 bg-muted/50 rounded-lg border border-border">
+                    <div className="text-sm font-medium text-foreground">Checkout Requirements:</div>
+                    <div className="space-y-1 text-xs">
+                      {!selectedRegionId && (
+                        <div className="flex items-center gap-2 text-destructive">
+                          <AlertCircle className="h-3 w-3" />
+                          <span>Please select a delivery region</span>
+                        </div>
+                      )}
+                      {calculatingShipping && (
+                        <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <span>Calculating shipping costs...</span>
+                        </div>
+                      )}
+                      {!meetsGlobalMinimum && (
+                        <div className="flex items-center gap-2 text-destructive">
+                          <AlertCircle className="h-3 w-3" />
+                          <span>Minimum 4 items required (you have {totalItems})</span>
+                        </div>
+                      )}
+                      {!vendorMoqData.canCheckout && (
+                        <div className="flex items-center gap-2 text-destructive">
+                          <AlertCircle className="h-3 w-3" />
+                          <span>Vendor minimum order quantities not met</span>
+                        </div>
+                      )}
+                      {selectedRegionId && !calculatingShipping && meetsGlobalMinimum && vendorMoqData.canCheckout && (
+                        <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                          <div className="h-2 w-2 rounded-full bg-green-500" />
+                          <span>All requirements met - ready to checkout</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <Button 
+                  asChild={selectedRegionId && !calculatingShipping && meetsGlobalMinimum && vendorMoqData.canCheckout} 
+                  size="lg" 
+                  className="w-full" 
+                  disabled={!selectedRegionId || calculatingShipping || !meetsGlobalMinimum || !vendorMoqData.canCheckout}
+                >
+                  {!selectedRegionId ? (
+                    <span>Select Delivery Region to Continue</span>
+                  ) : calculatingShipping ? (
+                    <span>Calculating Shipping...</span>
+                  ) : !meetsGlobalMinimum ? (
+                    <span>Add More Items to Continue</span>
+                  ) : !vendorMoqData.canCheckout ? (
+                    <span>Fix MOQ Requirements to Continue</span>
+                  ) : (
+                    <Link to="/checkout">Proceed to Checkout</Link>
+                  )}
                 </Button>
 
                 <Button asChild variant="outline" className="w-full">

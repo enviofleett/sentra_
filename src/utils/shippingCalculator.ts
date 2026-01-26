@@ -111,6 +111,9 @@ export async function calculateShipping(
   // Step 1: Calculate total cart weight using smart weight calculation
   result.totalWeight = calculateTotalWeight(cartItems);
 
+  // Calculate total quantity across all items for bulk order override
+  const totalQuantity = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+
   // Step 2: Group cart items by vendor
   const vendorGroups: Record<string, { 
     items: CartItem[]; 
@@ -157,6 +160,42 @@ export async function calculateShipping(
   if (customerRegionId) {
     result.hasLocationBasedPricing = true;
     
+    // Fetch weight-based rates for fallback (in case matrix routes don't exist)
+    const { data: weightRates, error: weightRatesError } = await supabase
+      .from('shipping_weight_rates')
+      .select('min_weight, max_weight, cost')
+      .order('min_weight', { ascending: true });
+    
+    if (weightRatesError) {
+      console.error('[Shipping] Error fetching weight-based rates:', weightRatesError);
+    }
+    
+    // Helper function to get weight-based cost for a given weight
+    const getWeightBasedCost = (weight: number): number => {
+      if (!weightRates || weightRates.length === 0) {
+        console.warn(`[Shipping] No weight-based rates available. Weight: ${weight}kg`);
+        return 0;
+      }
+      
+      const matchingRate = weightRates.find(
+        (rate) => weight >= rate.min_weight && weight < rate.max_weight
+      );
+
+      if (matchingRate) {
+        return matchingRate.cost;
+      } else if (weight >= weightRates[weightRates.length - 1].max_weight) {
+        // Use the highest rate if weight exceeds all ranges
+        return weightRates[weightRates.length - 1].cost;
+      }
+      
+      // If weight is less than the minimum rate, use the first rate
+      if (weight < weightRates[0].min_weight && weightRates.length > 0) {
+        return weightRates[0].cost;
+      }
+      
+      return 0;
+    };
+    
     for (const vendorId of vendorIds) {
       const vendorInfo = vendorRegionMap[vendorId];
       const group = vendorGroups[vendorId];
@@ -173,6 +212,7 @@ export async function calculateShipping(
       };
 
       // Look up shipping matrix for this origin->destination
+      let foundMatrixRoute = false;
       if (vendorInfo?.regionId) {
         const { data: matrixRoute } = await supabase
           .from('shipping_matrix')
@@ -186,6 +226,18 @@ export async function calculateShipping(
           // Calculate cost: base_cost + (weight * weight_rate)
           breakdown.shippingCost = matrixRoute.base_cost + (group.weight * matrixRoute.weight_rate);
           breakdown.estimatedDays = matrixRoute.estimated_days || undefined;
+          foundMatrixRoute = true;
+        }
+      }
+      
+      // Fallback to weight-based rates if no matrix route found
+      if (!foundMatrixRoute) {
+        const fallbackCost = getWeightBasedCost(group.weight);
+        breakdown.shippingCost = fallbackCost;
+        
+        // Log for debugging (can be removed in production)
+        if (fallbackCost === 0 && group.weight > 0) {
+          console.warn(`[Shipping] No matrix route found for vendor ${vendorId} (${vendorInfo?.name || 'Unknown'}) from region ${vendorInfo?.regionId || 'none'} to ${customerRegionId}. Weight: ${group.weight}kg. No weight-based rate matched.`);
         }
       }
 
@@ -217,6 +269,18 @@ export async function calculateShipping(
 
     // Sum up all vendor shipping costs
     result.weightBasedCost = result.vendorBreakdown.reduce((sum, b) => sum + b.shippingCost, 0);
+    
+    // If total cost is still 0 and we have weight, use total weight for fallback
+    if (result.weightBasedCost === 0 && result.totalWeight > 0) {
+      const totalWeightCost = getWeightBasedCost(result.totalWeight);
+      result.weightBasedCost = totalWeightCost;
+      
+      // Log for debugging
+      if (totalWeightCost === 0) {
+        console.warn(`[Shipping] Total shipping cost is 0. Total weight: ${result.totalWeight}kg. No weight-based rates configured or no matching rate found. Check admin shipping settings.`);
+        console.warn(`[Shipping] Available weight rates:`, weightRates);
+      }
+    }
 
   } else {
     // Fallback: Use global weight-based shipping rates (old behavior)
@@ -275,6 +339,28 @@ export async function calculateShipping(
     result.consolidatedSchedule = result.vendorSchedules
       .map((vs) => `${vs.vendorName}: ${vs.schedule}`)
       .join(' | ');
+  }
+
+  // Bulk Order Shipping Schedule Override (12+ units = expedited shipping)
+  // This override happens AFTER weight calculation and schedule building
+  // but BEFORE returning the result, ensuring weight is the primary factor for cost
+  if (totalQuantity >= 12) {
+    // Override consolidated schedule
+    result.consolidatedSchedule = 'Within 2 business days';
+    
+    // Override all vendor schedules
+    result.vendorSchedules = result.vendorSchedules.map(vs => ({
+      ...vs,
+      schedule: 'Within 2 business days',
+      estimatedDays: '2 days'
+    }));
+    
+    // Override all vendor breakdown schedules
+    result.vendorBreakdown = result.vendorBreakdown.map(bd => ({
+      ...bd,
+      schedule: 'Within 2 business days',
+      estimatedDays: '2 days'
+    }));
   }
 
   return result;

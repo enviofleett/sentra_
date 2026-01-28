@@ -137,23 +137,43 @@ export async function calculateShipping(
   let vendorRegionMap: Record<string, { regionId: string | null; regionName: string | null; name: string }> = {};
   
   if (vendorIds.length > 0) {
-    const { data: vendors } = await supabase
-      .from('vendors')
-      .select(`
-        id, 
-        rep_full_name,
-        shipping_region_id,
-        shipping_region:shipping_regions(id, name)
-      `)
-      .in('id', vendorIds);
+    // Use RPC to bypass RLS for public shipping calculation
+    const { data: vendorsData, error: vendorError } = await supabase
+      .rpc('get_vendor_shipping_info' as any, { vendor_ids: vendorIds });
+    
+    const vendors = vendorsData as any[];
 
-    vendors?.forEach((v: any) => {
-      vendorRegionMap[v.id] = {
-        regionId: v.shipping_region_id,
-        regionName: v.shipping_region?.name || null,
-        name: v.rep_full_name
-      };
-    });
+    if (vendorError) {
+      console.error('[Shipping] Error fetching vendor info via RPC:', vendorError);
+      // Fallback: Try direct select (might work if user is admin)
+      const { data: directVendors } = await supabase
+        .from('vendors')
+        .select(`
+          id, 
+          rep_full_name,
+          shipping_region_id,
+          shipping_region:shipping_regions(id, name)
+        `)
+        .in('id', vendorIds);
+        
+      if (directVendors) {
+        directVendors.forEach((v: any) => {
+          vendorRegionMap[v.id] = {
+            regionId: v.shipping_region_id,
+            regionName: v.shipping_region?.name || null,
+            name: v.rep_full_name
+          };
+        });
+      }
+    } else if (vendors) {
+      vendors.forEach((v: any) => {
+        vendorRegionMap[v.id] = {
+          regionId: v.shipping_region_id,
+          regionName: v.region_name || null,
+          name: v.name
+        };
+      });
+    }
   }
 
   // Step 4: If customer region is provided, calculate location-based shipping

@@ -175,29 +175,34 @@ export async function calculateShipping(
         { min_weight: 5, max_weight: 10, cost: 8000 },
         { min_weight: 10, max_weight: 100, cost: 15000 }
       ];
+    } else {
+        console.log('[Shipping] Found weight rates from DB:', weightRates.length);
     }
     
     // Helper function to get weight-based cost for a given weight
-    const getWeightBasedCost = (weight: number): number => {
+    const getWeightBasedCost = (weightInput: number): number => {
+      const weight = Number(weightInput);
+      // Log input weight
+      // console.log(`[Shipping] Calculating cost for weight: ${weight}kg`);
+      
       if (!weightRates || weightRates.length === 0) {
         console.warn(`[Shipping] No weight-based rates available. Weight: ${weight}kg`);
         return 0;
       }
       
       const matchingRate = weightRates.find(
-        (rate) => weight >= rate.min_weight && weight < rate.max_weight
+        (rate) => weight >= Number(rate.min_weight) && weight < Number(rate.max_weight)
       );
 
       if (matchingRate) {
-        return matchingRate.cost;
-      } else if (weight >= weightRates[weightRates.length - 1].max_weight) {
-        // Use the highest rate if weight exceeds all ranges
-        return weightRates[weightRates.length - 1].cost;
+        // console.log(`[Shipping] Matched rate:`, matchingRate);
+        return Number(matchingRate.cost);
+      } else if (weight >= Number(weightRates[weightRates.length - 1].max_weight)) {
+        return Number(weightRates[weightRates.length - 1].cost);
       }
       
-      // If weight is less than the minimum rate, use the first rate
-      if (weight < weightRates[0].min_weight && weightRates.length > 0) {
-        return weightRates[0].cost;
+      if (weight < Number(weightRates[0].min_weight) && weightRates.length > 0) {
+        return Number(weightRates[0].cost);
       }
       
       return 0;
@@ -206,6 +211,9 @@ export async function calculateShipping(
     for (const vendorId of vendorIds) {
       const vendorInfo = vendorRegionMap[vendorId];
       const group = vendorGroups[vendorId];
+      
+      console.log(`[Shipping] Processing vendor ${vendorId} (${vendorInfo?.name}). Weight: ${group.weight}kg`);
+
       
       const breakdown: VendorBreakdown = {
         vendorId,
@@ -230,15 +238,21 @@ export async function calculateShipping(
           .maybeSingle();
 
         if (matrixRoute) {
+          console.log(`[Shipping] Found matrix route for vendor ${vendorId}:`, matrixRoute);
           // Calculate cost: base_cost + (weight * weight_rate)
           breakdown.shippingCost = matrixRoute.base_cost + (group.weight * matrixRoute.weight_rate);
           breakdown.estimatedDays = matrixRoute.estimated_days || undefined;
           foundMatrixRoute = true;
+        } else {
+          console.log(`[Shipping] No matrix route found for vendor ${vendorId} (${vendorInfo.regionId}) -> ${customerRegionId}`);
         }
+      } else {
+        console.log(`[Shipping] Missing region info for vendor ${vendorId}. Vendor Region: ${vendorInfo?.regionId}, Customer Region: ${customerRegionId}`);
       }
       
       // Fallback to weight-based rates if no matrix route found
       if (!foundMatrixRoute) {
+        console.log(`[Shipping] Using fallback weight-based cost for vendor ${vendorId}`);
         const fallbackCost = getWeightBasedCost(group.weight);
         breakdown.shippingCost = fallbackCost;
         

@@ -161,13 +161,20 @@ export async function calculateShipping(
     result.hasLocationBasedPricing = true;
     
     // Fetch weight-based rates for fallback (in case matrix routes don't exist)
-    const { data: weightRates, error: weightRatesError } = await supabase
+    let { data: weightRates, error: weightRatesError } = await supabase
       .from('shipping_weight_rates')
       .select('min_weight, max_weight, cost')
       .order('min_weight', { ascending: true });
     
-    if (weightRatesError) {
-      console.error('[Shipping] Error fetching weight-based rates:', weightRatesError);
+    // Fallback defaults if DB is empty or error
+    if (weightRatesError || !weightRates || weightRates.length === 0) {
+      console.warn('[Shipping] Using hardcoded default weight rates because DB is empty or error.');
+      weightRates = [
+        { min_weight: 0, max_weight: 2, cost: 2500 },
+        { min_weight: 2, max_weight: 5, cost: 4500 },
+        { min_weight: 5, max_weight: 10, cost: 8000 },
+        { min_weight: 10, max_weight: 100, cost: 15000 }
+      ];
     }
     
     // Helper function to get weight-based cost for a given weight
@@ -290,10 +297,20 @@ export async function calculateShipping(
 
   } else {
     // Fallback: Use global weight-based shipping rates (old behavior)
-    const { data: weightRates } = await supabase
+    let { data: weightRates } = await supabase
       .from('shipping_weight_rates')
       .select('min_weight, max_weight, cost')
       .order('min_weight', { ascending: true });
+
+    // Fallback defaults if DB is empty
+    if (!weightRates || weightRates.length === 0) {
+      weightRates = [
+        { min_weight: 0, max_weight: 2, cost: 2500 },
+        { min_weight: 2, max_weight: 5, cost: 4500 },
+        { min_weight: 5, max_weight: 10, cost: 8000 },
+        { min_weight: 10, max_weight: 100, cost: 15000 }
+      ];
+    }
 
     if (weightRates && weightRates.length > 0) {
       const matchingRate = weightRates.find(

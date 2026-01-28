@@ -267,19 +267,25 @@ export async function calculateShipping(
       result.vendorBreakdown.push(breakdown);
     }
 
-    // Sum up all vendor shipping costs
+    // Sum up all vendor shipping costs - this is the CORRECT cumulative calculation
     result.weightBasedCost = result.vendorBreakdown.reduce((sum, b) => sum + b.shippingCost, 0);
     
-    // If total cost is still 0 and we have weight, use total weight for fallback
+    // Only use fallback if NO vendor-specific shipping costs were calculated
+    // This ensures we don't override the proper cumulative weight-based calculation
     if (result.weightBasedCost === 0 && result.totalWeight > 0) {
-      const totalWeightCost = getWeightBasedCost(result.totalWeight);
-      result.weightBasedCost = totalWeightCost;
+      // Check if we actually have vendor breakdowns but they all returned 0 cost
+      const hasVendorBreakdownsButZeroCost = result.vendorBreakdown.length > 0 && 
+        result.vendorBreakdown.every(b => b.shippingCost === 0);
       
-      // Log for debugging
-      if (totalWeightCost === 0) {
-        console.warn(`[Shipping] Total shipping cost is 0. Total weight: ${result.totalWeight}kg. No weight-based rates configured or no matching rate found. Check admin shipping settings.`);
-        console.warn(`[Shipping] Available weight rates:`, weightRates);
+      if (hasVendorBreakdownsButZeroCost) {
+        // This indicates a configuration issue - log it but use total weight fallback
+        const totalWeightCost = getWeightBasedCost(result.totalWeight);
+        result.weightBasedCost = totalWeightCost;
+        
+        console.warn(`[Shipping] All vendor shipping costs are 0. Using total weight fallback: ${result.totalWeight}kg = ₦${totalWeightCost}. Check shipping matrix configuration.`);
+        console.warn(`[Shipping] Vendor breakdown:`, result.vendorBreakdown);
       }
+      // If no vendor breakdowns exist at all, this is expected behavior
     }
 
   } else {

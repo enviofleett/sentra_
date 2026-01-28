@@ -177,8 +177,8 @@ export default function Checkout() {
           product: item.product ? {
             id: item.product_id,
             name: item.product.name,
-            weight: (item.product as any).weight as number | undefined,
-            size: (item.product as any).size as string | undefined,
+            weight: item.product.weight,
+            size: item.product.size,
             vendor_id: item.product.vendor_id || undefined
           } : undefined
         }));
@@ -1135,6 +1135,8 @@ export default function Checkout() {
                     </span>
                     {calculatingShipping ? (
                       <span className="text-muted-foreground text-sm">Calculating...</span>
+                    ) : !selectedRegionId ? (
+                      <span className="text-muted-foreground text-sm italic">Select region</span>
                     ) : shippingCost > 0 ? (
                       <span>₦{shippingCost.toLocaleString()}</span>
                     ) : (

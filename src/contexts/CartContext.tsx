@@ -14,6 +14,8 @@ export interface CartItem {
     image_url?: string;
     stock_quantity: number;
     vendor_id?: string;
+    weight?: number;
+    size?: string;
     vendor?: {
       id: string;
       rep_full_name: string;
@@ -119,7 +121,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       .select(`
         *,
         product:products(
-          id, name, price, image_url, stock_quantity, vendor_id,
+          id, name, price, image_url, stock_quantity, vendor_id, weight, size,
           vendor:vendors(id, rep_full_name, min_order_quantity)
         )
       `)
@@ -145,7 +147,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     const { data: products } = await supabase
       .from('products')
       .select(`
-        id, name, price, image_url, stock_quantity, vendor_id,
+        id, name, price, image_url, stock_quantity, vendor_id, weight, size,
         vendor:vendors(id, rep_full_name, min_order_quantity)
       `)
       .in('id', productIds);
@@ -197,7 +199,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         .select(`
           *,
           product:products(
-            id, name, price, image_url, stock_quantity, vendor_id,
+            id, name, price, image_url, stock_quantity, vendor_id, weight, size,
             vendor:vendors(id, rep_full_name, min_order_quantity)
           )
         `)

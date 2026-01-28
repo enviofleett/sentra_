@@ -139,7 +139,7 @@ export async function calculateShipping(
   if (vendorIds.length > 0) {
     // Use RPC to bypass RLS for public shipping calculation
     const { data: vendorsData, error: vendorError } = await supabase
-      .rpc('get_vendor_shipping_info' as any, { vendor_ids: vendorIds });
+      .rpc('get_vendor_public_info' as any, { vendor_ids: vendorIds });
     
     const vendors = vendorsData as any[];
 
@@ -169,7 +169,7 @@ export async function calculateShipping(
       vendors.forEach((v: any) => {
         vendorRegionMap[v.id] = {
           regionId: v.shipping_region_id,
-          regionName: v.region_name || null,
+          regionName: v.shipping_region_name || null,
           name: v.name
         };
       });

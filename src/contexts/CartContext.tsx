@@ -131,7 +131,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       console.error('Error loading cart:', error);
       toast({ title: 'Error', description: 'Failed to load cart', variant: 'destructive' });
     } else {
-      setItems(data || []);
+      const enrichedItems = await enrichItemsWithVendorInfo(data || []);
+      setItems(enrichedItems);
     }
   };
 
@@ -165,8 +166,43 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
           };
         })
         .filter(Boolean) as CartItem[];
-      setItems(mergedItems);
+      
+      const enrichedItems = await enrichItemsWithVendorInfo(mergedItems);
+      setItems(enrichedItems);
     }
+  };
+
+  // Helper to fetch public vendor info via RPC to bypass RLS (especially for guests)
+  const enrichItemsWithVendorInfo = async (cartItems: CartItem[]): Promise<CartItem[]> => {
+    const vendorIds = Array.from(new Set(cartItems.map(i => i.product?.vendor_id).filter(Boolean))) as string[];
+    
+    if (vendorIds.length === 0) return cartItems;
+
+    // Use RPC to fetch vendor details (bypassing RLS)
+    const { data: vendors } = await supabase
+      .rpc('get_vendor_public_info' as any, { vendor_ids: vendorIds });
+
+    if (!vendors || vendors.length === 0) return cartItems;
+
+    const vendorMap = new Map<string, any>(vendors.map((v: any) => [v.id, v]));
+
+    return cartItems.map(item => {
+      const vid = item.product?.vendor_id;
+      if (!vid) return item;
+      
+      const vInfo = vendorMap.get(vid);
+      if (vInfo && item.product) {
+        // If vendor info is missing (due to RLS), fill it in
+        if (!item.product.vendor) {
+           item.product.vendor = {
+              id: vInfo.id,
+              rep_full_name: vInfo.name,
+              min_order_quantity: vInfo.min_order_quantity
+           };
+        }
+      }
+      return item;
+    });
   };
 
   const addToCart = async (productId: string, quantity: number) => {
@@ -209,7 +245,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         console.error('Error adding to cart:', error);
         toast({ title: 'Error', description: 'Failed to add item to cart', variant: 'destructive' });
       } else {
-        setItems([...items, data]);
+        const enrichedData = (await enrichItemsWithVendorInfo([data]))[0];
+        setItems([...items, enrichedData]);
         toast({ title: 'Added to cart', description: 'Item added to your cart' });
       }
     }

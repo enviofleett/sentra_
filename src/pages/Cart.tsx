@@ -124,8 +124,8 @@ export default function Cart() {
           product: item.product ? {
             id: item.product_id,
             name: item.product.name,
-            weight: (item.product as Record<string, unknown>).weight as number | undefined,
-            size: (item.product as Record<string, unknown>).size as string | undefined,
+            weight: item.product.weight,
+            size: item.product.size,
             vendor_id: item.product.vendor_id
           } : undefined
         }));

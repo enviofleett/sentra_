@@ -37,7 +37,7 @@ export default function Checkout() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const { items, subtotal, clearCart, totalItems } = useCart();
-  const { isMember, balance, isEnabled: membershipEnabled, isLoading: membershipLoading, refetch: refetchMembership } = useMembership();
+  const { isMember, balance, isEnabled: membershipEnabled, refetch: refetchMembership } = useMembership();
   const [processing, setProcessing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'paystack' | 'membership'>('paystack');
   const [termsContent, setTermsContent] = useState('');
@@ -1273,6 +1273,70 @@ export default function Checkout() {
                       You're saving ₦{promoDiscount.toLocaleString()} with promo credit!
                     </div>
                   )}
+
+                   {/* Validation Status Messages */}
+                    {(!selectedRegionId || calculatingShipping || !vendorMoqData.canCheckout) && (
+                      <div className="space-y-2 p-3 bg-muted/50 rounded-lg border border-border mt-4">
+                        <div className="text-sm font-medium text-foreground">Checkout Requirements:</div>
+                        <div className="space-y-1 text-xs">
+                          {!selectedRegionId && (
+                            <div className="flex items-center gap-2 text-destructive">
+                              <AlertCircle className="h-3 w-3" />
+                              <span>Please select a delivery region</span>
+                            </div>
+                          )}
+                          {calculatingShipping && (
+                            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              <span>Calculating shipping costs...</span>
+                            </div>
+                          )}
+                          {!vendorMoqData.canCheckout && (
+                            <div className="flex items-center gap-2 text-destructive">
+                              <AlertCircle className="h-3 w-3" />
+                              <span>Minimum order quantities not met (see warnings above)</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                  <Button 
+                      type="submit"
+                      form="checkout-form"
+                      size="lg" 
+                      className="w-full mt-6" 
+                      disabled={processing || calculatingShipping || !vendorMoqData.canCheckout || !selectedRegionId}
+                    >
+                      {processing ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Processing...
+                        </>
+                      ) : !selectedRegionId ? (
+                        <>
+                          <MapPin className="mr-2 h-4 w-4" />
+                          Select Region
+                        </>
+                      ) : calculatingShipping ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Calculating...
+                        </>
+                      ) : !vendorMoqData.canCheckout ? (
+                        <>
+                          <AlertCircle className="mr-2 h-4 w-4" />
+                          Fix MOQ Issues
+                        </>
+                      ) : paymentMethod === 'membership' ? (
+                        <>
+                          <Wallet className="mr-2 h-4 w-4" />
+                          Pay ₦{totalAmount.toLocaleString()}
+                        </>
+                      ) : (
+                        `Place Order - ₦${totalAmount.toLocaleString()}`
+                      )}
+                    </Button>
                 </div>
               </CardContent>
             </Card>

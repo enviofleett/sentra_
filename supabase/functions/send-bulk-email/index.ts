@@ -11,7 +11,7 @@ interface BulkEmailRequest {
   subject: string;
   htmlContent: string;
   textContent?: string;
-  recipientFilter: 'all' | 'verified' | 'pending';
+  recipientFilter: 'all' | 'verified' | 'pending' | 'customers';
   campaignId?: string;
   testEmail?: string;
 }
@@ -165,19 +165,30 @@ serve(async (req) => {
     const trackingBaseUrl = `${supabaseUrl}/functions/v1/track-email`;
 
     // Build query based on filter
-    let query = supabase.from('waiting_list').select('id, email, full_name');
+    let recipients: { id: string; email: string; full_name: string | null }[] = [];
     
-    if (recipientFilter === 'verified') {
-      query = query.eq('is_social_verified', true);
-    } else if (recipientFilter === 'pending') {
-      query = query.eq('is_social_verified', false);
-    }
-
-    const { data: recipients, error: fetchError } = await query;
-
-    if (fetchError) {
-      console.error('❌ Failed to fetch recipients:', fetchError);
-      throw new Error('Failed to fetch waitlist recipients');
+    if (recipientFilter === 'customers') {
+      // Fetch all customers from profiles
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, email, full_name');
+        
+      if (error) throw error;
+      recipients = data || [];
+      
+    } else {
+      // Default: Fetch from waiting_list
+      let query = supabase.from('waiting_list').select('id, email, full_name');
+      
+      if (recipientFilter === 'verified') {
+        query = query.eq('is_social_verified', true);
+      } else if (recipientFilter === 'pending') {
+        query = query.eq('is_social_verified', false);
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      recipients = data || [];
     }
 
     if (!recipients || recipients.length === 0) {

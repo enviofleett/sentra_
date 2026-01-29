@@ -164,6 +164,7 @@ export function ProductsManagement() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [defaultVendorId, setDefaultVendorId] = useState<string>('');
   
   // Live margin calculation state
   const [livePrice, setLivePrice] = useState<number>(0);
@@ -283,6 +284,17 @@ export function ProductsManagement() {
       .select('id, rep_full_name, email')
       .order('rep_full_name');
     setVendors(data || []);
+
+    if (data) {
+      // Find Sentra vendor to set as default
+      const sentra = data.find(v => 
+        v.rep_full_name === 'Sentra' || 
+        v.rep_full_name === 'Sentra Perfumes Main'
+      );
+      if (sentra) {
+        setDefaultVendorId(sentra.id);
+      }
+    }
   };
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -1105,7 +1117,7 @@ export function ProductsManagement() {
               </div>
               <div>
                 <Label htmlFor="vendor_id">Vendor</Label>
-                <Select name="vendor_id" defaultValue={editingProduct?.vendor_id || ''}>
+                <Select name="vendor_id" defaultValue={editingProduct?.vendor_id || defaultVendorId || ''}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select vendor" />
                   </SelectTrigger>

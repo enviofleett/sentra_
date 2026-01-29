@@ -168,6 +168,24 @@ Creed Aventus 100ml,350000,230000,,2`;
     setProgress(0);
 
     try {
+      // Step 0: Get Default Vendor (Sentra)
+      addLog('info', 'Locating default vendor...');
+      const { data: vendorData, error: vendorError } = await supabase
+        .from('vendors')
+        .select('id')
+        .or('rep_full_name.eq.Sentra,rep_full_name.eq.Sentra Perfumes Main')
+        .limit(1)
+        .maybeSingle();
+
+      if (vendorError || !vendorData) {
+        const msg = 'Default vendor "Sentra" not found. Please ensure the vendor exists.';
+        addLog('error', msg);
+        toast.error(msg);
+        setIsImporting(false);
+        return;
+      }
+      const defaultVendorId = vendorData.id;
+
       // Step 1: Parse CSV
       setCurrentStep('parsing');
       addLog('info', 'Parsing CSV file...');
@@ -202,6 +220,7 @@ Creed Aventus 100ml,350000,230000,,2`;
         stock_quantity: p.stock || 0,
         is_active: false, // Draft mode
         is_featured: false,
+        vendor_id: defaultVendorId,
       }));
 
       const { data: createdProducts, error: insertError } = await supabase

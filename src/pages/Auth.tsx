@@ -12,7 +12,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Gift } from 'lucide-react';
+import { Gift, Eye, EyeOff } from 'lucide-react';
 import sentraLogo from '@/assets/sentra-logo.png';
 
 // Validation schemas
@@ -54,6 +54,8 @@ export const AuthFormContent: React.FC<AuthFormContentProps> = ({
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
   const [sendingResetEmail, setSendingResetEmail] = useState(false);
+  const [showSignInPassword, setShowSignInPassword] = useState(false);
+  const [showSignUpPassword, setShowSignUpPassword] = useState(false);
 
   const signInForm = useForm<SignInFormData>({
     resolver: zodResolver(signInSchema),
@@ -291,12 +293,27 @@ export const AuthFormContent: React.FC<AuthFormContentProps> = ({
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="password" 
-                        placeholder="••••••••" 
-                        autoComplete="current-password"
-                        {...field} 
-                      />
+                      <div className="relative">
+                        <Input 
+                          type={showSignInPassword ? "text" : "password"} 
+                          placeholder="••••••••" 
+                          autoComplete="current-password"
+                          {...field} 
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                          onClick={() => setShowSignInPassword(!showSignInPassword)}
+                        >
+                          {showSignInPassword ? (
+                            <EyeOff className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <Eye className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </Button>
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -371,12 +388,27 @@ export const AuthFormContent: React.FC<AuthFormContentProps> = ({
                 <FormItem>
                   <FormLabel>Password</FormLabel>
                   <FormControl>
-                    <Input 
-                      type="password" 
-                      placeholder="••••••••" 
-                      autoComplete="new-password"
-                      {...field} 
-                    />
+                    <div className="relative">
+                      <Input 
+                        type={showSignUpPassword ? "text" : "password"} 
+                        placeholder="••••••••" 
+                        autoComplete="new-password"
+                        {...field} 
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowSignUpPassword(!showSignUpPassword)}
+                      >
+                        {showSignUpPassword ? (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </Button>
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>

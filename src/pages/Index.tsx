@@ -6,6 +6,7 @@ import { HeroSection } from '@/components/home/HeroSection';
 import { BrandBar } from '@/components/home/BrandBar';
 import { LifestyleBanners } from '@/components/home/LifestyleBanners';
 import { ArticlesSection } from '@/components/home/ArticlesSection';
+import { NewArrivalsSection } from '@/components/home/NewArrivalsSection';
 import { supabase } from '@/integrations/supabase/client';
 import { useSiteContent } from '@/hooks/useSiteContent';
 import { Button } from '@/components/ui/button';
@@ -24,12 +25,31 @@ export default function Index() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [featuredArticle, setFeaturedArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
+  const [newArrivals, setNewArrivals] = useState<any[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
   const {
     getContent
   } = useSiteContent();
   useEffect(() => {
     loadArticles();
+    loadNewArrivals();
   }, []);
+
+  const loadNewArrivals = async () => {
+    setLoadingProducts(true);
+    const { data } = await supabase
+      .from('products')
+      .select('*, vendors(rep_full_name), group_buy_campaigns!products_active_group_buy_id_fkey(id, status, discount_price, current_quantity, goal_quantity, expiry_at)')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(8);
+    
+    if (data) {
+      setNewArrivals(data);
+    }
+    setLoadingProducts(false);
+  };
+
   const loadArticles = async () => {
     setLoading(true);
     const {
@@ -50,6 +70,8 @@ export default function Index() {
       <Navbar />
       <HeroSection />
       <BrandBar />
+
+      <NewArrivalsSection products={newArrivals} loading={loadingProducts} />
 
       <ArticlesSection articles={articles} featuredArticle={featuredArticle} loading={loading} title={journalTitle} subtitle={journalSubtitle} />
 

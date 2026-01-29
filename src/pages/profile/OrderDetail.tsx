@@ -243,9 +243,12 @@ export default function OrderDetail() {
           <CardContent>
             {order.shipping_address && (
               <div className="text-sm space-y-1">
-                <p>{order.shipping_address.street}</p>
-                <p>{order.shipping_address.city}, {order.shipping_address.state}</p>
-                <p>{order.shipping_address.postalCode}</p>
+                <p>{order.shipping_address.street || order.shipping_address.address}</p>
+                <p>
+                  {order.shipping_address.city && `${order.shipping_address.city}, `}
+                  {order.shipping_address.state}
+                </p>
+                {order.shipping_address.postalCode && <p>{order.shipping_address.postalCode}</p>}
                 <p>{order.shipping_address.country}</p>
               </div>
             )}
@@ -262,9 +265,12 @@ export default function OrderDetail() {
           <CardContent>
             {order.billing_address && (
               <div className="text-sm space-y-1">
-                <p>{order.billing_address.street}</p>
-                <p>{order.billing_address.city}, {order.billing_address.state}</p>
-                <p>{order.billing_address.postalCode}</p>
+                <p>{order.billing_address.street || order.billing_address.address}</p>
+                <p>
+                  {order.billing_address.city && `${order.billing_address.city}, `}
+                  {order.billing_address.state}
+                </p>
+                {order.billing_address.postalCode && <p>{order.billing_address.postalCode}</p>}
                 <p>{order.billing_address.country}</p>
               </div>
             )}

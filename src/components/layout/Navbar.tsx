@@ -23,6 +23,7 @@ export const Navbar = () => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [featuredProducts, setFeaturedProducts] = useState<any[]>([]);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const navigate = useNavigate();
   useEffect(() => {
@@ -46,6 +47,28 @@ export const Navbar = () => {
     };
     fetchData();
   }, []);
+
+  useEffect(() => {
+    const fetchSuggestions = async () => {
+      if (!searchQuery.trim()) {
+        setSuggestions([]);
+        return;
+      }
+
+      const { data } = await supabase
+        .from('products')
+        .select('id, name, brand, image_url, price')
+        .eq('is_active', true)
+        .ilike('name', `%${searchQuery}%`)
+        .limit(5);
+      
+      if (data) setSuggestions(data);
+    };
+
+    const debounce = setTimeout(fetchSuggestions, 300);
+    return () => clearTimeout(debounce);
+  }, [searchQuery]);
+
   const handleSearchSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
     if (searchQuery.trim()) {
@@ -126,9 +149,7 @@ export const Navbar = () => {
                   <DropdownMenuItem asChild>
                     <Link to="/profile/orders" className="cursor-pointer">My Orders</Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/profile/groupbuys" className="cursor-pointer">My Circles</Link>
-                  </DropdownMenuItem>
+
                   {isAdmin && <DropdownMenuItem asChild>
                       <Link to="/admin" className="cursor-pointer">Admin Dashboard</Link>
                     </DropdownMenuItem>}
@@ -195,6 +216,43 @@ export const Navbar = () => {
             <Button variant="ghost" size="icon" onClick={() => setIsSearchOpen(true)}>
               <Search className="h-5 w-5" />
             </Button>
+
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <User className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48 bg-card">
+                  <DropdownMenuItem asChild>
+                    <Link to="/profile" className="cursor-pointer">My Profile</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/profile/orders" className="cursor-pointer">My Orders</Link>
+                  </DropdownMenuItem>
+
+                  {isAdmin && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/admin" className="cursor-pointer">Admin Dashboard</Link>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={async () => {
+                    await signOut();
+                    window.location.href = '/';
+                  }} className="cursor-pointer">
+                    Sign Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Link to="/auth">
+                <Button variant="ghost" size="icon">
+                  <User className="h-5 w-5" />
+                </Button>
+              </Link>
+            )}
             
             <Link to="/cart">
               <Button variant="ghost" size="icon" className="relative">
@@ -211,7 +269,7 @@ export const Navbar = () => {
       {/* Search Modal */}
       <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
         <DialogContent className="overflow-hidden p-0 max-w-lg bg-background border-border">
-          <Command className="bg-transparent">
+          <Command className="bg-transparent" shouldFilter={false}>
             <form onSubmit={handleSearchSubmit}>
               <div className="flex items-center border-b border-border px-4">
                 <Search className="mr-3 h-4 w-4 shrink-0 text-muted-foreground" />
@@ -219,6 +277,43 @@ export const Navbar = () => {
               </div>
             </form>
             <CommandList className="max-h-[400px] overflow-y-auto p-2">
+              {suggestions.length > 0 && (
+                <CommandGroup heading="Suggestions">
+                  {suggestions.map((product) => (
+                    <CommandItem
+                      key={product.id}
+                      onSelect={() => handleProductSelect(product.id)}
+                      className="cursor-pointer flex items-center gap-3 p-3 rounded-lg hover:bg-accent"
+                    >
+                      {product.image_url ? (
+                        <div className="w-12 h-12 bg-accent rounded-lg flex items-center justify-center overflow-hidden">
+                          <img
+                            src={product.image_url}
+                            alt={product.name}
+                            className="w-full h-full object-contain p-1"
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-12 h-12 bg-accent rounded-lg flex items-center justify-center">
+                          <Sparkles className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{product.name}</p>
+                        {product.brand && (
+                          <p className="text-xs uppercase tracking-wider text-muted-foreground">
+                            {product.brand}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-sm font-medium">
+                        ₦{product.price?.toLocaleString()}
+                      </span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
+
               {!searchQuery && featuredProducts.length > 0 && <CommandGroup heading={<span className="flex items-center gap-2 text-xs uppercase tracking-[0.15em] text-muted-foreground px-2">
                     <Sparkles className="h-3 w-3" />
                     Curated for You

@@ -335,7 +335,13 @@ export function UsersManagement() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
+                list="user-suggestions"
               />
+              <datalist id="user-suggestions">
+                {filteredUsers.slice(0, 5).map((user) => (
+                  <option key={user.id} value={user.email} />
+                ))}
+              </datalist>
             </div>
           </div>
 

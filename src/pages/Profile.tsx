@@ -35,7 +35,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { cn } from '@/lib/utils';
-import GroupBuysProfile from './profile/GroupBuysProfile';
+
 import AddressesProfile from './profile/AddressesProfile';
 import OrderDetail from './profile/OrderDetail';
 import SecurityProfile from './profile/SecurityProfile';
@@ -60,6 +60,7 @@ interface ProfileStats {
   ordersCount: number;
   groupBuysCount: number;
   totalSpent: number;
+  walletBalance: number;
 }
 
 function ProfileInfo() {
@@ -361,13 +362,15 @@ function ProfileHeader({ profile, stats }: { profile: ProfileData | null; stats:
             <p className="text-2xl md:text-3xl font-bold text-primary">{stats.ordersCount}</p>
             <p className="text-xs md:text-sm text-muted-foreground">Orders</p>
           </div>
-          <div className="text-center border-x border-border">
-            <p className="text-2xl md:text-3xl font-bold text-primary">{stats.groupBuysCount}</p>
-            <p className="text-xs md:text-sm text-muted-foreground">Group Buys</p>
-          </div>
+
           <div className="text-center">
             <p className="text-2xl md:text-3xl font-bold text-primary">₦{(stats.totalSpent / 1000).toFixed(0)}k</p>
             <p className="text-xs md:text-sm text-muted-foreground">Total Spent</p>
+          </div>
+
+          <div className="text-center">
+            <p className="text-2xl md:text-3xl font-bold text-primary">₦{stats.walletBalance.toLocaleString()}</p>
+            <p className="text-xs md:text-sm text-muted-foreground">Wallet Balance</p>
           </div>
         </div>
       </div>
@@ -407,9 +410,8 @@ function MobileNav({ currentPath }: { currentPath: string }) {
   const navItems = [
     { to: '/profile', icon: <UserIcon className="h-5 w-5" />, label: 'Profile', exact: true },
     { to: '/profile/orders', icon: <Package className="h-5 w-5" />, label: 'Orders' },
-    { to: '/profile/groupbuys', icon: <ShoppingBag className="h-5 w-5" />, label: 'Circles' },
+
     { to: '/profile/wallet', icon: <Wallet className="h-5 w-5" />, label: 'Wallet' },
-    { to: '/profile/membership', icon: <CreditCard className="h-5 w-5" />, label: 'Membership' },
   ];
 
   const isActive = (path: string, exact?: boolean) => {
@@ -442,9 +444,8 @@ function DesktopSidebar({ currentPath }: { currentPath: string }) {
     { to: '/profile', icon: <UserIcon className="h-5 w-5" />, label: 'Profile Info', exact: true },
     { to: '/profile/orders', icon: <Package className="h-5 w-5" />, label: 'My Orders' },
     { to: '/profile/addresses', icon: <MapPin className="h-5 w-5" />, label: 'Addresses' },
-    { to: '/profile/groupbuys', icon: <ShoppingBag className="h-5 w-5" />, label: 'My Circles' },
+
     { to: '/profile/wallet', icon: <Wallet className="h-5 w-5" />, label: 'Wallet' },
-    { to: '/profile/membership', icon: <CreditCard className="h-5 w-5" />, label: 'Membership' },
     { to: '/profile/security', icon: <Shield className="h-5 w-5" />, label: 'Security' },
   ];
 
@@ -488,7 +489,12 @@ export default function Profile() {
   const navigate = useNavigate();
   const location = useLocation();
   const [profile, setProfile] = useState<ProfileData | null>(null);
-  const [stats, setStats] = useState<ProfileStats>({ ordersCount: 0, groupBuysCount: 0, totalSpent: 0 });
+  const [stats, setStats] = useState<ProfileStats>({ 
+    ordersCount: 0, 
+    groupBuysCount: 0, 
+    totalSpent: 0,
+    walletBalance: 0 
+  });
 
   useEffect(() => {
     if (!user) navigate('/auth');
@@ -527,14 +533,23 @@ export default function Profile() {
       .from('group_buy_commitments')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id);
+
+    // Get wallet balance
+    const { data: wallet } = await supabase
+      .from('user_wallets')
+      .select('balance_promo')
+      .eq('user_id', user.id)
+      .maybeSingle();
     
     const ordersCount = orders?.length || 0;
     const totalSpent = orders?.reduce((sum, order) => sum + (order.total_amount || 0), 0) || 0;
+    const walletBalance = wallet?.balance_promo || 0;
     
     setStats({
       ordersCount,
       groupBuysCount: groupBuysCount || 0,
       totalSpent,
+      walletBalance,
     });
   };
 
@@ -564,7 +579,7 @@ export default function Profile() {
                 <Route path="orders" element={<Orders />} />
                 <Route path="orders/:orderId" element={<OrderDetail />} />
                 <Route path="addresses" element={<AddressesProfile />} />
-                <Route path="groupbuys" element={<GroupBuysProfile />} />
+
                 <Route path="security" element={<SecurityProfile />} />
                 <Route path="wallet" element={<WalletProfile />} />
                 <Route path="membership" element={<MembershipWalletProfile />} />

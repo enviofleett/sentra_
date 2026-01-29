@@ -203,7 +203,8 @@ export function UserDetailPage() {
                   <div>
                     <p className="text-sm font-medium">Default Shipping Address</p>
                     <p className="text-sm text-muted-foreground">
-                      {profile.default_shipping_address.street}, {profile.default_shipping_address.city}
+                      {profile.default_shipping_address.street}
+                      {profile.default_shipping_address.city && `, ${profile.default_shipping_address.city}`}
                       {profile.default_shipping_address.state && `, ${profile.default_shipping_address.state}`}
                       {profile.default_shipping_address.zipCode && ` ${profile.default_shipping_address.zipCode}`}
                     </p>
@@ -217,7 +218,8 @@ export function UserDetailPage() {
                   <div>
                     <p className="text-sm font-medium">Default Billing Address</p>
                     <p className="text-sm text-muted-foreground">
-                      {profile.default_billing_address.street}, {profile.default_billing_address.city}
+                      {profile.default_billing_address.street}
+                      {profile.default_billing_address.city && `, ${profile.default_billing_address.city}`}
                       {profile.default_billing_address.state && `, ${profile.default_billing_address.state}`}
                       {profile.default_billing_address.zipCode && ` ${profile.default_billing_address.zipCode}`}
                     </p>

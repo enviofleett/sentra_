@@ -922,7 +922,13 @@ export function ProductsManagement() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 w-full sm:w-64"
+              list="admin-product-suggestions"
             />
+            <datalist id="admin-product-suggestions">
+              {filteredProducts.slice(0, 5).map((product) => (
+                <option key={product.id} value={product.name} />
+              ))}
+            </datalist>
           </div>
           <BulkImportDialog onSuccess={fetchProducts} />
           

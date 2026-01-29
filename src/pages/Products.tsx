@@ -166,7 +166,22 @@ export default function Products() {
         <CollapsibleContent className="mt-4">
           <div className="relative mb-3">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input type="text" placeholder="Search brands..." value={brandSearchQuery} onChange={e => setBrandSearchQuery(e.target.value)} className="pl-9 h-9 text-sm rounded-full" />
+            <Input
+              type="text"
+              placeholder="Search brands..."
+              value={brandSearchQuery}
+              onChange={(e) => setBrandSearchQuery(e.target.value)}
+              className="pl-9 h-9 text-sm rounded-full"
+              list="brand-suggestions"
+            />
+            <datalist id="brand-suggestions">
+              {brands
+                .filter((brand) => brand.toLowerCase().includes(brandSearchQuery.toLowerCase()))
+                .slice(0, 5)
+                .map((brand) => (
+                  <option key={brand} value={brand} />
+                ))}
+            </datalist>
           </div>
           <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
             {brands.filter(brand => brand.toLowerCase().includes(brandSearchQuery.toLowerCase())).map(brand => <div key={brand} className="flex items-center space-x-3">
@@ -212,7 +227,19 @@ export default function Products() {
           <div className="mt-6 max-w-md mx-auto">
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-              <Input type="text" placeholder="Search products, brands..." value={searchQuery} onChange={handleSearchChange} className="w-full pl-12 pr-4 py-3 h-12 text-base rounded-full border-muted-foreground/20 focus:border-primary" />
+              <Input
+                type="text"
+                placeholder="Search products, brands..."
+                value={searchQuery}
+                onChange={handleSearchChange}
+                className="w-full pl-12 pr-4 py-3 h-12 text-base rounded-full border-muted-foreground/20 focus:border-primary"
+                list="product-suggestions"
+              />
+              <datalist id="product-suggestions">
+                {products.slice(0, 5).map((product) => (
+                  <option key={product.id} value={product.name} />
+                ))}
+              </datalist>
             </div>
           </div>
         </motion.div>

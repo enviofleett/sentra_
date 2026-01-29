@@ -10,45 +10,72 @@ import Autoplay from 'embla-carousel-autoplay';
 export function HeroSection() {
   const { getContent } = useSiteContent();
   const { getBannersBySection, loading } = useSiteBanners();
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  
+  // Separate states for mobile and desktop to ensure proper functionality
+  const [mobileIndex, setMobileIndex] = useState(0);
+  const [desktopIndex, setDesktopIndex] = useState(0);
 
   const heroBanners = getBannersBySection('hero');
   const subheadline = getContent('hero', 'subheadline', 'Discover the beauty of fragrance with our collection of premium perfumes');
   const buttonText = getContent('hero', 'button_text', 'SHOP NOW');
-
-  // Autoplay plugin
-  const autoplayPlugin = Autoplay({ delay: 5000, stopOnInteraction: false });
-
-  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true }, [autoplayPlugin]);
-
-  const onSelect = useCallback(() => {
-    if (!emblaApi) return;
-    setSelectedIndex(emblaApi.selectedScrollSnap());
-  }, [emblaApi]);
-
-  useEffect(() => {
-    if (!emblaApi) return;
-    onSelect();
-    emblaApi.on('select', onSelect);
-    return () => {
-      emblaApi.off('select', onSelect);
-    };
-  }, [emblaApi, onSelect]);
-
-  const scrollTo = useCallback((index: number) => {
-    if (emblaApi) emblaApi.scrollTo(index);
-  }, [emblaApi]);
-
-  // Get current slide data
-  const currentBanner = heroBanners[selectedIndex] || heroBanners[0];
 
   // Fallback slide if no banners
   const slides = heroBanners.length > 0 ? heroBanners : [{ 
     id: 'default', 
     image_url: '', 
     title: null, 
-    subtitle: null 
+    subtitle: null,
+    button_text: null,
+    button_link: null
   }];
+
+  // Mobile Carousel
+  const mobileAutoplay = Autoplay({ delay: 5000, stopOnInteraction: false });
+  const [mobileRef, mobileApi] = useEmblaCarousel({ loop: true }, [mobileAutoplay]);
+
+  const onMobileSelect = useCallback(() => {
+    if (!mobileApi) return;
+    setMobileIndex(mobileApi.selectedScrollSnap());
+  }, [mobileApi]);
+
+  useEffect(() => {
+    if (!mobileApi) return;
+    onMobileSelect();
+    mobileApi.on('select', onMobileSelect);
+    return () => {
+      mobileApi.off('select', onMobileSelect);
+    };
+  }, [mobileApi, onMobileSelect]);
+
+  const scrollToMobile = useCallback((index: number) => {
+    if (mobileApi) mobileApi.scrollTo(index);
+  }, [mobileApi]);
+
+  // Desktop Carousel
+  const desktopAutoplay = Autoplay({ delay: 5000, stopOnInteraction: false });
+  const [desktopRef, desktopApi] = useEmblaCarousel({ loop: true }, [desktopAutoplay]);
+
+  const onDesktopSelect = useCallback(() => {
+    if (!desktopApi) return;
+    setDesktopIndex(desktopApi.selectedScrollSnap());
+  }, [desktopApi]);
+
+  useEffect(() => {
+    if (!desktopApi) return;
+    onDesktopSelect();
+    desktopApi.on('select', onDesktopSelect);
+    return () => {
+      desktopApi.off('select', onDesktopSelect);
+    };
+  }, [desktopApi, onDesktopSelect]);
+
+  const scrollToDesktop = useCallback((index: number) => {
+    if (desktopApi) desktopApi.scrollTo(index);
+  }, [desktopApi]);
+
+  // Get current slide data
+  const mobileBanner = slides[mobileIndex];
+  const desktopBanner = slides[desktopIndex];
 
   return (
     <section className="relative bg-background overflow-hidden">
@@ -68,14 +95,14 @@ export function HeroSection() {
               <span className="italic">of Sentra</span>
             </h1>
             <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-              {subheadline}
+              {mobileBanner?.subtitle || subheadline}
             </p>
           </motion.div>
 
           {/* Mobile Image */}
           <div className="relative mx-auto w-full max-w-[320px]">
             
-            <div className="overflow-hidden relative z-10" ref={emblaRef}>
+            <div className="overflow-hidden relative z-10" ref={mobileRef}>
               <div className="flex">
                 {slides.map((banner, index) => (
                   <div key={banner.id || index} className="flex-[0_0_100%] min-w-0">
@@ -107,8 +134,8 @@ export function HeroSection() {
               size="lg" 
               className="bg-foreground hover:bg-foreground/90 text-background font-medium px-8 h-12 text-sm tracking-wider rounded-none"
             >
-              <Link to="/products" className="inline-flex items-center gap-3">
-                {buttonText}
+              <Link to={mobileBanner?.button_link || "/products"} className="inline-flex items-center gap-3">
+                {mobileBanner?.button_text || buttonText}
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
@@ -120,9 +147,9 @@ export function HeroSection() {
               {slides.map((_, index) => (
                 <button
                   key={index}
-                  onClick={() => scrollTo(index)}
+                  onClick={() => scrollToMobile(index)}
                   className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                    index === selectedIndex 
+                    index === mobileIndex 
                       ? 'bg-foreground w-6' 
                       : 'bg-muted-foreground/30 hover:bg-muted-foreground/50'
                   }`}
@@ -144,7 +171,7 @@ export function HeroSection() {
           >
             
             {/* Carousel */}
-            <div className="relative w-full max-w-md overflow-hidden z-10" ref={emblaRef}>
+            <div className="relative w-full max-w-md overflow-hidden z-10" ref={desktopRef}>
               <div className="flex">
                 {slides.map((banner, index) => (
                   <div key={banner.id || index} className="flex-[0_0_100%] min-w-0 p-8">
@@ -169,9 +196,9 @@ export function HeroSection() {
                 {slides.map((_, index) => (
                   <button
                     key={index}
-                    onClick={() => scrollTo(index)}
+                    onClick={() => scrollToDesktop(index)}
                     className={`h-2.5 rounded-full transition-all duration-300 ${
-                      index === selectedIndex 
+                      index === desktopIndex 
                         ? 'bg-foreground w-8' 
                         : 'w-2.5 bg-muted-foreground/40 hover:bg-muted-foreground/60'
                     }`}
@@ -196,7 +223,7 @@ export function HeroSection() {
               
               <AnimatePresence mode="wait">
                 <motion.h1
-                  key={currentBanner?.title || 'default'}
+                  key={desktopBanner?.title || 'default'}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
@@ -210,7 +237,7 @@ export function HeroSection() {
             </div>
             
             <p className="text-base text-muted-foreground leading-relaxed max-w-md">
-              {currentBanner?.subtitle || subheadline}
+              {desktopBanner?.subtitle || subheadline}
             </p>
             
             <Button 
@@ -218,8 +245,8 @@ export function HeroSection() {
               size="lg" 
               className="bg-foreground hover:bg-foreground/90 text-background font-medium px-10 h-14 text-sm tracking-wider rounded-none"
             >
-              <Link to={currentBanner?.button_link || "/products"} className="inline-flex items-center gap-3">
-                {currentBanner?.button_text || buttonText}
+              <Link to={desktopBanner?.button_link || "/products"} className="inline-flex items-center gap-3">
+                {desktopBanner?.button_text || buttonText}
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>

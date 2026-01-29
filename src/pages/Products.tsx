@@ -28,6 +28,7 @@ export default function Products() {
   const [categories, setCategories] = useState<any[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
   const [brandSearchQuery, setBrandSearchQuery] = useState('');
+  const [brandsOpen, setBrandsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
@@ -62,6 +63,31 @@ export default function Products() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
   useEffect(() => {
+    const cats = searchParams.get('cat');
+    const br = searchParams.get('br');
+    const s = searchParams.get('sort');
+    const bq = searchParams.get('bq');
+    const bo = searchParams.get('bo');
+    if (cats) setSelectedCategories(cats.split(',').filter(Boolean));
+    if (br) setSelectedBrands(br.split(',').filter(Boolean));
+    if (s) setSortBy(s);
+    if (bq !== null) setBrandSearchQuery(bq);
+    if (bo) setBrandsOpen(bo === '1');
+    if (!cats && !br && !s && bq === null && !bo) {
+      const raw = localStorage.getItem('products_filters');
+      if (raw) {
+        try {
+          const saved = JSON.parse(raw);
+          if (Array.isArray(saved.selectedCategories)) setSelectedCategories(saved.selectedCategories);
+          if (Array.isArray(saved.selectedBrands)) setSelectedBrands(saved.selectedBrands);
+          if (typeof saved.sortBy === 'string') setSortBy(saved.sortBy);
+          if (typeof saved.brandSearchQuery === 'string') setBrandSearchQuery(saved.brandSearchQuery);
+          if (typeof saved.brandsOpen === 'boolean') setBrandsOpen(saved.brandsOpen);
+        } catch {}
+      }
+    }
+  }, []);
+  useEffect(() => {
     loadData();
     const newSearchParams = new URLSearchParams(searchParams.toString());
     if (debouncedSearchQuery) {
@@ -69,10 +95,41 @@ export default function Products() {
     } else {
       newSearchParams.delete('q');
     }
+    if (selectedCategories.length > 0) {
+      newSearchParams.set('cat', selectedCategories.join(','));
+    } else {
+      newSearchParams.delete('cat');
+    }
+    if (selectedBrands.length > 0) {
+      newSearchParams.set('br', selectedBrands.join(','));
+    } else {
+      newSearchParams.delete('br');
+    }
+    if (sortBy) {
+      newSearchParams.set('sort', sortBy);
+    }
+    if (brandSearchQuery) {
+      newSearchParams.set('bq', brandSearchQuery);
+    } else {
+      newSearchParams.delete('bq');
+    }
+    newSearchParams.set('bo', brandsOpen ? '1' : '0');
     setSearchParams(newSearchParams, {
       replace: true
     });
-  }, [selectedCategories, selectedBrands, sortBy, debouncedSearchQuery]);
+    try {
+      localStorage.setItem(
+        'products_filters',
+        JSON.stringify({
+          selectedCategories,
+          selectedBrands,
+          sortBy,
+          brandSearchQuery,
+          brandsOpen
+        })
+      );
+    } catch {}
+  }, [selectedCategories, selectedBrands, sortBy, debouncedSearchQuery, brandSearchQuery, brandsOpen]);
   const loadData = async () => {
     setLoading(true);
 
@@ -158,7 +215,7 @@ export default function Products() {
         </div>
       </div>
 
-      <Collapsible defaultOpen={false}>
+      <Collapsible open={brandsOpen} onOpenChange={setBrandsOpen}>
         <CollapsibleTrigger className="flex items-center justify-between w-full group">
           <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-medium">Brands</h3>
           <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />

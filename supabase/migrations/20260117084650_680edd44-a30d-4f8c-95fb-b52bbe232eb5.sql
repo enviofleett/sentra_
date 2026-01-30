@@ -43,10 +43,11 @@ TO anon, authenticated
 WITH CHECK (true);
 
 -- 6. Fix proactive_vehicle_events - restrict to service role only
-DROP POLICY IF EXISTS "Service role can manage events" ON public.proactive_vehicle_events;
-CREATE POLICY "Service role can manage events"
-ON public.proactive_vehicle_events
-FOR ALL
-TO service_role
-USING (true)
-WITH CHECK (true);
+-- Commented out as table does not exist
+-- DROP POLICY IF EXISTS "Service role can manage events" ON public.proactive_vehicle_events;
+-- CREATE POLICY "Service role can manage events"
+-- ON public.proactive_vehicle_events
+-- FOR ALL
+-- TO service_role
+-- USING (true)
+-- WITH CHECK (true);

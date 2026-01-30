@@ -1,5 +1,6 @@
 -- Phase 1: Secure update_product_cost_price function (if exists)
 -- First check and create/replace with admin check
+DROP FUNCTION IF EXISTS public.update_product_cost_price(uuid, numeric);
 CREATE OR REPLACE FUNCTION public.update_product_cost_price(p_product_id uuid, p_cost_price numeric)
 RETURNS boolean
 LANGUAGE plpgsql

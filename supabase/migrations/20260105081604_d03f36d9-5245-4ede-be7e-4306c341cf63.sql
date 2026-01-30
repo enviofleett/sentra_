@@ -1,11 +1,13 @@
 -- Add cost_price column to products table
-ALTER TABLE public.products
-ADD COLUMN cost_price numeric NULL;
+-- Commented out as it is already added in 20260105000001_add_cost_price_tracking.sql
+-- ALTER TABLE public.products
+-- ADD COLUMN cost_price numeric NULL;
 
 -- Add comment for documentation
 COMMENT ON COLUMN public.products.cost_price IS 'Cost price for margin calculation. NULL means cost data not yet entered.';
 
 -- Create products_at_risk view (products with low or negative margins)
+DROP VIEW IF EXISTS public.products_at_risk;
 CREATE OR REPLACE VIEW public.products_at_risk AS
 SELECT 
   p.id,
@@ -44,8 +46,8 @@ ORDER BY
   END,
   margin_percentage ASC NULLS LAST;
 
--- Create product_profitability view (overall profitability metrics)
-CREATE OR REPLACE VIEW public.product_profitability AS
+-- Create product_profitability_summary view (overall profitability metrics)
+CREATE OR REPLACE VIEW public.product_profitability_summary AS
 SELECT 
   COUNT(*) AS total_products,
   COUNT(cost_price) AS products_with_cost_data,

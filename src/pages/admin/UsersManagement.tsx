@@ -19,6 +19,12 @@ interface Profile {
   full_name: string | null;
   phone: string | null;
   created_at: string;
+  total_orders?: number;
+  total_spent?: number;
+  is_admin?: boolean;
+  wallet_balance_real?: number;
+  wallet_balance_promo?: number;
+  membership_balance?: number;
 }
 
 type BulkResetTarget = 'all' | 'before_date' | 'selected';
@@ -44,13 +50,40 @@ export function UsersManagement() {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      // Fetch all profiles excluding admins
-      const { data: profiles, error } = await supabase
+      // 1. Fetch all profiles
+      const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('id, email, full_name, phone, created_at')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (profilesError) throw profilesError;
+
+      // 2. Fetch all orders (lightweight)
+      const { data: orders, error: ordersError } = await supabase
+        .from('orders')
+        .select('id, user_id, total_amount, status, payment_status, paystack_status');
+
+      if (ordersError) throw ordersError;
+
+      // 3. Fetch user wallets
+      const { data: userWallets, error: userWalletsError } = await supabase
+        .from('user_wallets')
+        .select('user_id, balance_real, balance_promo');
+
+      if (userWalletsError) {
+        console.error('Error fetching user wallets:', userWalletsError);
+        // Don't throw, just log error and continue without wallet data
+      }
+
+      // 4. Fetch membership wallets
+      const { data: membershipWallets, error: membershipWalletsError } = await supabase
+        .from('membership_wallets')
+        .select('user_id, balance');
+
+      if (membershipWalletsError) {
+        console.error('Error fetching membership wallets:', membershipWalletsError);
+        // Don't throw
+      }
 
       // Filter out admin users
       const { data: adminRoles } = await supabase
@@ -59,11 +92,45 @@ export function UsersManagement() {
         .eq('role', 'admin');
 
       const adminIds = new Set(adminRoles?.map(r => r.user_id) || []);
-      const customers = profiles?.filter(p => !adminIds.has(p.id)) || [];
+      
+      console.log('Fetched profiles:', profiles?.length);
+      console.log('Fetched admin roles:', adminRoles?.length);
+      
+      const customers = profiles
+        ?.map(profile => {
+          // Find orders for this user
+          const userOrders = orders?.filter(o => o.user_id === profile.id) || [];
+          
+          // Count valid orders (completed/delivered or paid)
+          const validOrders = userOrders.filter(o => 
+            o.status === 'delivered' || 
+            o.payment_status === 'paid' || 
+            o.paystack_status === 'success'
+          );
+          
+          const totalSpent = validOrders.reduce((sum, order) => 
+            sum + (Number(order.total_amount) || 0), 0
+          );
+
+          // Find wallets
+          const userWallet = userWallets?.find(w => w.user_id === profile.id);
+          const membershipWallet = membershipWallets?.find(w => w.user_id === profile.id);
+
+          return {
+            ...profile,
+            total_orders: userOrders.length,
+            total_spent: totalSpent,
+            is_admin: adminIds.has(profile.id),
+            wallet_balance_real: userWallet?.balance_real || 0,
+            wallet_balance_promo: userWallet?.balance_promo || 0,
+            membership_balance: membershipWallet?.balance || 0
+          };
+        }) || [];
       
       setUsers(customers);
     } catch (error) {
       console.error('Error fetching users:', error);
+      toast.error('Failed to load customers');
     } finally {
       setLoading(false);
     }
@@ -356,13 +423,16 @@ export function UsersManagement() {
                   <TableHead>Customer</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
+                  <TableHead>Total Orders</TableHead>
+                  <TableHead>Total Spent</TableHead>
+                  <TableHead>Wallet Balances</TableHead>
                   <TableHead>Registration Date</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={bulkResetTarget === 'selected' ? 5 : 4} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={bulkResetTarget === 'selected' ? 7 : 6} className="text-center py-8 text-muted-foreground">
                       {searchQuery ? 'No customers found matching your search' : 'No customers yet'}
                     </TableCell>
                   </TableRow>
@@ -391,10 +461,35 @@ export function UsersManagement() {
                         </TableCell>
                       )}
                       <TableCell className="font-medium">
-                        {user.full_name || 'No name provided'}
+                        <div className="flex flex-col">
+                          <span>{user.full_name || 'No name provided'}</span>
+                          {user.is_admin && (
+                            <span className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full w-fit mt-1">
+                              Admin
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>{user.phone || 'N/A'}</TableCell>
+                      <TableCell>{user.total_orders || 0}</TableCell>
+                      <TableCell>₦{(user.total_spent || 0).toLocaleString()}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col space-y-1 text-xs">
+                          <div className="flex justify-between w-32">
+                            <span className="text-muted-foreground">Main:</span>
+                            <span className="font-medium">₦{(user.wallet_balance_real || 0).toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between w-32">
+                            <span className="text-muted-foreground">Promo:</span>
+                            <span className="font-medium">₦{(user.wallet_balance_promo || 0).toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between w-32">
+                            <span className="text-muted-foreground">Membership:</span>
+                            <span className="font-medium">₦{(user.membership_balance || 0).toLocaleString()}</span>
+                          </div>
+                        </div>
+                      </TableCell>
                       <TableCell>{format(new Date(user.created_at), 'MMM d, yyyy')}</TableCell>
                     </TableRow>
                   ))
@@ -425,10 +520,34 @@ export function UsersManagement() {
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between">
                       <div>
-                        <div className="font-medium mb-1">{user.full_name || 'No name provided'}</div>
+                        <div className="font-medium mb-1">
+                          {user.full_name || 'No name provided'}
+                          {user.is_admin && (
+                            <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">
+                              Admin
+                            </span>
+                          )}
+                        </div>
                         <div className="text-sm text-muted-foreground space-y-1">
                           <div>{user.email}</div>
                           {user.phone && <div>{user.phone}</div>}
+                          <div className="font-medium text-foreground">
+                            {user.total_orders || 0} Orders • ₦{(user.total_spent || 0).toLocaleString()} Spent
+                          </div>
+                          <div className="text-xs space-y-0.5 mt-1 bg-muted p-2 rounded">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Main Wallet:</span>
+                              <span className="font-medium">₦{(user.wallet_balance_real || 0).toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Promo Wallet:</span>
+                              <span className="font-medium">₦{(user.wallet_balance_promo || 0).toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Membership:</span>
+                              <span className="font-medium">₦{(user.membership_balance || 0).toLocaleString()}</span>
+                            </div>
+                          </div>
                           <div>{format(new Date(user.created_at), 'MMM d, yyyy')}</div>
                         </div>
                       </div>

@@ -5,7 +5,8 @@
 DROP POLICY IF EXISTS "Service role can insert tracking events" ON public.email_tracking_events;
 DROP POLICY IF EXISTS "Service role can insert profit allocations" ON public.profit_allocations;
 DROP POLICY IF EXISTS "Service role can insert transactions" ON public.membership_transactions;
-DROP POLICY IF EXISTS "Service role can manage events" ON public.proactive_vehicle_events;
+-- Commented out as table does not exist
+-- DROP POLICY IF EXISTS "Service role can manage events" ON public.proactive_vehicle_events;
 
 -- For waiting_list, we need to keep anon insert for the waitlist form
 -- But we can add a constraint-based validation instead of WITH CHECK (true)

@@ -200,7 +200,7 @@ serve(async (req: Request) => {
 
         const { data: order, error: fetchError } = await supabase
           .from("orders")
-          .select("id, total_amount, paystack_status, user_id")
+          .select("id, total_amount, paystack_status, user_id, promo_discount_applied")
           .eq("payment_reference", reference)
           .single();
 
@@ -215,8 +215,13 @@ serve(async (req: Request) => {
 
         console.log(`[Paystack Webhook] Found order: ${order.id}`);
         
-        // STRICT EQUALITY: Customer pays exact order total, merchant absorbs fees
-        const expectedAmount = Math.round(order.total_amount * 100);
+        // STRICT EQUALITY: Customer pays exact order total (less promo), merchant absorbs fees
+        // Adjust expected amount by subtracting any applied promo discount
+        const orderTotal = Number(order.total_amount);
+        const promoDiscount = Number(order.promo_discount_applied || 0);
+        const expectedAmount = Math.round((orderTotal - promoDiscount) * 100);
+        
+        console.log(`[Paystack Webhook] Amount check - Order Total: ₦${orderTotal}, Promo: ₦${promoDiscount}`);
         console.log(`[Paystack Webhook] Amount check - Expected: ${expectedAmount} kobo, Received: ${amount} kobo`);
 
         if (amount !== expectedAmount) {

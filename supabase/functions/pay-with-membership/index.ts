@@ -58,9 +58,10 @@ serve(async (req: Request) => {
 
     const productIds = orderItems.map((item: any) => item.product_id).filter(Boolean);
 
+    // Verify products and calculate total from DB prices
     const { data: products, error: productsError } = await supabase
       .from('products')
-      .select('id, vendor_id, vendor:vendors(id, rep_full_name, min_order_quantity)')
+      .select('id, price, stock_quantity, vendor_id, vendor:vendors(id, rep_full_name, min_order_quantity)')
       .in('id', productIds);
 
     if (productsError) {
@@ -71,16 +72,30 @@ serve(async (req: Request) => {
       });
     }
 
-    // Group by vendor and check MOQ
+    // Group by vendor and check MOQ, and calculate verified total
     const vendorQuantities: Record<string, {
       vendorName: string;
       moq: number;
       totalQty: number;
     }> = {};
+    
+    let verifiedSubtotal = 0;
+    const outOfStock: string[] = [];
 
     for (const item of orderItems) {
       const product = products?.find(p => p.id === item.product_id);
-      if (!product) continue;
+      if (!product) {
+        console.error(`[Pay with Membership] Product ${item.product_id} not found`);
+        continue;
+      }
+
+      // Stock check
+      if (product.stock_quantity < item.quantity) {
+        outOfStock.push((product as any).name || 'Unknown Product');
+      }
+
+      // Calculate price from DB
+      verifiedSubtotal += Number(product.price) * item.quantity;
 
       const vendorId = product.vendor_id;
       const vendor = (product as any).vendor;
@@ -95,6 +110,16 @@ serve(async (req: Request) => {
         }
         vendorQuantities[vendorId].totalQty += item.quantity;
       }
+    }
+
+    if (outOfStock.length > 0) {
+      return new Response(JSON.stringify({ 
+        error: "Stock unavailable", 
+        details: `Out of stock: ${outOfStock.join(', ')}` 
+      }), { 
+        status: 400, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      });
     }
 
     // Check if any vendor's MOQ is not met
@@ -119,6 +144,13 @@ serve(async (req: Request) => {
 
     console.log('[Pay with Membership] MOQ validation passed');
 
+    // Calculate total with shipping
+    const shippingCost = Number(orderData.shipping_cost) || 0;
+    const tax = Number(orderData.tax) || 0;
+    const verifiedTotal = verifiedSubtotal + shippingCost + tax;
+    
+    console.log(`[Pay with Membership] Verified Total: ₦${verifiedTotal} (Subtotal: ₦${verifiedSubtotal}, Shipping: ₦${shippingCost})`);
+
     // Handle promo discount if provided
     let actualPromoDiscount = 0;
     if (promoDiscount && promoDiscount > 0) {
@@ -130,12 +162,12 @@ serve(async (req: Request) => {
         .maybeSingle();
 
       const promoBalance = promoWallet?.balance_promo || 0;
-      actualPromoDiscount = Math.min(promoDiscount, promoBalance, cartTotal);
+      actualPromoDiscount = Math.min(promoDiscount, promoBalance, verifiedTotal);
       console.log(`[Pay with Membership] Promo balance: ₦${promoBalance}, Applying: ₦${actualPromoDiscount}`);
     }
 
     // Calculate final amount to charge from membership
-    const finalMembershipCharge = Math.max(0, cartTotal - actualPromoDiscount);
+    const finalMembershipCharge = Math.max(0, verifiedTotal - actualPromoDiscount);
 
     // Check membership balance
     const { data: wallet, error: walletError } = await supabase
@@ -170,6 +202,8 @@ serve(async (req: Request) => {
       .from("orders")
       .insert([{
         ...orderData,
+        subtotal: verifiedSubtotal,
+        total_amount: finalMembershipCharge, // Use Net Amount (after discount)
         user_id: user.id,
         status: 'processing',
         payment_status: 'paid',
@@ -224,9 +258,26 @@ serve(async (req: Request) => {
 
       if (debitError) {
         console.error("[Pay with Membership] Wallet debit failed:", debitError);
+        
+        // ROLLBACK: Refund promo wallet if it was debited
+        if (actualPromoDiscount > 0) {
+            console.log(`[Pay with Membership] Rolling back promo debit: ₦${actualPromoDiscount}`);
+            const { error: refundError } = await supabase.rpc('refund_promo_wallet', {
+                p_user_id: user.id,
+                p_amount: actualPromoDiscount,
+                p_order_id: newOrder.id,
+                p_description: `Refund due to failed membership payment`
+            });
+            if (refundError) {
+                console.error("[Pay with Membership] CRITICAL: Failed to refund promo wallet during rollback:", refundError);
+                // In a real system, this should trigger an alert to admin
+            }
+        }
+
         // Rollback: delete the order since payment failed
         await supabase.from("orders").delete().eq("id", newOrder.id);
-        return new Response(JSON.stringify({ error: "Failed to process payment" }), { 
+        
+        return new Response(JSON.stringify({ error: "Failed to process payment. Insufficient membership balance or system error." }), { 
           status: 500, 
           headers: { ...corsHeaders, "Content-Type": "application/json" } 
         });
@@ -240,7 +291,7 @@ serve(async (req: Request) => {
       p_order_id: newOrder.id,
       p_commitment_id: null,
       p_payment_reference: paymentReference,
-      p_total_amount: cartTotal
+      p_total_amount: verifiedTotal
     });
 
     // Get user profile for email

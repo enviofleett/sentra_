@@ -84,7 +84,7 @@ serve(async (req: Request) => {
     if (orderId) {
       const { data: orderData, error: orderError } = await supabase
         .from("orders")
-        .select("id, payment_reference, payment_status, paystack_status, total_amount, user_id")
+        .select("id, payment_reference, payment_status, paystack_status, total_amount, user_id, promo_discount_applied")
         .eq("id", orderId)
         .single();
       
@@ -186,7 +186,10 @@ serve(async (req: Request) => {
     if (txStatus === "success") {
       // Verify amount matches (sanity check)
       if (order) {
-        const expectedAmount = Math.round(order.total_amount * 100);
+        const orderTotal = Number(order.total_amount);
+        const promoDiscount = Number(order.promo_discount_applied || 0);
+        const expectedAmount = Math.round((orderTotal - promoDiscount) * 100);
+        
         const amountMatches = txData.amount === expectedAmount;
         console.log(`[Verify Payment] Amount check - Expected: ${expectedAmount}, Got: ${txData.amount}, Matches: ${amountMatches}`);
         

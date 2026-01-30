@@ -279,7 +279,9 @@ serve(async (req) => {
 
     // Handle promo discount if provided
     let actualPromoDiscount = 0;
-    if (promoDiscount && promoDiscount > 0) {
+    const requestedPromoDiscount = Number(promoDiscount);
+
+    if (!isNaN(requestedPromoDiscount) && requestedPromoDiscount > 0) {
       // Verify user has sufficient promo balance
       const { data: wallet } = await supabase
         .from('user_wallets')
@@ -288,7 +290,7 @@ serve(async (req) => {
         .maybeSingle();
 
       const promoBalance = wallet?.balance_promo || 0;
-      actualPromoDiscount = Math.min(promoDiscount, promoBalance, verifiedTotal);
+      actualPromoDiscount = Math.min(requestedPromoDiscount, promoBalance, verifiedTotal);
       
       if (actualPromoDiscount > 0) {
         // Debit promo wallet using the RPC
@@ -301,11 +303,13 @@ serve(async (req) => {
 
         if (debitError) {
           console.error('[Initialize Payment] Promo debit error:', debitError);
-          // Continue without promo if debit fails
-          actualPromoDiscount = 0;
-        } else {
-          console.log(`[Initialize Payment] Promo debit successful: ₦${actualPromoDiscount}`);
+          return new Response(JSON.stringify({ error: 'Failed to apply promo credit. Please try again.' }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
         }
+        
+        console.log(`[Initialize Payment] Promo debit successful: ₦${actualPromoDiscount}`);
       }
     }
 
@@ -325,6 +329,8 @@ serve(async (req) => {
 
     if (actualPromoDiscount > 0) {
       orderUpdateData.promo_discount_applied = actualPromoDiscount;
+      // Ensure the order total reflects the final (net) amount after discount
+      orderUpdateData.total_amount = finalAmount;
     }
 
     if (Object.keys(orderUpdateData).length > 1) {

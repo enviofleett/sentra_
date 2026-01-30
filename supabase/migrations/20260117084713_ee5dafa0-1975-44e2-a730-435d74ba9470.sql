@@ -2,16 +2,17 @@
 
 -- 1. Add policies to proactive_vehicle_events (RLS enabled but no policies after dropping)
 -- This table should only be accessible by admins
-CREATE POLICY "Admins can view proactive vehicle events"
-ON public.proactive_vehicle_events
-FOR SELECT
-USING (is_admin());
+-- Commented out as table does not exist
+-- CREATE POLICY "Admins can view proactive vehicle events"
+-- ON public.proactive_vehicle_events
+-- FOR SELECT
+-- USING (is_admin());
 
-CREATE POLICY "Admins can manage proactive vehicle events"
-ON public.proactive_vehicle_events
-FOR ALL
-USING (is_admin())
-WITH CHECK (is_admin());
+-- CREATE POLICY "Admins can manage proactive vehicle events"
+-- ON public.proactive_vehicle_events
+-- FOR ALL
+-- USING (is_admin())
+-- WITH CHECK (is_admin());
 
 -- 2. Fix product_analytics - use authenticated check instead of true
 DROP POLICY IF EXISTS "Authenticated users can insert product analytics" ON public.product_analytics;

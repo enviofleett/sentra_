@@ -21,24 +21,28 @@ CREATE INDEX IF NOT EXISTS idx_password_change_audit_change_type ON public.passw
 ALTER TABLE public.password_change_audit ENABLE ROW LEVEL SECURITY;
 
 -- Users can view their own password change history
+DROP POLICY IF EXISTS "Users can view own password changes" ON public.password_change_audit;
 CREATE POLICY "Users can view own password changes"
 ON public.password_change_audit
 FOR SELECT
 USING (auth.uid() = user_id);
 
 -- Admins can view all password change history
+DROP POLICY IF EXISTS "Admins can view all password changes" ON public.password_change_audit;
 CREATE POLICY "Admins can view all password changes"
 ON public.password_change_audit
 FOR SELECT
 USING (public.is_admin());
 
 -- Users can insert their own audit logs (for profile page changes)
+DROP POLICY IF EXISTS "Users can insert own audit logs" ON public.password_change_audit;
 CREATE POLICY "Users can insert own audit logs"
 ON public.password_change_audit
 FOR INSERT
 WITH CHECK (auth.uid() = user_id);
 
 -- Service role can insert audit logs (for edge functions)
+DROP POLICY IF EXISTS "Service role can insert audit logs" ON public.password_change_audit;
 CREATE POLICY "Service role can insert audit logs"
 ON public.password_change_audit
 FOR INSERT

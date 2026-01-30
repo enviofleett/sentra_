@@ -38,6 +38,8 @@ export function OrdersManagement() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [enrichedItems, setEnrichedItems] = useState<any[]>([]);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [statusBreakdown, setStatusBreakdown] = useState<OrderStatusBreakdown[]>([]);
   const [timelineData, setTimelineData] = useState<any[]>([]);
@@ -59,6 +61,60 @@ export function OrdersManagement() {
   useEffect(() => {
     fetchOrders();
   }, [selectedVendor, timePeriod]);
+
+  useEffect(() => {
+    if (selectedOrder) {
+      fetchEnrichedItems(selectedOrder.items);
+    }
+  }, [selectedOrder]);
+
+  const fetchEnrichedItems = async (items: any[]) => {
+    setIsLoadingDetails(true);
+    if (!items || !Array.isArray(items)) {
+      setEnrichedItems([]);
+      setIsLoadingDetails(false);
+      return;
+    }
+
+    const productIds = items.map(item => item.product_id).filter(Boolean);
+    
+    if (productIds.length === 0) {
+      setEnrichedItems(items);
+      setIsLoadingDetails(false);
+      return;
+    }
+
+    try {
+      const { data: products } = await supabase
+        .from('products')
+        .select(`
+          id,
+          cost_price,
+          categories (
+            name
+          )
+        `)
+        .in('id', productIds);
+
+      const productMap = new Map(products?.map(p => [p.id, p]));
+
+      const enriched = items.map(item => {
+        const product = productMap.get(item.product_id);
+        return {
+          ...item,
+          category_name: product?.categories?.name || 'N/A',
+          supply_price: product?.cost_price || 0
+        };
+      });
+
+      setEnrichedItems(enriched);
+    } catch (error) {
+      console.error('Error fetching item details:', error);
+      setEnrichedItems(items);
+    } finally {
+      setIsLoadingDetails(false);
+    }
+  };
 
   // Set up real-time subscription for order updates
   useEffect(() => {
@@ -573,26 +629,38 @@ export function OrdersManagement() {
               </div>
               <div>
                 <h3 className="font-semibold">Items</h3>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Product</TableHead>
-                      <TableHead>Vendor</TableHead>
-                      <TableHead>Quantity</TableHead>
-                      <TableHead>Price</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {selectedOrder.items?.map((item: any, idx: number) => (
-                      <TableRow key={idx}>
-                        <TableCell>{item.name}</TableCell>
-                        <TableCell>{getVendorName(item.vendor_id)}</TableCell>
-                        <TableCell>{item.quantity}</TableCell>
-                        <TableCell>₦{item.price?.toLocaleString()}</TableCell>
+                {isLoadingDetails ? (
+                  <div className="flex justify-center p-4">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Product</TableHead>
+                        <TableHead>Category</TableHead>
+                        <TableHead>Vendor</TableHead>
+                        <TableHead>Quantity</TableHead>
+                        <TableHead>Supply Price</TableHead>
+                        <TableHead>Sales Price</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {enrichedItems.map((item: any, idx: number) => (
+                        <TableRow key={idx}>
+                          <TableCell>{item.name}</TableCell>
+                          <TableCell>{item.category_name || 'N/A'}</TableCell>
+                          <TableCell>{getVendorName(item.vendor_id)}</TableCell>
+                          <TableCell>{item.quantity}</TableCell>
+                          <TableCell>
+                            {item.supply_price ? `₦${Number(item.supply_price).toLocaleString()}` : '-'}
+                          </TableCell>
+                          <TableCell>₦{item.price?.toLocaleString()}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
               </div>
               <div>
                 <h3 className="font-semibold">Total: ₦{selectedOrder.total_amount.toLocaleString()}</h3>

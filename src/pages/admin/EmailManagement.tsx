@@ -9,13 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2, Send, Eye } from 'lucide-react';
-import { getEmailTemplate } from '@/utils/emailTemplates';
+import { getEmailTemplate, getBroadcastTemplate } from '@/utils/emailTemplates';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 export const EmailManagement = () => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [recipientFilter, setRecipientFilter] = useState<string>('waiting_list_all');
+  const [templateType, setTemplateType] = useState<string>('standard');
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [testEmail, setTestEmail] = useState('');
@@ -48,9 +49,12 @@ export const EmailManagement = () => {
       if (recipientFilter === 'waiting_list_verified') apiFilter = 'verified';
       if (recipientFilter === 'waiting_list_pending') apiFilter = 'pending';
       if (recipientFilter === 'customers') apiFilter = 'customers';
+      if (recipientFilter === 'all_users') apiFilter = 'all_users';
 
       // Generate the HTML content using the template
-      const htmlContent = getEmailTemplate(subject, message);
+      const htmlContent = templateType === 'broadcast' 
+        ? getBroadcastTemplate(subject, message)
+        : getEmailTemplate(subject, message);
 
       const payload: any = {
         subject,
@@ -98,7 +102,9 @@ export const EmailManagement = () => {
     }
   };
 
-  const generatedHtml = getEmailTemplate(subject || 'Subject Preview', message || 'Message content preview...');
+  const generatedHtml = templateType === 'broadcast'
+    ? getBroadcastTemplate(subject || 'Subject Preview', message || 'Message content preview...')
+    : getEmailTemplate(subject || 'Subject Preview', message || 'Message content preview...');
 
   return (
     <div className="space-y-6">
@@ -121,6 +127,7 @@ export const EmailManagement = () => {
                   <SelectValue placeholder="Select recipients" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="all_users">All Users (Customers + Waitlist)</SelectItem>
                   <SelectItem value="waiting_list_all">Waiting List - All</SelectItem>
                   <SelectItem value="waiting_list_verified">Waiting List - Verified Only</SelectItem>
                   <SelectItem value="waiting_list_pending">Waiting List - Pending Only</SelectItem>
@@ -130,7 +137,20 @@ export const EmailManagement = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="subject">Subject</Label>
+                <Label htmlFor="template">Email Template</Label>
+                <Select value={templateType} onValueChange={setTemplateType}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="standard">Standard Template</SelectItem>
+                    <SelectItem value="broadcast">Broadcast / Announcement</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="subject">Subject</Label>
               <Input 
                 id="subject" 
                 placeholder="Enter email subject" 

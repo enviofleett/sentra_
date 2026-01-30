@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.calculate-promo-discount]
 verify_jwt = false
+
+[functions.debug-order]
+verify_jwt = false

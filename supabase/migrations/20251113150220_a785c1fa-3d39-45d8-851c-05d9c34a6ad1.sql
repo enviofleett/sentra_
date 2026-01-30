@@ -98,23 +98,3 @@ CREATE POLICY "Public can view active products" ON public.products FOR SELECT US
 
 DROP POLICY IF EXISTS "Admins can manage products" ON public.products;
 CREATE POLICY "Admins/Managers can manage products" ON public.products FOR ALL USING (public.is_product_manager());
-
--- 11. Storage policies for product-images
-DROP POLICY IF EXISTS "Public can view product images" ON storage.objects;
-CREATE POLICY "Public can view product images" ON storage.objects FOR SELECT USING (bucket_id = 'product-images');
-
-DROP POLICY IF EXISTS "Admins/Managers can upload product images" ON storage.objects;
-CREATE POLICY "Admins/Managers can upload product images" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'product-images' AND public.is_product_manager());
-
-DROP POLICY IF EXISTS "Admins/Managers can update product images" ON storage.objects;
-CREATE POLICY "Admins/Managers can update product images" ON storage.objects FOR UPDATE USING (bucket_id = 'product-images' AND public.is_product_manager());
-
-DROP POLICY IF EXISTS "Admins/Managers can delete product images" ON storage.objects;
-CREATE POLICY "Admins/Managers can delete product images" ON storage.objects FOR DELETE USING (bucket_id = 'product-images' AND public.is_product_manager());
-
--- 12. Storage policies for branding
-DROP POLICY IF EXISTS "Public can view branding" ON storage.objects;
-CREATE POLICY "Public can view branding" ON storage.objects FOR SELECT USING (bucket_id = 'branding');
-
-DROP POLICY IF EXISTS "Admins can manage branding" ON storage.objects;
-CREATE POLICY "Admins can manage branding" ON storage.objects FOR ALL USING (bucket_id = 'branding' AND public.is_admin());

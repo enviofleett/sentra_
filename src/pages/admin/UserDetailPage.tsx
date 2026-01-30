@@ -18,6 +18,9 @@ interface Profile {
   created_at: string;
   default_shipping_address: any;
   default_billing_address: any;
+  wallet_balance_real?: number;
+  wallet_balance_promo?: number;
+  membership_balance?: number;
 }
 
 interface Order {
@@ -25,7 +28,10 @@ interface Order {
   created_at: string;
   total_amount: number;
   status: string;
+  payment_status: string;
+  paystack_status?: string;
   items: any;
+  promo_discount_applied?: number;
 }
 
 export function UserDetailPage() {
@@ -53,7 +59,26 @@ export function UserDetailPage() {
         .single();
 
       if (profileError) throw profileError;
-      setProfile(profileData);
+
+      // Fetch wallet balances
+      const { data: userWallet } = await supabase
+        .from('user_wallets')
+        .select('balance_real, balance_promo')
+        .eq('user_id', id)
+        .maybeSingle();
+
+      const { data: membershipWallet } = await supabase
+        .from('membership_wallets')
+        .select('balance')
+        .eq('user_id', id)
+        .maybeSingle();
+
+      setProfile({
+        ...profileData,
+        wallet_balance_real: userWallet?.balance_real || 0,
+        wallet_balance_promo: userWallet?.balance_promo || 0,
+        membership_balance: membershipWallet?.balance || 0
+      });
 
       // Fetch user orders
       const { data: ordersData, error: ordersError } = await supabase
@@ -104,7 +129,7 @@ export function UserDetailPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed':
+      case 'delivered':
         return 'bg-green-500/10 text-green-500 border-green-500/20';
       case 'processing':
         return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
@@ -118,7 +143,7 @@ export function UserDetailPage() {
   };
 
   const totalSpent = orders
-    .filter(o => o.status === 'completed')
+    .filter(o => o.status === 'delivered' || o.payment_status === 'paid' || o.paystack_status === 'success')
     .reduce((sum, order) => sum + Number(order.total_amount), 0);
 
   if (loading) {
@@ -230,24 +255,38 @@ export function UserDetailPage() {
 
             {/* Summary Stats */}
             <div className="pt-4 border-t grid grid-cols-2 gap-4">
-              <div>
-                <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <ShoppingBag className="h-4 w-4" />
-                  <span className="text-sm">Total Orders</span>
+                <div>
+                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                    <ShoppingBag className="h-4 w-4" />
+                    <span className="text-sm">Total Orders</span>
+                  </div>
+                  <p className="text-2xl font-bold">{orders.length}</p>
                 </div>
-                <p className="text-2xl font-bold">{orders.length}</p>
-              </div>
-              <div>
-                <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <DollarSign className="h-4 w-4" />
-                  <span className="text-sm">Lifetime Value</span>
+                <div>
+                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                    <DollarSign className="h-4 w-4" />
+                    <span className="text-sm">Lifetime Value</span>
+                  </div>
+                  <p className="text-2xl font-bold">₦{totalSpent.toLocaleString()}</p>
                 </div>
-                <p className="text-2xl font-bold">₦{totalSpent.toLocaleString()}</p>
               </div>
-            </div>
 
-            {/* Password Reset Button */}
-            <div className="pt-4 border-t">
+              <div className="pt-4 border-t grid grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground block">Main Wallet</span>
+                  <p className="font-semibold text-lg">₦{(profile.wallet_balance_real || 0).toLocaleString()}</p>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground block">Promo Wallet</span>
+                  <p className="font-semibold text-lg">₦{(profile.wallet_balance_promo || 0).toLocaleString()}</p>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground block">Membership</span>
+                  <p className="font-semibold text-lg">₦{(profile.membership_balance || 0).toLocaleString()}</p>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t">
               <Button
                 variant="outline"
                 onClick={handleSendPasswordReset}
@@ -299,11 +338,18 @@ export function UserDetailPage() {
                         {order.status}
                       </Badge>
                     </div>
-                    <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between">
                       <p className="text-sm text-muted-foreground">
                         {Array.isArray(order.items) ? order.items.length : 0} item(s)
                       </p>
-                      <p className="font-semibold">₦{Number(order.total_amount).toLocaleString()}</p>
+                      <div className="text-right">
+                        <p className="font-semibold">₦{Number(order.total_amount).toLocaleString()}</p>
+                        {order.promo_discount_applied && order.promo_discount_applied > 0 && (
+                          <p className="text-xs text-green-600">
+                            -₦{order.promo_discount_applied.toLocaleString()} Promo
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}

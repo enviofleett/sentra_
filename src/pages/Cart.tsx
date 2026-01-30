@@ -452,6 +452,16 @@ export default function Cart() {
       });
       return;
     }
+
+    // 4. Promo calculation validation
+    if (calculatingPromo) {
+      toast({
+        title: 'Discount Calculation In Progress',
+        description: 'Please wait for promo discount calculation to complete before proceeding.',
+        variant: 'destructive'
+      });
+      return;
+    }
     
     if (!shippingData) {
       toast({
@@ -612,6 +622,16 @@ export default function Cart() {
       });
       return;
     }
+
+    // 4. Promo calculation validation
+    if (calculatingPromo) {
+      toast({
+        title: 'Discount Calculation In Progress',
+        description: 'Please wait for promo discount calculation to complete before proceeding.',
+        variant: 'destructive'
+      });
+      return;
+    }
     
     if (!shippingData) {
       toast({
@@ -681,7 +701,7 @@ export default function Cart() {
         subtotal: subtotal,
         tax: 0,
         shipping_cost: shippingCost,
-        total_amount: totalAmount,
+        total_amount: totalBeforePromo, // Insert Gross Amount initially to avoid "ghost discounts" if payment init fails
         shipping_address: {
           fullName: data.fullName,
           phone: data.phone,

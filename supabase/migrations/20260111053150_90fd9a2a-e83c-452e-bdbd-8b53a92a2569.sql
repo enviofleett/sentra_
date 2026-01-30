@@ -1,5 +1,5 @@
 -- Create price_intelligence table for competitor price tracking
-CREATE TABLE public.price_intelligence (
+CREATE TABLE IF NOT EXISTS public.price_intelligence (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
   average_market_price NUMERIC(12, 2),
@@ -13,13 +13,14 @@ CREATE TABLE public.price_intelligence (
 );
 
 -- Create index for faster lookups
-CREATE INDEX idx_price_intelligence_product_id ON public.price_intelligence(product_id);
-CREATE INDEX idx_price_intelligence_last_scraped ON public.price_intelligence(last_scraped_at DESC);
+CREATE INDEX IF NOT EXISTS idx_price_intelligence_product_id ON public.price_intelligence(product_id);
+CREATE INDEX IF NOT EXISTS idx_price_intelligence_last_scraped ON public.price_intelligence(last_scraped_at DESC);
 
 -- Enable Row Level Security
 ALTER TABLE public.price_intelligence ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policy: Authenticated users can read
+DROP POLICY IF EXISTS "Authenticated users can read price intelligence" ON public.price_intelligence;
 CREATE POLICY "Authenticated users can read price intelligence"
   ON public.price_intelligence
   FOR SELECT
@@ -27,6 +28,7 @@ CREATE POLICY "Authenticated users can read price intelligence"
   USING (true);
 
 -- RLS Policy: Only admins can insert/update/delete (service role bypasses RLS)
+DROP POLICY IF EXISTS "Admins can manage price intelligence" ON public.price_intelligence;
 CREATE POLICY "Admins can manage price intelligence"
   ON public.price_intelligence
   FOR ALL
@@ -35,7 +37,7 @@ CREATE POLICY "Admins can manage price intelligence"
   WITH CHECK (public.is_admin());
 
 -- Create product_pricing_audit table for logging price changes
-CREATE TABLE public.product_pricing_audit (
+CREATE TABLE IF NOT EXISTS public.product_pricing_audit (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
   old_price NUMERIC(12, 2),
@@ -51,6 +53,7 @@ CREATE TABLE public.product_pricing_audit (
 ALTER TABLE public.product_pricing_audit ENABLE ROW LEVEL SECURITY;
 
 -- RLS: Admins can read audit logs
+DROP POLICY IF EXISTS "Admins can read pricing audit" ON public.product_pricing_audit;
 CREATE POLICY "Admins can read pricing audit"
   ON public.product_pricing_audit
   FOR SELECT
@@ -58,6 +61,7 @@ CREATE POLICY "Admins can read pricing audit"
   USING (public.is_admin());
 
 -- RLS: Allow inserts via service role (edge functions)
+DROP POLICY IF EXISTS "Service role can insert audit logs" ON public.product_pricing_audit;
 CREATE POLICY "Service role can insert audit logs"
   ON public.product_pricing_audit
   FOR INSERT
@@ -65,6 +69,7 @@ CREATE POLICY "Service role can insert audit logs"
   WITH CHECK (public.is_admin());
 
 -- Add trigger for updated_at on price_intelligence
+DROP TRIGGER IF EXISTS update_price_intelligence_updated_at ON public.price_intelligence;
 CREATE TRIGGER update_price_intelligence_updated_at
   BEFORE UPDATE ON public.price_intelligence
   FOR EACH ROW

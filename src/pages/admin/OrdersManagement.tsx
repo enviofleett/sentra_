@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Eye, Clock, Package, TruckIcon, CheckCircle, XCircle, RefreshCw, CreditCard, Loader2, AlertCircle } from 'lucide-react';
+import { Eye, Clock, Package, TruckIcon, CheckCircle, XCircle, RefreshCw, CreditCard, Loader2, AlertCircle, TrendingUp, Receipt } from 'lucide-react';
 import { getOrderStatusBreakdown, getOrdersTimeline, OrderStatusBreakdown } from '@/utils/analytics';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Badge } from '@/components/ui/badge';
@@ -22,7 +22,9 @@ interface Vendor {
 interface Order {
   id: string;
   customer_email: string;
+  subtotal: number;
   total_amount: number;
+  shipping_cost: number;
   status: string;
   payment_status: string;
   paystack_status: string | null;
@@ -679,6 +681,74 @@ export function OrdersManagement() {
                   </CardContent>
                 </Card>
               </div>
+
+              {/* Financial Breakdown */}
+              {(() => {
+                 const totalSupplyCost = enrichedItems.reduce((sum, item) => sum + (Number(item.supply_price || 0) * item.quantity), 0);
+                 const revenueBase = selectedOrder.subtotal || (selectedOrder.total_amount - (selectedOrder.shipping_cost || 0));
+                 const grossProfit = revenueBase - totalSupplyCost;
+                 const marginPercentage = revenueBase > 0 ? (grossProfit / revenueBase) * 100 : 0;
+                 
+                 return (
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <Card>
+                        <CardHeader className="pb-2">
+                           <div className="flex items-center gap-2">
+                             <Receipt className="h-4 w-4 text-muted-foreground" />
+                             <CardTitle className="text-sm font-medium text-muted-foreground">Subtotal</CardTitle>
+                           </div>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">₦{revenueBase.toLocaleString()}</div>
+                          <p className="text-xs text-muted-foreground mt-1">Revenue from items</p>
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader className="pb-2">
+                           <div className="flex items-center gap-2">
+                             <TruckIcon className="h-4 w-4 text-muted-foreground" />
+                             <CardTitle className="text-sm font-medium text-muted-foreground">Shipping Fee</CardTitle>
+                           </div>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">₦{(selectedOrder.shipping_cost || 0).toLocaleString()}</div>
+                          <p className="text-xs text-muted-foreground mt-1">Delivery cost</p>
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader className="pb-2">
+                           <div className="flex items-center gap-2">
+                             <Package className="h-4 w-4 text-muted-foreground" />
+                             <CardTitle className="text-sm font-medium text-muted-foreground">Supply Cost</CardTitle>
+                           </div>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold">₦{totalSupplyCost.toLocaleString()}</div>
+                          <p className="text-xs text-muted-foreground mt-1">Cost of goods</p>
+                        </CardContent>
+                      </Card>
+
+                      <Card className={grossProfit >= 0 ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800" : "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"}>
+                        <CardHeader className="pb-2">
+                           <div className="flex items-center gap-2">
+                             <TrendingUp className={`h-4 w-4 ${grossProfit >= 0 ? "text-green-600" : "text-red-600"}`} />
+                             <CardTitle className={`text-sm font-medium ${grossProfit >= 0 ? "text-green-600" : "text-red-600"}`}>Net Margin</CardTitle>
+                           </div>
+                        </CardHeader>
+                        <CardContent>
+                          <div className={`text-2xl font-bold ${grossProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                            ₦{grossProfit.toLocaleString()}
+                          </div>
+                          <p className={`text-xs mt-1 font-medium ${grossProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                            {marginPercentage.toFixed(1)}% Profit
+                          </p>
+                        </CardContent>
+                      </Card>
+                    </div>
+                 );
+              })()}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">

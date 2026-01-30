@@ -28,6 +28,7 @@ interface Order {
   paystack_status: string | null;
   payment_reference: string | null;
   created_at: string;
+  updated_at: string;
   items: any;
   shipping_address: any;
   billing_address: any;
@@ -90,6 +91,7 @@ export function OrdersManagement() {
         .select(`
           id,
           cost_price,
+          brand,
           categories (
             name
           )
@@ -103,6 +105,7 @@ export function OrdersManagement() {
         return {
           ...item,
           category_name: product?.categories?.name || 'N/A',
+          brand_name: product?.brand || 'N/A',
           supply_price: product?.cost_price || 0
         };
       });
@@ -610,60 +613,151 @@ export function OrdersManagement() {
       </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Order Details</DialogTitle>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              Order #{selectedOrder?.id.slice(0, 8)}
+              {selectedOrder && getPaymentStatusBadge(selectedOrder.payment_status, selectedOrder.paystack_status)}
+            </DialogTitle>
           </DialogHeader>
           {selectedOrder && (
-            <div className="space-y-4">
-              <div>
-                <h3 className="font-semibold">Customer Information</h3>
-                <p>Email: {selectedOrder.customer_email}</p>
+            <div className="space-y-6">
+              {/* Top Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Order Date</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-semibold">{new Date(selectedOrder.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {new Date(selectedOrder.created_at).toLocaleTimeString()}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Payment Information</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Method:</span>
+                        <span className="font-medium">
+                          {selectedOrder.payment_reference ? 'Paystack' : 'Wallet / Other'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Date Paid:</span>
+                        <span className="font-medium">
+                          {selectedOrder.payment_status === 'paid' 
+                            ? new Date(selectedOrder.updated_at).toLocaleDateString() 
+                            : 'Pending'}
+                        </span>
+                      </div>
+                      {selectedOrder.payment_reference && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Ref:</span>
+                          <span className="font-mono text-xs">{selectedOrder.payment_reference.slice(0, 10)}...</span>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Order Total</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">₦{selectedOrder.total_amount.toLocaleString()}</div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {Array.isArray(selectedOrder.items) ? selectedOrder.items.length : 0} items
+                    </p>
+                  </CardContent>
+                </Card>
               </div>
-              <div>
-                <h3 className="font-semibold">Shipping Address</h3>
-                <p>{selectedOrder.shipping_address?.fullName}</p>
-                <p>{selectedOrder.shipping_address?.address}</p>
-                <p>{selectedOrder.shipping_address?.city}, {selectedOrder.shipping_address?.state}</p>
-                <p>{selectedOrder.shipping_address?.phone}</p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <div className="bg-primary/10 p-2 rounded-full">
+                      <Package className="h-4 w-4 text-primary" />
+                    </div>
+                    Customer Details
+                  </h3>
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="grid gap-1">
+                        <div className="font-medium">{selectedOrder.shipping_address?.fullName}</div>
+                        <div className="text-sm text-muted-foreground">{selectedOrder.customer_email}</div>
+                        <div className="text-sm text-muted-foreground">{selectedOrder.shipping_address?.phone}</div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <div className="bg-primary/10 p-2 rounded-full">
+                      <TruckIcon className="h-4 w-4 text-primary" />
+                    </div>
+                    Shipping Address
+                  </h3>
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="text-sm text-muted-foreground">
+                        <p>{selectedOrder.shipping_address?.address}</p>
+                        <p>{selectedOrder.shipping_address?.city}, {selectedOrder.shipping_address?.state}</p>
+                        <p>{selectedOrder.shipping_address?.country || 'Nigeria'}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
+
               <div>
-                <h3 className="font-semibold">Items</h3>
+                <h3 className="font-semibold mb-3">Order Items</h3>
                 {isLoadingDetails ? (
-                  <div className="flex justify-center p-4">
-                    <Loader2 className="h-6 w-6 animate-spin" />
+                  <div className="flex justify-center p-8 border rounded-lg bg-muted/20">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                   </div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Product</TableHead>
-                        <TableHead>Category</TableHead>
-                        <TableHead>Vendor</TableHead>
-                        <TableHead>Quantity</TableHead>
-                        <TableHead>Supply Price</TableHead>
-                        <TableHead>Sales Price</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {enrichedItems.map((item: any, idx: number) => (
-                        <TableRow key={idx}>
-                          <TableCell>{item.name}</TableCell>
-                          <TableCell>{item.category_name || 'N/A'}</TableCell>
-                          <TableCell>{getVendorName(item.vendor_id)}</TableCell>
-                          <TableCell>{item.quantity}</TableCell>
-                          <TableCell>
-                            {item.supply_price ? `₦${Number(item.supply_price).toLocaleString()}` : '-'}
-                          </TableCell>
-                          <TableCell>₦{item.price?.toLocaleString()}</TableCell>
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader className="bg-muted/50">
+                        <TableRow>
+                          <TableHead>Product</TableHead>
+                          <TableHead>Brand</TableHead>
+                          <TableHead>Vendor</TableHead>
+                          <TableHead className="text-right">Qty</TableHead>
+                          <TableHead className="text-right">Supply Price</TableHead>
+                          <TableHead className="text-right">Sales Price</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {enrichedItems.map((item: any, idx: number) => (
+                          <TableRow key={idx}>
+                            <TableCell className="font-medium">{item.name}</TableCell>
+                            <TableCell>{item.brand_name || 'N/A'}</TableCell>
+                            <TableCell>{getVendorName(item.vendor_id)}</TableCell>
+                            <TableCell className="text-right">{item.quantity}</TableCell>
+                            <TableCell className="text-right">
+                              {item.supply_price ? `₦${Number(item.supply_price).toLocaleString()}` : '-'}
+                            </TableCell>
+                            <TableCell className="text-right">₦{item.price?.toLocaleString()}</TableCell>
+                            <TableCell className="text-right font-medium">
+                              ₦{(item.price * item.quantity).toLocaleString()}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
-              </div>
-              <div>
-                <h3 className="font-semibold">Total: ₦{selectedOrder.total_amount.toLocaleString()}</h3>
               </div>
             </div>
           )}

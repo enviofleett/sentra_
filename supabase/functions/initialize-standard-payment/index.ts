@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -106,7 +106,7 @@ function calculateProfitSplit(
   return { totalAmount, splits };
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   console.log('[Initialize Payment] Request received');
 
   if (req.method === 'OPTIONS') {

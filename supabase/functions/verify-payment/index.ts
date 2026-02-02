@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.76.1";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,7 +15,7 @@ const corsHeaders = {
  * - This function is authenticated - users can only verify their own orders
  * - Safe to call repeatedly (idempotent, spam-proof)
  */
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   console.log(`[Verify Payment] Received ${req.method} request at ${new Date().toISOString()}`);
 
   if (req.method === "OPTIONS") {

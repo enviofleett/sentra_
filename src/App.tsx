@@ -8,6 +8,7 @@ import { CartProvider } from "./contexts/CartContext";
 import { BrandingProvider } from "./hooks/useBranding";
 import { LaunchOverlay } from "./components/layout/LaunchOverlay";
 import { MembershipGuard } from "./components/layout/MembershipGuard";
+import { WhatsAppButton } from "./components/layout/WhatsAppButton";
 import Index from "./pages/Index";
 import Products from "./pages/Products";
 import ProductDetail from "./pages/ProductDetail";
@@ -52,6 +53,7 @@ const App = () => (
                 <Route path="*" element={<NotFound />} />
                 </Routes>
               </LaunchOverlay>
+              <WhatsAppButton />
             </CartProvider>
           </BrandingProvider>
         </AuthProvider>

@@ -233,7 +233,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         .from('cart_items')
         .insert({ user_id: user.id, product_id: productId, quantity })
         .select(`
-          *,
+          id, user_id, product_id, quantity,
           product:products(
             id, name, price, image_url, stock_quantity, vendor_id, weight, size,
             vendor:vendors(id, rep_full_name, min_order_quantity)

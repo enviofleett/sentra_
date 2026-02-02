@@ -11,7 +11,7 @@ interface BulkEmailRequest {
   subject: string;
   htmlContent: string;
   textContent?: string;
-  recipientFilter: 'all' | 'verified' | 'pending' | 'customers' | 'all_users';
+  recipientFilter: 'all' | 'verified' | 'pending' | 'customers';
   campaignId?: string;
   testEmail?: string;
 }
@@ -176,33 +176,6 @@ serve(async (req) => {
       if (error) throw error;
       recipients = data || [];
       
-    } else if (recipientFilter === 'all_users') {
-      // Fetch customers
-      const { data: customers, error: customerError } = await supabase
-        .from('profiles')
-        .select('id, email, full_name');
-      
-      if (customerError) throw customerError;
-
-      // Fetch waiting list
-      const { data: waitlist, error: waitlistError } = await supabase
-        .from('waiting_list')
-        .select('id, email, full_name');
-        
-      if (waitlistError) throw waitlistError;
-
-      // Deduplicate by email
-      const emailMap = new Map();
-      
-      (customers || []).forEach((c: any) => emailMap.set(c.email, c));
-      (waitlist || []).forEach((w: any) => {
-        if (!emailMap.has(w.email)) {
-          emailMap.set(w.email, w);
-        }
-      });
-      
-      recipients = Array.from(emailMap.values());
-
     } else {
       // Default: Fetch from waiting_list
       let query = supabase.from('waiting_list').select('id, email, full_name');

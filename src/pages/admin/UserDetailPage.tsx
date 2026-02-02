@@ -83,7 +83,7 @@ export function UserDetailPage() {
       // Fetch user orders
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
-        .select('*')
+        .select('id, created_at, total_amount, status, payment_status, paystack_status, items, promo_discount_applied')
         .eq('user_id', id)
         .order('created_at', { ascending: false });
 

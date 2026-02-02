@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Eye, Clock, Package, TruckIcon, CheckCircle, XCircle, RefreshCw, CreditCard, Loader2, AlertCircle, TrendingUp, Receipt } from 'lucide-react';
+import { Eye, Clock, Package, TruckIcon, CheckCircle, XCircle, RefreshCw, CreditCard, Loader2, AlertCircle } from 'lucide-react';
 import { getOrderStatusBreakdown, getOrdersTimeline, OrderStatusBreakdown } from '@/utils/analytics';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Badge } from '@/components/ui/badge';
@@ -22,15 +22,12 @@ interface Vendor {
 interface Order {
   id: string;
   customer_email: string;
-  subtotal: number;
   total_amount: number;
-  shipping_cost: number;
   status: string;
   payment_status: string;
   paystack_status: string | null;
   payment_reference: string | null;
   created_at: string;
-  updated_at: string;
   items: any;
   shipping_address: any;
   billing_address: any;
@@ -41,8 +38,6 @@ export function OrdersManagement() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [enrichedItems, setEnrichedItems] = useState<any[]>([]);
-  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [statusBreakdown, setStatusBreakdown] = useState<OrderStatusBreakdown[]>([]);
   const [timelineData, setTimelineData] = useState<any[]>([]);
@@ -64,62 +59,6 @@ export function OrdersManagement() {
   useEffect(() => {
     fetchOrders();
   }, [selectedVendor, timePeriod]);
-
-  useEffect(() => {
-    if (selectedOrder) {
-      fetchEnrichedItems(selectedOrder.items);
-    }
-  }, [selectedOrder]);
-
-  const fetchEnrichedItems = async (items: any[]) => {
-    setIsLoadingDetails(true);
-    if (!items || !Array.isArray(items)) {
-      setEnrichedItems([]);
-      setIsLoadingDetails(false);
-      return;
-    }
-
-    const productIds = items.map(item => item.product_id).filter(Boolean);
-    
-    if (productIds.length === 0) {
-      setEnrichedItems(items);
-      setIsLoadingDetails(false);
-      return;
-    }
-
-    try {
-      const { data: products } = await supabase
-        .from('products')
-        .select(`
-          id,
-          cost_price,
-          brand,
-          categories (
-            name
-          )
-        `)
-        .in('id', productIds);
-
-      const productMap = new Map(products?.map(p => [p.id, p]));
-
-      const enriched = items.map(item => {
-        const product = productMap.get(item.product_id);
-        return {
-          ...item,
-          category_name: product?.categories?.name || 'N/A',
-          brand_name: product?.brand || 'N/A',
-          supply_price: product?.cost_price || 0
-        };
-      });
-
-      setEnrichedItems(enriched);
-    } catch (error) {
-      console.error('Error fetching item details:', error);
-      setEnrichedItems(items);
-    } finally {
-      setIsLoadingDetails(false);
-    }
-  };
 
   // Set up real-time subscription for order updates
   useEffect(() => {
@@ -615,219 +554,48 @@ export function OrdersManagement() {
       </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-xl flex items-center gap-2">
-              Order #{selectedOrder?.id.slice(0, 8)}
-              {selectedOrder && getPaymentStatusBadge(selectedOrder.payment_status, selectedOrder.paystack_status)}
-            </DialogTitle>
+            <DialogTitle>Order Details</DialogTitle>
           </DialogHeader>
           {selectedOrder && (
-            <div className="space-y-6">
-              {/* Top Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Order Date</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-semibold">{new Date(selectedOrder.created_at).toLocaleDateString()}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {new Date(selectedOrder.created_at).toLocaleTimeString()}
-                    </p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Payment Information</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Method:</span>
-                        <span className="font-medium">
-                          {selectedOrder.payment_reference ? 'Paystack' : 'Wallet / Other'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Date Paid:</span>
-                        <span className="font-medium">
-                          {selectedOrder.payment_status === 'paid' 
-                            ? new Date(selectedOrder.updated_at).toLocaleDateString() 
-                            : 'Pending'}
-                        </span>
-                      </div>
-                      {selectedOrder.payment_reference && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Ref:</span>
-                          <span className="font-mono text-xs">{selectedOrder.payment_reference.slice(0, 10)}...</span>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Order Total</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">₦{selectedOrder.total_amount.toLocaleString()}</div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {Array.isArray(selectedOrder.items) ? selectedOrder.items.length : 0} items
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Financial Breakdown */}
-              {(() => {
-                 const totalSupplyCost = enrichedItems.reduce((sum, item) => sum + (Number(item.supply_price || 0) * item.quantity), 0);
-                 const revenueBase = selectedOrder.subtotal || (selectedOrder.total_amount - (selectedOrder.shipping_cost || 0));
-                 const grossProfit = revenueBase - totalSupplyCost;
-                 const marginPercentage = revenueBase > 0 ? (grossProfit / revenueBase) * 100 : 0;
-                 
-                 return (
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      <Card>
-                        <CardHeader className="pb-2">
-                           <div className="flex items-center gap-2">
-                             <Receipt className="h-4 w-4 text-muted-foreground" />
-                             <CardTitle className="text-sm font-medium text-muted-foreground">Subtotal</CardTitle>
-                           </div>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">₦{revenueBase.toLocaleString()}</div>
-                          <p className="text-xs text-muted-foreground mt-1">Revenue from items</p>
-                        </CardContent>
-                      </Card>
-
-                      <Card>
-                        <CardHeader className="pb-2">
-                           <div className="flex items-center gap-2">
-                             <TruckIcon className="h-4 w-4 text-muted-foreground" />
-                             <CardTitle className="text-sm font-medium text-muted-foreground">Shipping Fee</CardTitle>
-                           </div>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">₦{(selectedOrder.shipping_cost || 0).toLocaleString()}</div>
-                          <p className="text-xs text-muted-foreground mt-1">Delivery cost</p>
-                        </CardContent>
-                      </Card>
-
-                      <Card>
-                        <CardHeader className="pb-2">
-                           <div className="flex items-center gap-2">
-                             <Package className="h-4 w-4 text-muted-foreground" />
-                             <CardTitle className="text-sm font-medium text-muted-foreground">Supply Cost</CardTitle>
-                           </div>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold">₦{totalSupplyCost.toLocaleString()}</div>
-                          <p className="text-xs text-muted-foreground mt-1">Cost of goods</p>
-                        </CardContent>
-                      </Card>
-
-                      <Card className={grossProfit >= 0 ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800" : "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"}>
-                        <CardHeader className="pb-2">
-                           <div className="flex items-center gap-2">
-                             <TrendingUp className={`h-4 w-4 ${grossProfit >= 0 ? "text-green-600" : "text-red-600"}`} />
-                             <CardTitle className={`text-sm font-medium ${grossProfit >= 0 ? "text-green-600" : "text-red-600"}`}>Net Margin</CardTitle>
-                           </div>
-                        </CardHeader>
-                        <CardContent>
-                          <div className={`text-2xl font-bold ${grossProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
-                            ₦{grossProfit.toLocaleString()}
-                          </div>
-                          <p className={`text-xs mt-1 font-medium ${grossProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
-                            {marginPercentage.toFixed(1)}% Profit
-                          </p>
-                        </CardContent>
-                      </Card>
-                    </div>
-                 );
-              })()}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <div className="bg-primary/10 p-2 rounded-full">
-                      <Package className="h-4 w-4 text-primary" />
-                    </div>
-                    Customer Details
-                  </h3>
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="grid gap-1">
-                        <div className="font-medium">{selectedOrder.shipping_address?.fullName}</div>
-                        <div className="text-sm text-muted-foreground">{selectedOrder.customer_email}</div>
-                        <div className="text-sm text-muted-foreground">{selectedOrder.shipping_address?.phone}</div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <div className="space-y-2">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <div className="bg-primary/10 p-2 rounded-full">
-                      <TruckIcon className="h-4 w-4 text-primary" />
-                    </div>
-                    Shipping Address
-                  </h3>
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="text-sm text-muted-foreground">
-                        <p>{selectedOrder.shipping_address?.address}</p>
-                        <p>{selectedOrder.shipping_address?.city}, {selectedOrder.shipping_address?.state}</p>
-                        <p>{selectedOrder.shipping_address?.country || 'Nigeria'}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-
+            <div className="space-y-4">
               <div>
-                <h3 className="font-semibold mb-3">Order Items</h3>
-                {isLoadingDetails ? (
-                  <div className="flex justify-center p-8 border rounded-lg bg-muted/20">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                  </div>
-                ) : (
-                  <div className="border rounded-lg overflow-hidden">
-                    <Table>
-                      <TableHeader className="bg-muted/50">
-                        <TableRow>
-                          <TableHead>Product</TableHead>
-                          <TableHead>Brand</TableHead>
-                          <TableHead>Vendor</TableHead>
-                          <TableHead className="text-right">Qty</TableHead>
-                          <TableHead className="text-right">Supply Price</TableHead>
-                          <TableHead className="text-right">Sales Price</TableHead>
-                          <TableHead className="text-right">Total</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {enrichedItems.map((item: any, idx: number) => (
-                          <TableRow key={idx}>
-                            <TableCell className="font-medium">{item.name}</TableCell>
-                            <TableCell>{item.brand_name || 'N/A'}</TableCell>
-                            <TableCell>{getVendorName(item.vendor_id)}</TableCell>
-                            <TableCell className="text-right">{item.quantity}</TableCell>
-                            <TableCell className="text-right">
-                              {item.supply_price ? `₦${Number(item.supply_price).toLocaleString()}` : '-'}
-                            </TableCell>
-                            <TableCell className="text-right">₦{item.price?.toLocaleString()}</TableCell>
-                            <TableCell className="text-right font-medium">
-                              ₦{(item.price * item.quantity).toLocaleString()}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
+                <h3 className="font-semibold">Customer Information</h3>
+                <p>Email: {selectedOrder.customer_email}</p>
+              </div>
+              <div>
+                <h3 className="font-semibold">Shipping Address</h3>
+                <p>{selectedOrder.shipping_address?.fullName}</p>
+                <p>{selectedOrder.shipping_address?.address}</p>
+                <p>{selectedOrder.shipping_address?.city}, {selectedOrder.shipping_address?.state}</p>
+                <p>{selectedOrder.shipping_address?.phone}</p>
+              </div>
+              <div>
+                <h3 className="font-semibold">Items</h3>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Product</TableHead>
+                      <TableHead>Vendor</TableHead>
+                      <TableHead>Quantity</TableHead>
+                      <TableHead>Price</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedOrder.items?.map((item: any, idx: number) => (
+                      <TableRow key={idx}>
+                        <TableCell>{item.name}</TableCell>
+                        <TableCell>{getVendorName(item.vendor_id)}</TableCell>
+                        <TableCell>{item.quantity}</TableCell>
+                        <TableCell>₦{item.price?.toLocaleString()}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div>
+                <h3 className="font-semibold">Total: ₦{selectedOrder.total_amount.toLocaleString()}</h3>
               </div>
             </div>
           )}

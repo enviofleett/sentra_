@@ -47,7 +47,9 @@ export function OrdersManagement() {
   const [timelineData, setTimelineData] = useState<any[]>([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
   const [selectedVendor, setSelectedVendor] = useState<string>('all');
-  const [timePeriod, setTimePeriod] = useState<'day' | 'week' | 'month'>('week');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [timePeriod, setTimePeriod] = useState<'day' | 'week' | 'month' | 'year'>('week');
   const [verifyingOrderId, setVerifyingOrderId] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<{ start: Date; end: Date }>({
     start: new Date(new Date().setDate(new Date().getDate() - 7)),
@@ -61,8 +63,12 @@ export function OrdersManagement() {
   }, []);
 
   useEffect(() => {
-    fetchOrders();
-  }, [selectedVendor, timePeriod]);
+    const timer = setTimeout(() => {
+      fetchOrders();
+    }, 500); // Debounce search
+
+    return () => clearTimeout(timer);
+  }, [selectedVendor, timePeriod, statusFilter, searchQuery]);
 
   // Set up real-time subscription for order updates
   useEffect(() => {
@@ -173,6 +179,21 @@ export function OrdersManagement() {
     } else if (timePeriod === 'month') {
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       query = query.gte('created_at', startOfMonth.toISOString());
+    } else if (timePeriod === 'year') {
+      const startOfYear = new Date(now.getFullYear(), 0, 1);
+      query = query.gte('created_at', startOfYear.toISOString());
+    }
+
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      query = query.eq('status', statusFilter);
+    }
+
+    // Apply search filter
+    if (searchQuery) {
+      // Use ILIKE for case-insensitive search on id or customer_email
+      // Note: Supabase 'or' expects a string like "column.operator.value,column.operator.value"
+      query = query.or(`id.ilike.%${searchQuery}%,customer_email.ilike.%${searchQuery}%`);
     }
 
     const { data, error } = await query;
@@ -221,7 +242,7 @@ export function OrdersManagement() {
       setOrders(filteredOrders);
     }
     setLoading(false);
-  }, [selectedVendor, timePeriod]);
+  }, [selectedVendor, timePeriod, statusFilter, searchQuery]);
 
   const updateOrderStatus = async (orderId: string, newStatus: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled') => {
     const { error } = await supabase
@@ -414,8 +435,38 @@ export function OrdersManagement() {
           <CardTitle>Filters</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-4">
-            <div className="w-64">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <Label>Search Orders</Label>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search by Order ID or Email..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                />
+              </div>
+            </div>
+
+            <div className="w-full md:w-64">
+              <Label>Filter by Status</Label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="processing">Processing</SelectItem>
+                  <SelectItem value="shipped">Shipped</SelectItem>
+                  <SelectItem value="delivered">Delivered</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="w-full md:w-64">
               <Label>Filter by Vendor</Label>
               <Select value={selectedVendor} onValueChange={setSelectedVendor}>
                 <SelectTrigger>
@@ -432,7 +483,7 @@ export function OrdersManagement() {
               </Select>
             </div>
             
-            <div className="w-48">
+            <div className="w-full md:w-48">
               <Label>Time Period</Label>
               <Select value={timePeriod} onValueChange={(v) => setTimePeriod(v as any)}>
                 <SelectTrigger>
@@ -442,6 +493,7 @@ export function OrdersManagement() {
                   <SelectItem value="day">Today</SelectItem>
                   <SelectItem value="week">This Week</SelectItem>
                   <SelectItem value="month">This Month</SelectItem>
+                  <SelectItem value="year">This Year</SelectItem>
                 </SelectContent>
               </Select>
             </div>

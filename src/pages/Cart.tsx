@@ -741,8 +741,27 @@ export default function Cart() {
       });
 
       if (paymentError) {
-        console.error('[Checkout] Payment initialization error:', paymentError);
-        throw new Error('Failed to initialize payment. Please try again.');
+        // Detailed error logging
+        console.error('[Checkout] Payment initialization error (Function Invocation):', paymentError);
+        
+        // Try to extract useful message from error body if available
+        let errorMessage = 'Failed to initialize payment. Please try again.';
+        try {
+          // If the error object has a JSON body, parse it
+          if (paymentError instanceof Error && 'context' in paymentError) {
+             // Supabase function errors sometimes hide details in context or body
+          }
+        } catch (e) {
+          // ignore parsing errors
+        }
+        
+        throw new Error(errorMessage);
+      }
+      
+      // Check for application-level errors returned in success response (non-200 status handled by invoke but check body)
+      if (paymentResult?.error) {
+         console.error('[Checkout] Payment initialization returned error:', paymentResult.error);
+         throw new Error(paymentResult.error);
       }
 
       // Check if order was fully paid with promo credit

@@ -232,6 +232,30 @@ Deno.serve(async (req: Request) => {
             paystack_status: "amount_mismatch",
             updated_at: new Date().toISOString()
           }).eq("payment_reference", reference);
+
+          // Fetch user profile for email
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('email, full_name')
+            .eq('id', order.user_id)
+            .single();
+
+          // Send discrepancy email (fire and forget)
+          if (profile?.email) {
+            console.log(`[Paystack Webhook] Sending discrepancy email to ${profile.email}`);
+            supabase.functions.invoke('send-email', {
+              body: {
+                to: profile.email,
+                templateId: 'PAYMENT_DISCREPANCY',
+                data: {
+                  customer_name: profile.full_name || 'Customer',
+                  order_id: order.id.slice(0, 8),
+                  expected_amount: (expectedAmount / 100).toLocaleString(),
+                  paid_amount: (amount / 100).toLocaleString(),
+                }
+              }
+            }).catch(err => console.error('[Paystack Webhook] Discrepancy email error:', err));
+          }
           
           return new Response(JSON.stringify({ 
             received: true, 
@@ -315,6 +339,24 @@ Deno.serve(async (req: Request) => {
 
         if (amount !== expectedAmount) {
           console.error(`[Paystack Webhook] SECURITY: Amount mismatch for commitment ${commitmentId}`);
+          
+          const profile = commitment.profiles as any;
+          if (profile?.email) {
+             console.log(`[Paystack Webhook] Sending discrepancy email to ${profile.email}`);
+             supabase.functions.invoke('send-email', {
+              body: {
+                to: profile.email,
+                templateId: 'PAYMENT_DISCREPANCY',
+                data: {
+                  customer_name: profile.full_name || 'Customer',
+                  order_id: commitmentId.slice(0, 8),
+                  expected_amount: (expectedAmount / 100).toLocaleString(),
+                  paid_amount: (amount / 100).toLocaleString(),
+                }
+              }
+            }).catch((err: any) => console.error('[Paystack Webhook] Discrepancy email error:', err));
+          }
+
           return new Response(JSON.stringify({ error: "Amount mismatch" }), { status: 400 });
         }
         console.log(`[Paystack Webhook] Amount verification: PASSED`);
@@ -502,6 +544,24 @@ Deno.serve(async (req: Request) => {
 
         if (amount !== expectedAmount) {
           console.error(`[Paystack Webhook] SECURITY: Amount mismatch for final payment ${commitmentId}`);
+          
+          const profile = commitment.profiles as any;
+          if (profile?.email) {
+             console.log(`[Paystack Webhook] Sending discrepancy email to ${profile.email}`);
+             supabase.functions.invoke('send-email', {
+              body: {
+                to: profile.email,
+                templateId: 'PAYMENT_DISCREPANCY',
+                data: {
+                  customer_name: profile.full_name || 'Customer',
+                  order_id: commitmentId.slice(0, 8),
+                  expected_amount: (expectedAmount / 100).toLocaleString(),
+                  paid_amount: (amount / 100).toLocaleString(),
+                }
+              }
+            }).catch((err: any) => console.error('[Paystack Webhook] Discrepancy email error:', err));
+          }
+
           return new Response(JSON.stringify({ error: "Amount mismatch" }), { status: 400 });
         }
         console.log(`[Paystack Webhook] Amount verification: PASSED`);

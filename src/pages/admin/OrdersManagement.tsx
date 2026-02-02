@@ -21,6 +21,7 @@ interface Vendor {
 
 interface Order {
   id: string;
+  user_id: string;
   customer_email: string;
   total_amount: number;
   status: string;
@@ -31,6 +32,9 @@ interface Order {
   items: any;
   shipping_address: any;
   billing_address: any;
+  promo_discount_applied?: number;
+  registration_date?: string;
+  promo_wallet_balance?: number;
 }
 
 export function OrdersManagement() {
@@ -177,7 +181,34 @@ export function OrdersManagement() {
       toast.error('Failed to load orders');
       console.error(error);
     } else {
-      let filteredOrders = data || [];
+      let filteredOrders: any[] = data || [];
+
+      // Fetch additional user details (profiles and wallets)
+      if (filteredOrders.length > 0) {
+        const userIds = [...new Set(filteredOrders.map((o: any) => o.user_id).filter(Boolean))];
+        
+        if (userIds.length > 0) {
+          const [profilesResponse, walletsResponse] = await Promise.all([
+            supabase
+              .from('profiles')
+              .select('id, created_at')
+              .in('id', userIds),
+            supabase
+              .from('user_wallets')
+              .select('user_id, balance_promo')
+              .in('user_id', userIds)
+          ]);
+
+          const profilesMap = new Map(profilesResponse.data?.map(p => [p.id, p.created_at]));
+          const walletsMap = new Map(walletsResponse.data?.map(w => [w.user_id, w.balance_promo]));
+
+          filteredOrders = filteredOrders.map(order => ({
+            ...order,
+            registration_date: profilesMap.get(order.user_id),
+            promo_wallet_balance: walletsMap.get(order.user_id) || 0
+          }));
+        }
+      }
       
       // Filter by vendor (client-side since vendor_id is in items JSON)
       if (selectedVendor !== 'all') {
@@ -563,6 +594,12 @@ export function OrdersManagement() {
               <div>
                 <h3 className="font-semibold">Customer Information</h3>
                 <p>Email: {selectedOrder.customer_email}</p>
+                {selectedOrder.registration_date && (
+                  <p>Registered: {new Date(selectedOrder.registration_date).toLocaleDateString()}</p>
+                )}
+                {selectedOrder.promo_wallet_balance !== undefined && (
+                  <p>Promo Wallet Balance: ₦{selectedOrder.promo_wallet_balance.toLocaleString()}</p>
+                )}
               </div>
               <div>
                 <h3 className="font-semibold">Shipping Address</h3>
@@ -595,7 +632,14 @@ export function OrdersManagement() {
                 </Table>
               </div>
               <div>
-                <h3 className="font-semibold">Total: ₦{selectedOrder.total_amount.toLocaleString()}</h3>
+                <h3 className="font-semibold">Payment Information</h3>
+                <div className="space-y-1">
+                  <p>Subtotal: ₦{(selectedOrder.total_amount + (selectedOrder.promo_discount_applied || 0)).toLocaleString()}</p>
+                  {selectedOrder.promo_discount_applied ? (
+                    <p className="text-green-600">Discount Applied: -₦{selectedOrder.promo_discount_applied.toLocaleString()}</p>
+                  ) : null}
+                  <p className="font-bold text-lg">Total Paid: ₦{selectedOrder.total_amount.toLocaleString()}</p>
+                </div>
               </div>
             </div>
           )}

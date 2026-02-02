@@ -357,15 +357,26 @@ serve(async (req) => {
       .eq('key', 'live_callback_url')
       .maybeSingle();
     
-    const appBaseUrl = (configData?.value as any)?.url || Deno.env.get('APP_BASE_URL');
-
+    let appBaseUrl = (configData?.value as any)?.url || Deno.env.get('APP_BASE_URL');
+    
+    // Fallback if not configured
     if (!appBaseUrl) {
-      console.error('[Initialize Payment] APP_BASE_URL not configured');
-      return new Response(JSON.stringify({ error: 'Server configuration error' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      console.warn('[Initialize Payment] APP_BASE_URL not configured, defaulting to origin or example');
+      // You might want to fail hard here, or use a default if acceptable
+      // For now, let's try to infer from request or fail with clearer message
+      const origin = req.headers.get('origin');
+      if (origin && !origin.includes('localhost')) {
+         appBaseUrl = origin;
+      } else {
+         console.error('[Initialize Payment] APP_BASE_URL missing and origin not usable');
+         return new Response(JSON.stringify({ error: 'Server configuration error: Missing callback URL' }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+         });
+      }
     }
+    
+    console.log(`[Initialize Payment] Using callback base URL: ${appBaseUrl}`);
 
     // Fetch profit split configuration with subaccount codes
     const { data: splitConfigData } = await supabase
@@ -469,19 +480,35 @@ serve(async (req) => {
 
     // Add split configuration if subaccounts are configured
     if (hasSubaccounts) {
-      const { splits } = calculateProfitSplit(orderItems, products as ProductWithCost[], splitConfig);
-      
-      if (splits.length > 0) {
-        paystackPayload.split = {
-          type: "flat",
-          currency: "NGN",
-          subaccounts: splits,
-          bearer_type: "account" // Main account bears transaction charges
-        };
-        console.log(`[Initialize Payment] Split configured with ${splits.length} subaccounts`);
+      try {
+        const { splits } = calculateProfitSplit(orderItems, products as ProductWithCost[], splitConfig);
+        
+        if (splits.length > 0) {
+          // VALIDATION: Ensure split shares do not exceed total amount
+          const totalSplitShare = splits.reduce((sum, s) => sum + s.share, 0);
+          
+          if (totalSplitShare > amountInKobo) {
+             console.warn(`[Initialize Payment] Split sum (${totalSplitShare}) exceeds total amount (${amountInKobo}). Adjusting main account share.`);
+             // If splits exceed, we must reduce them or disable split. 
+             // Safer to disable split to ensure payment goes through to main account.
+             console.error('[Initialize Payment] Disabling split due to calculation discrepancy');
+          } else {
+            paystackPayload.split = {
+              type: "flat",
+              currency: "NGN",
+              subaccounts: splits,
+              bearer_type: "account" // Main account bears transaction charges
+            };
+            console.log(`[Initialize Payment] Split configured with ${splits.length} subaccounts. Total split: ${totalSplitShare/100}`);
+          }
+        }
+      } catch (e: any) {
+        console.error('[Initialize Payment] Split calculation error:', e);
+        // Continue without split
       }
     }
 
+    console.log('[Initialize Payment] Sending request to Paystack...');
     const paystackResponse = await fetch('https://api.paystack.co/transaction/initialize', {
       method: 'POST',
       headers: {
@@ -492,11 +519,16 @@ serve(async (req) => {
     });
 
     const paystackData = await paystackResponse.json();
+    
+    console.log(`[Initialize Payment] Paystack API Status: ${paystackResponse.status}`);
 
     if (!paystackData.status) {
-      console.error('[Initialize Payment] Paystack error:', paystackData);
-      return new Response(JSON.stringify({ error: 'Payment initialization failed', details: paystackData.message }), {
-        status: 500,
+      console.error('[Initialize Payment] Paystack error:', JSON.stringify(paystackData));
+      return new Response(JSON.stringify({ 
+        error: 'Payment initialization failed', 
+        details: paystackData.message || 'Unknown Paystack error' 
+      }), {
+        status: 500, // Return 500 so client knows it's a server/upstream issue
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

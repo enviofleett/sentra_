@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { createSmtpClient, minifyHtml } from "../_shared/email-utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -96,6 +97,90 @@ async function verifySignature(paystackSecretKey: string, rawBody: string, signa
   const hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 
   return hash === signature;
+}
+
+// Helper function to notify admins
+async function notifyAdminsOfNewOrder(
+  supabase: any, 
+  orderId: string, 
+  amount: number, 
+  customerName: string
+) {
+  try {
+    const gmailEmail = Deno.env.get('GMAIL_EMAIL');
+    const gmailPassword = Deno.env.get('GMAIL_APP_PASSWORD');
+
+    if (!gmailEmail || !gmailPassword) {
+      console.warn('[Paystack Webhook] Admin notification skipped: Gmail credentials missing');
+      return;
+    }
+
+    console.log(`[Paystack Webhook] Notifying admins for order ${orderId}`);
+    
+    // 1. Fetch admin emails
+    const { data: adminRoles } = await supabase
+      .from('user_roles')
+      .select('user_id')
+      .eq('role', 'admin');
+      
+    if (!adminRoles || adminRoles.length === 0) {
+      console.log('[Paystack Webhook] No admins found');
+      return;
+    }
+    
+    const adminIds = adminRoles.map((r: any) => r.user_id);
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('email')
+      .in('id', adminIds);
+      
+    if (!profiles || profiles.length === 0) return;
+    
+    const adminEmails = profiles.map((p: any) => p.email).filter((e: any) => e);
+    
+    if (adminEmails.length === 0) {
+      console.log('[Paystack Webhook] No admin emails found');
+      return;
+    }
+    
+    console.log(`[Paystack Webhook] Found ${adminEmails.length} admin(s)`);
+
+    // 2. Prepare email content
+    const subject = `New Order Received: #${orderId.slice(0, 8)}`;
+    const amountFormatted = (amount / 100).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' });
+    
+    const htmlContent = `
+      <div style="font-family: sans-serif; padding: 20px; color: #333;">
+        <h2 style="color: #d4af37;">New Order Notification</h2>
+        <p>A new order has been successfully paid.</p>
+        <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 15px 0;">
+          <p><strong>Order ID:</strong> #${orderId.slice(0, 8)}</p>
+          <p><strong>Customer:</strong> ${customerName}</p>
+          <p><strong>Amount:</strong> ${amountFormatted}</p>
+          <p><strong>Date:</strong> ${new Date().toLocaleString()}</p>
+        </div>
+        <a href="https://sentra.shop/admin/orders" style="background: #000; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View in Admin Panel</a>
+      </div>
+    `;
+
+    const minifiedHtml = minifyHtml(htmlContent);
+    const client = createSmtpClient(gmailEmail, gmailPassword);
+
+    // 3. Send emails via BCC
+    await client.send({
+      from: `Sentra Admin <${gmailEmail}>`,
+      to: gmailEmail, 
+      bcc: adminEmails,
+      subject: subject,
+      html: minifiedHtml,
+    });
+    
+    await client.close();
+    console.log('[Paystack Webhook] Admin notifications sent');
+    
+  } catch (error) {
+    console.error('[Paystack Webhook] Failed to notify admins:', error);
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -306,6 +391,20 @@ Deno.serve(async (req: Request) => {
         // Process affiliate commission if user was referred
         await processAffiliateCommission(supabase, order.user_id, order.id, order.total_amount);
         
+        // Notify admins
+        const { data: profileName } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', order.user_id)
+          .single();
+          
+        await notifyAdminsOfNewOrder(
+          supabase, 
+          order.id, 
+          amount, // Use the amount from Paystack (kobo)
+          profileName?.full_name || 'Customer'
+        );
+
         console.log(`[Paystack Webhook] SUCCESS: Order ${order.id} updated to 'processing'`);
         return new Response(JSON.stringify({ message: "Order processed successfully" }), { status: 200 });
 
@@ -475,6 +574,14 @@ Deno.serve(async (req: Request) => {
           
           // Process affiliate commission for group buy order
           await processAffiliateCommission(supabase, commitment.user_id, newOrder.id, totalAmount);
+
+          // Notify admins
+          await notifyAdminsOfNewOrder(
+            supabase, 
+            newOrder.id, 
+            totalAmount * 100, // Convert Naira to Kobo
+            profile?.full_name || 'Customer'
+          );
 
           console.log(`[Paystack Webhook] SUCCESS: Order ${newOrder.id} created for commitment ${commitmentId}`);
 
@@ -651,6 +758,14 @@ Deno.serve(async (req: Request) => {
         // Process affiliate commission for final payment order
         await processAffiliateCommission(supabase, commitment.user_id, newOrder.id, totalAmount);
         
+        // Notify admins
+        await notifyAdminsOfNewOrder(
+          supabase, 
+          newOrder.id, 
+          totalAmount * 100, // Convert Naira to Kobo
+          profile?.full_name || 'Customer'
+        );
+
         console.log(`[Paystack Webhook] SUCCESS: Final payment processed - Order ${newOrder.id} created, Commitment ${commitmentId} finalized`);
 
         // Send confirmation email (fire and forget)

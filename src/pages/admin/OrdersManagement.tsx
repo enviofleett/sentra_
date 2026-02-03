@@ -7,15 +7,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Eye, Clock, Package, TruckIcon, CheckCircle, XCircle, RefreshCw, CreditCard, Loader2, AlertCircle, Send, Mail, MessageSquare, Phone, Mail as MailIcon, User, MapPin, Calendar, CreditCard as CreditCardIcon } from 'lucide-react';
+import { Eye, Clock, Package, TruckIcon, CheckCircle, XCircle, RefreshCw, CreditCard, Loader2, AlertCircle, Send, Mail, MessageSquare, Phone, MapPin, Calendar, CreditCard as CreditCardIcon } from 'lucide-react';
 import { getOrderStatusBreakdown, getOrdersTimeline, OrderStatusBreakdown } from '@/utils/analytics';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip as UITooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { DateRange } from 'react-day-picker';
 
@@ -736,249 +734,215 @@ export function OrdersManagement() {
       </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto bg-gray-50/50 dark:bg-black/50">
-          <DialogHeader>
-            <div className="flex items-center justify-between pb-4 border-b">
-              <div className="space-y-1">
-                <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-                  {selectedOrder ? (
-                    <>
-                      Order #{selectedOrder.id.slice(0, 8)}
-                      <Badge variant="outline" className={`${getStatusColor(selectedOrder.status)} border-current`}>
-                        {selectedOrder.status.toUpperCase()}
-                      </Badge>
-                    </>
-                  ) : (
-                    "Order Details"
-                  )}
-                </DialogTitle>
-                {selectedOrder && (
-                  <DialogDescription className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    Placed on {new Date(selectedOrder.created_at).toLocaleDateString()} at {new Date(selectedOrder.created_at).toLocaleTimeString()}
-                  </DialogDescription>
-                )}
-              </div>
-              {selectedOrder && (
-                <div className="flex items-center gap-2">
-                  {getPaymentStatusBadge(selectedOrder.payment_status, selectedOrder.paystack_status)}
-                </div>
-              )}
-            </div>
-          </DialogHeader>
-
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0 gap-0 bg-background">
           {selectedOrder ? (
-            <div className="space-y-6 py-6">
-                {/* Top Section: Customer & Details Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Customer Details */}
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                        <User className="h-4 w-4" /> Customer Details
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3 text-sm">
-                      <div>
-                        <span className="block font-medium">{selectedOrder.shipping_address?.fullName}</span>
-                        <span className="text-muted-foreground">{selectedOrder.customer_email}</span>
+            <div className="flex flex-col h-full">
+              {/* Header */}
+              <div className="p-6 border-b flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-muted/10">
+                <div>
+                  <div className="flex items-center gap-3 mb-1">
+                    <h2 className="text-2xl font-bold tracking-tight">#{selectedOrder.id.slice(0, 8)}</h2>
+                    <Badge variant="outline" className={`${getStatusColor(selectedOrder.status)} border-current px-2 py-0.5 text-xs uppercase`}>
+                      {selectedOrder.status}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center text-sm text-muted-foreground gap-2">
+                    <Calendar className="h-3.5 w-3.5" />
+                    <span>{new Date(selectedOrder.created_at).toLocaleDateString()} at {new Date(selectedOrder.created_at).toLocaleTimeString()}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  {getPaymentStatusBadge(selectedOrder.payment_status, selectedOrder.paystack_status)}
+                  <Button size="sm" variant="outline" onClick={() => openEmailDialog(selectedOrder)}>
+                    <Mail className="h-3.5 w-3.5 mr-2" /> Email Customer
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+                {/* Main Content (Left) */}
+                <div className="flex-1 p-6 overflow-y-auto border-r border-border/50">
+                  <div className="space-y-8">
+                    {/* Items Section */}
+                    <section>
+                      <h3 className="text-sm font-semibold mb-4 flex items-center gap-2 text-foreground/80">
+                        <Package className="h-4 w-4" /> Order Items ({selectedOrder.items?.length || 0})
+                      </h3>
+                      <div className="space-y-4">
+                        {selectedOrder.items?.map((item: any, idx: number) => (
+                          <div key={idx} className="flex gap-4 p-4 rounded-lg border bg-card hover:bg-accent/5 transition-colors">
+                            <div className="h-16 w-16 rounded-md bg-muted overflow-hidden flex-shrink-0 border">
+                              {item.image_url ? (
+                                <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
+                              ) : (
+                                <div className="h-full w-full flex items-center justify-center text-muted-foreground">
+                                  <Package className="h-6 w-6 opacity-20" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between items-start mb-1">
+                                <h4 className="font-medium text-sm line-clamp-2 pr-4">{item.name}</h4>
+                                <span className="font-semibold text-sm">₦{(item.price * item.quantity).toLocaleString()}</span>
+                              </div>
+                              <p className="text-xs text-muted-foreground mb-2">{getVendorName(item.vendor_id)}</p>
+                              <div className="flex items-center text-xs text-muted-foreground bg-muted/50 w-fit px-2 py-1 rounded">
+                                <span>₦{item.price?.toLocaleString()}</span>
+                                <span className="mx-1">×</span>
+                                <span>{item.quantity}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Phone className="h-3 w-3" />
-                        <span>{selectedOrder.shipping_address?.phone}</span>
-                      </div>
-                      {selectedOrder.registration_date && (
-                        <div className="pt-2 border-t mt-2">
-                          <span className="text-xs text-muted-foreground">Member Since</span>
-                          <p>{new Date(selectedOrder.registration_date).toLocaleDateString()}</p>
+                    </section>
+
+                    {/* Financial Summary */}
+                    <section className="bg-muted/20 p-4 rounded-lg border">
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Subtotal</span>
+                          <span>₦{(selectedOrder.total_amount + (selectedOrder.promo_discount_applied || 0)).toLocaleString()}</span>
                         </div>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  {/* Shipping Address */}
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                        <MapPin className="h-4 w-4" /> Shipping Address
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="text-sm space-y-1">
-                      <p>{selectedOrder.shipping_address?.address}</p>
-                      <p>{selectedOrder.shipping_address?.city}, {selectedOrder.shipping_address?.state}</p>
-                      <p>{selectedOrder.shipping_address?.country || 'Nigeria'}</p>
-                    </CardContent>
-                  </Card>
-
-                  {/* Payment & Promo Info */}
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                        <CreditCardIcon className="h-4 w-4" /> Payment & Promo
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Subtotal</span>
-                        <span>₦{(selectedOrder.total_amount + (selectedOrder.promo_discount_applied || 0)).toLocaleString()}</span>
-                      </div>
-                      {selectedOrder.promo_discount_applied ? (
-                         <div className="flex justify-between text-green-600">
+                        {selectedOrder.promo_discount_applied ? (
+                          <div className="flex justify-between text-green-600">
                             <span>Discount</span>
                             <span>-₦{selectedOrder.promo_discount_applied.toLocaleString()}</span>
-                         </div>
-                      ) : null}
-                      <div className="flex justify-between font-bold pt-2 border-t">
-                        <span>Total Paid</span>
-                        <span>₦{selectedOrder.total_amount.toLocaleString()}</span>
+                          </div>
+                        ) : null}
+                        <Separator className="my-2" />
+                        <div className="flex justify-between font-bold text-base">
+                          <span>Total Paid</span>
+                          <span>₦{selectedOrder.total_amount.toLocaleString()}</span>
+                        </div>
                       </div>
-                      {selectedOrder.promo_wallet_balance !== undefined && (
-                         <div className="pt-2 border-t">
-                            <span className="text-xs text-muted-foreground block">Promo Wallet Balance</span>
-                            <span className="font-medium">₦{selectedOrder.promo_wallet_balance.toLocaleString()}</span>
-                         </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                    </section>
+                    
+                    {/* Communications History */}
+                    <section>
+                      <h3 className="text-sm font-semibold mb-4 flex items-center gap-2 text-foreground/80">
+                        <MessageSquare className="h-4 w-4" /> Communication History
+                      </h3>
+                      <div className="border rounded-md divide-y max-h-[300px] overflow-y-auto">
+                        {communicationsLoading ? (
+                          <div className="p-4 text-center"><Loader2 className="h-4 w-4 animate-spin mx-auto"/></div>
+                        ) : communications.length === 0 ? (
+                          <div className="p-4 text-center text-sm text-muted-foreground">No history</div>
+                        ) : (
+                          communications.map((comm) => (
+                            <div key={comm.id} className="p-3 hover:bg-muted/50 text-sm">
+                              <div className="flex justify-between mb-1">
+                                <span className="font-medium text-xs">{comm.subject}</span>
+                                <span className="text-[10px] text-muted-foreground">{new Date(comm.created_at).toLocaleDateString()}</span>
+                              </div>
+                              <p className="text-muted-foreground line-clamp-1 text-xs">{comm.content}</p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </section>
+                  </div>
                 </div>
 
-                {/* Middle Section: Order Items */}
-                <Card>
-                  <CardHeader>
-                     <CardTitle className="text-base flex items-center gap-2">
-                        <Package className="h-4 w-4" /> Order Items
-                     </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                     <Table>
-                        <TableHeader>
-                           <TableRow>
-                              <TableHead>Product</TableHead>
-                              <TableHead>Vendor</TableHead>
-                              <TableHead className="text-right">Qty</TableHead>
-                              <TableHead className="text-right">Price</TableHead>
-                              <TableHead className="text-right">Total</TableHead>
-                           </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                           {selectedOrder.items?.map((item: any, idx: number) => (
-                              <TableRow key={idx}>
-                                 <TableCell className="font-medium">{item.name}</TableCell>
-                                 <TableCell className="text-muted-foreground">{getVendorName(item.vendor_id)}</TableCell>
-                                 <TableCell className="text-right">{item.quantity}</TableCell>
-                                 <TableCell className="text-right">₦{item.price?.toLocaleString()}</TableCell>
-                                 <TableCell className="text-right">₦{(item.price * item.quantity).toLocaleString()}</TableCell>
-                              </TableRow>
-                           ))}
-                        </TableBody>
-                     </Table>
-                  </CardContent>
-                </Card>
+                {/* Sidebar (Right) */}
+                <div className="w-full md:w-[320px] bg-muted/10 p-6 space-y-8 h-full overflow-y-auto">
+                  {/* Customer */}
+                  <section>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Customer</h3>
+                    <div className="flex items-start gap-3 mb-4">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+                        {selectedOrder.shipping_address?.fullName?.[0] || 'C'}
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">{selectedOrder.shipping_address?.fullName}</p>
+                        <p className="text-xs text-muted-foreground">{selectedOrder.customer_email}</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Phone className="h-3.5 w-3.5" />
+                        <span>{selectedOrder.shipping_address?.phone || 'N/A'}</span>
+                      </div>
+                      <div className="flex items-start gap-2 text-muted-foreground">
+                        <MapPin className="h-3.5 w-3.5 mt-0.5" />
+                        <div className="text-xs leading-relaxed">
+                          <p>{selectedOrder.shipping_address?.address}</p>
+                          <p>{selectedOrder.shipping_address?.city}, {selectedOrder.shipping_address?.state}</p>
+                          <p>{selectedOrder.shipping_address?.country || 'Nigeria'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
 
-                {/* Bottom Section: Actions & Communications */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                   {/* Actions */}
-                   <Card>
-                      <CardHeader>
-                         <CardTitle className="text-base">Quick Actions</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                         <div className="space-y-2">
-                            <Label>Update Order Status</Label>
-                            <Select
-                               value={selectedOrder.status}
-                               onValueChange={(value) => updateOrderStatus(selectedOrder.id, value as 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled')}
-                            >
-                               <SelectTrigger>
-                                  <SelectValue />
-                               </SelectTrigger>
-                               <SelectContent>
-                                  <SelectItem value="pending">Pending</SelectItem>
-                                  <SelectItem value="processing">Processing</SelectItem>
-                                  <SelectItem value="shipped">Shipped</SelectItem>
-                                  <SelectItem value="delivered">Delivered</SelectItem>
-                                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                               </SelectContent>
-                            </Select>
-                         </div>
-                         
-                         <Separator />
-                         
-                         <div className="space-y-2">
-                            <Label>Payment Actions</Label>
-                            <div className="flex gap-2">
-                               <Button 
-                                  variant="outline" 
-                                  size="sm" 
-                                  className="flex-1"
-                                  onClick={() => verifyPayment(selectedOrder.id)}
-                               >
-                                  <RefreshCw className="mr-2 h-3 w-3" /> Verify
-                               </Button>
-                               <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                  className="flex-1 text-green-600 hover:text-green-700"
-                                  onClick={() => manuallyMarkAsPaid(selectedOrder.id)}
-                               >
-                                  <CreditCardIcon className="mr-2 h-3 w-3" /> Mark Paid
-                               </Button>
-                            </div>
-                         </div>
-                      </CardContent>
-                   </Card>
+                  <Separator />
 
-                   {/* Communications */}
-                   <Card className="flex flex-col h-full">
-                      <CardHeader className="flex flex-row items-center justify-between">
-                         <CardTitle className="text-base flex items-center gap-2">
-                            <MessageSquare className="h-4 w-4" /> Communications
-                         </CardTitle>
-                         <Button size="sm" onClick={() => openEmailDialog(selectedOrder)}>
-                            <MailIcon className="mr-2 h-3 w-3" /> New Email
-                         </Button>
-                      </CardHeader>
-                      <CardContent className="flex-1 min-h-[200px] p-0">
-                         <ScrollArea className="h-[250px]">
-                            <div className="p-4 space-y-4">
-                               {communicationsLoading ? (
-                                  <div className="flex justify-center p-4">
-                                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                                  </div>
-                               ) : communications.length === 0 ? (
-                                  <div className="text-center text-muted-foreground py-8 text-sm">
-                                     No communications history
-                                  </div>
-                               ) : (
-                                  communications.map((comm) => (
-                                     <div key={comm.id} className="flex flex-col gap-1 p-3 border rounded-lg bg-muted/30">
-                                        <div className="flex items-center justify-between">
-                                           <span className="font-medium text-sm">{comm.subject}</span>
-                                           <span className="text-xs text-muted-foreground">
-                                              {new Date(comm.created_at).toLocaleDateString()}
-                                           </span>
-                                        </div>
-                                        <p className="text-xs text-muted-foreground line-clamp-2">
-                                           {comm.content}
-                                        </p>
-                                        <div className="flex items-center gap-2 mt-2">
-                                           <Badge variant="secondary" className="text-[10px] h-5">
-                                              {comm.type}
-                                           </Badge>
-                                        </div>
-                                     </div>
-                                  ))
-                               )}
-                            </div>
-                         </ScrollArea>
-                      </CardContent>
-                   </Card>
+                  {/* Management Actions */}
+                  <section className="space-y-4">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Management</h3>
+                    
+                    <div className="space-y-2">
+                      <Label className="text-xs">Order Status</Label>
+                      <Select
+                        value={selectedOrder.status}
+                        onValueChange={(value) => updateOrderStatus(selectedOrder.id, value as any)}
+                      >
+                        <SelectTrigger className="w-full bg-background">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="processing">Processing</SelectItem>
+                          <SelectItem value="shipped">Shipped</SelectItem>
+                          <SelectItem value="delivered">Delivered</SelectItem>
+                          <SelectItem value="cancelled">Cancelled</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {selectedOrder.payment_status === 'pending' && (
+                      <div className="grid grid-cols-2 gap-2 pt-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="w-full text-xs"
+                          onClick={() => verifyPayment(selectedOrder.id)}
+                          disabled={verifyingOrderId === selectedOrder.id}
+                        >
+                          {verifyingOrderId === selectedOrder.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1.5" />}
+                          Verify
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="w-full text-xs text-green-600 hover:text-green-700 hover:bg-green-50"
+                          onClick={() => manuallyMarkAsPaid(selectedOrder.id)}
+                        >
+                          <CreditCardIcon className="h-3 w-3 mr-1.5" /> Mark Paid
+                        </Button>
+                      </div>
+                    )}
+                  </section>
+                  
+                  {selectedOrder.promo_wallet_balance !== undefined && (
+                    <>
+                      <Separator />
+                      <section>
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Wallet</h3>
+                        <div className="bg-background border rounded p-3">
+                          <span className="text-xs text-muted-foreground block mb-1">Promo Balance</span>
+                          <span className="font-mono font-medium">₦{selectedOrder.promo_wallet_balance.toLocaleString()}</span>
+                        </div>
+                      </section>
+                    </>
+                  )}
                 </div>
               </div>
+            </div>
           ) : (
-             <div className="flex items-center justify-center h-64 text-muted-foreground">
-                No order selected
-             </div>
+            <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+              <Package className="h-12 w-12 mb-4 opacity-20" />
+              <p>No order selected</p>
+            </div>
           )}
         </DialogContent>
       </Dialog>

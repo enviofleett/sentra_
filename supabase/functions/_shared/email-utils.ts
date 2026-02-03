@@ -1,7 +1,26 @@
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+
 /**
  * Shared email utilities for all email edge functions
  * Prevents =20 quoted-printable encoding artifacts in emails
  */
+
+/**
+ * Creates a configured SMTP client for Gmail
+ */
+export const createSmtpClient = (email: string, password: string) => {
+  return new SMTPClient({
+    connection: {
+      hostname: "smtp.gmail.com",
+      port: 465,
+      tls: true,
+      auth: {
+        username: email,
+        password: password,
+      },
+    },
+  });
+};
 
 /**
  * Minifies HTML content to prevent quoted-printable encoding issues

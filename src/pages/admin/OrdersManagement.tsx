@@ -302,30 +302,36 @@ export function OrdersManagement() {
       .select('*')
       .order('created_at', { ascending: false });
 
-    // Apply time period filter
-    const now = new Date();
-    if (timePeriod === 'day') {
-      const startOfDay = new Date(now.setHours(0, 0, 0, 0));
-      query = query.gte('created_at', startOfDay.toISOString());
-    } else if (timePeriod === 'week') {
-      const startOfWeek = new Date(now);
-      startOfWeek.setDate(now.getDate() - now.getDay());
-      startOfWeek.setHours(0, 0, 0, 0);
-      query = query.gte('created_at', startOfWeek.toISOString());
-    } else if (timePeriod === 'month') {
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      query = query.gte('created_at', startOfMonth.toISOString());
-    } else if (timePeriod === 'year') {
-      const startOfYear = new Date(now.getFullYear(), 0, 1);
-      query = query.gte('created_at', startOfYear.toISOString());
-    } else if (timePeriod === 'custom' && dateRange?.from) {
-      query = query.gte('created_at', dateRange.from.toISOString());
-      if (dateRange.to) {
-        // Add 1 day to end date to include the full day
-        const endDate = new Date(dateRange.to);
-        endDate.setDate(endDate.getDate() + 1);
-        query = query.lt('created_at', endDate.toISOString());
+    // Apply time period filter (only if not searching)
+    // If searching, we want to search ALL history (or up to limit) to ensure we find the product/order
+    if (!searchQuery) {
+      const now = new Date();
+      if (timePeriod === 'day') {
+        const startOfDay = new Date(now.setHours(0, 0, 0, 0));
+        query = query.gte('created_at', startOfDay.toISOString());
+      } else if (timePeriod === 'week') {
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - now.getDay());
+        startOfWeek.setHours(0, 0, 0, 0);
+        query = query.gte('created_at', startOfWeek.toISOString());
+      } else if (timePeriod === 'month') {
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        query = query.gte('created_at', startOfMonth.toISOString());
+      } else if (timePeriod === 'year') {
+        const startOfYear = new Date(now.getFullYear(), 0, 1);
+        query = query.gte('created_at', startOfYear.toISOString());
+      } else if (timePeriod === 'custom' && dateRange?.from) {
+        query = query.gte('created_at', dateRange.from.toISOString());
+        if (dateRange.to) {
+          // Add 1 day to end date to include the full day
+          const endDate = new Date(dateRange.to);
+          endDate.setDate(endDate.getDate() + 1);
+          query = query.lt('created_at', endDate.toISOString());
+        }
       }
+    } else {
+      // If searching, limit results to prevent fetching entire database
+      query = query.limit(1000);
     }
 
     // Apply status filter
@@ -333,13 +339,8 @@ export function OrdersManagement() {
       query = query.eq('status', statusFilter as any);
     }
 
-    // Apply search filter
-    if (searchQuery) {
-      // Use ILIKE for case-insensitive search on id or customer_email
-      // Note: Supabase 'or' expects a string like "column.operator.value,column.operator.value"
-      query = query.or(`id.ilike.%${searchQuery}%,customer_email.ilike.%${searchQuery}%`);
-    }
-
+    // Removed server-side search to allow robust client-side product searching
+    
     const { data, error } = await query;
 
     if (error) {
@@ -380,6 +381,23 @@ export function OrdersManagement() {
         filteredOrders = filteredOrders.filter(order => {
           const items = Array.isArray(order.items) ? order.items : [];
           return items.some((item: any) => item.vendor_id === selectedVendor);
+        });
+      }
+
+      // Filter by Search Query (Client-side to support Product Names)
+      if (searchQuery) {
+        const lowerQuery = searchQuery.toLowerCase();
+        filteredOrders = filteredOrders.filter(order => {
+          const matchesId = order.id.toLowerCase().includes(lowerQuery);
+          const matchesEmail = order.customer_email?.toLowerCase().includes(lowerQuery);
+          
+          // Search in Items (Product Names)
+          const items = Array.isArray(order.items) ? order.items : [];
+          const matchesProduct = items.some((item: any) => 
+            item.name?.toLowerCase().includes(lowerQuery)
+          );
+
+          return matchesId || matchesEmail || matchesProduct;
         });
       }
       

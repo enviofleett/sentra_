@@ -39,6 +39,18 @@ interface Order {
   promo_discount_applied?: number;
   registration_date?: string;
   promo_wallet_balance?: number;
+  shipments?: Shipment[]; // Joined via relation
+}
+
+interface Shipment {
+  id: string;
+  order_id: string;
+  tracking_number: string | null;
+  carrier: string | null;
+  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  items: any[];
+  destination_address: any;
+  created_at: string;
 }
 
 interface OrderCommunication {
@@ -192,6 +204,8 @@ export function OrdersManagement() {
     setIsEmailDialogOpen(true);
   };
 
+  const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+
   useEffect(() => {
     fetchVendors();
     fetchOrders();
@@ -299,7 +313,10 @@ export function OrdersManagement() {
     setLoading(true);
     let query = supabase
       .from('orders')
-      .select('*')
+      .select(`
+        *,
+        shipments:order_shipments(*)
+      `)
       .order('created_at', { ascending: false });
 
     // Apply time period filter (only if not searching)
@@ -421,6 +438,59 @@ export function OrdersManagement() {
     }
   };
 
+  const updateShipmentStatus = async (shipmentId: string, newStatus: string) => {
+    const { error } = await supabase
+      .from('order_shipments')
+      .update({ status: newStatus })
+      .eq('id', shipmentId);
+
+    if (error) {
+      toast.error('Failed to update shipment');
+    } else {
+      toast.success('Shipment updated');
+      fetchOrders();
+      if (selectedOrder) {
+        // Refresh selected order view
+        const { data } = await supabase
+          .from('orders')
+          .select(`*, shipments:order_shipments(*)`)
+          .eq('id', selectedOrder.id)
+          .single();
+        if (data) setSelectedOrder(data as any);
+      }
+    }
+  };
+
+  const handleBulkStatusUpdate = async (newStatus: string) => {
+    if (selectedOrders.length === 0) return;
+    
+    const confirm = window.confirm(`Update ${selectedOrders.length} orders to ${newStatus}?`);
+    if (!confirm) return;
+
+    setLoading(true);
+    const { error } = await supabase
+      .from('orders')
+      .update({ status: newStatus as any })
+      .in('id', selectedOrders);
+
+    if (error) {
+      toast.error('Bulk update failed');
+    } else {
+      toast.success(`Updated ${selectedOrders.length} orders`);
+      setSelectedOrders([]);
+      fetchOrders();
+    }
+    setLoading(false);
+  };
+
+  const toggleOrderSelection = (orderId: string) => {
+    setSelectedOrders(prev => 
+      prev.includes(orderId) 
+        ? prev.filter(id => id !== orderId)
+        : [...prev, orderId]
+    );
+  };
+
   const verifyPayment = async (orderId: string) => {
     setVerifyingOrderId(orderId);
     try {
@@ -530,9 +600,23 @@ export function OrdersManagement() {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Page Header */}
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">Order Management</h2>
-        <p className="text-muted-foreground">Track and manage all customer orders</p>
+      <div className="flex flex-col md:flex-row justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Order Management</h2>
+          <p className="text-muted-foreground">Track and manage all customer orders</p>
+        </div>
+        {selectedOrders.length > 0 && (
+          <div className="flex items-center gap-2 bg-primary/10 px-4 py-2 rounded-lg border border-primary/20 animate-in fade-in slide-in-from-top-2">
+            <span className="text-sm font-medium">{selectedOrders.length} selected</span>
+            <Separator orientation="vertical" className="h-4 bg-primary/20" />
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-muted-foreground uppercase mr-1">Mark as:</span>
+              <Button size="sm" className="h-7 px-2 text-xs" variant="outline" onClick={() => handleBulkStatusUpdate('processing')}>Processing</Button>
+              <Button size="sm" className="h-7 px-2 text-xs" variant="outline" onClick={() => handleBulkStatusUpdate('shipped')}>Shipped</Button>
+              <Button size="sm" className="h-7 px-2 text-xs" variant="outline" onClick={() => handleBulkStatusUpdate('delivered')}>Delivered</Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Order Status Cards */}
@@ -678,6 +762,20 @@ export function OrdersManagement() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[30px]">
+                  <input 
+                    type="checkbox" 
+                    className="h-4 w-4 rounded border-gray-300"
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedOrders(orders.map(o => o.id));
+                      } else {
+                        setSelectedOrders([]);
+                      }
+                    }}
+                    checked={orders.length > 0 && selectedOrders.length === orders.length}
+                  />
+                </TableHead>
                 <TableHead>Order ID</TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead>Items / Vendors</TableHead>
@@ -692,10 +790,26 @@ export function OrdersManagement() {
               {orders.map((order) => {
                 const isPending = order.payment_status === 'pending';
                 const isVerifying = verifyingOrderId === order.id;
+                const isSelected = selectedOrders.includes(order.id);
                 
                 return (
-                  <TableRow key={order.id} className={isPending ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''}>
-                    <TableCell className="font-mono text-sm">{order.id.slice(0, 8)}</TableCell>
+                  <TableRow key={order.id} className={`${isPending ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''} ${isSelected ? 'bg-primary/5' : ''}`}>
+                    <TableCell>
+                      <input 
+                        type="checkbox" 
+                        className="h-4 w-4 rounded border-gray-300"
+                        checked={isSelected}
+                        onChange={() => toggleOrderSelection(order.id)}
+                      />
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {order.id.slice(0, 8)}
+                      {order.shipments && order.shipments.length > 0 && (
+                         <Badge variant="outline" className="ml-2 text-[10px] bg-blue-50 text-blue-700 border-blue-200">
+                           {order.shipments.length} Shipments
+                         </Badge>
+                      )}
+                    </TableCell>
                     <TableCell>{order.customer_email}</TableCell>
                     <TableCell>
                       <div className="text-sm space-y-1">
@@ -835,6 +949,67 @@ export function OrdersManagement() {
                 {/* Main Content (Left) */}
                 <div className="flex-1 p-6 overflow-y-auto border-r border-border/50">
                   <div className="space-y-8">
+                    {/* Multi-Shipment Section */}
+                    {selectedOrder.shipments && selectedOrder.shipments.length > 0 && (
+                      <section className="mb-8">
+                        <h3 className="text-sm font-semibold mb-4 flex items-center gap-2 text-foreground/80">
+                          <TruckIcon className="h-4 w-4" /> Shipments ({selectedOrder.shipments.length})
+                        </h3>
+                        <div className="space-y-4">
+                          {selectedOrder.shipments.map((shipment) => (
+                            <div key={shipment.id} className="border rounded-lg p-4 bg-muted/5">
+                              <div className="flex justify-between items-start mb-3 pb-3 border-b border-border/50">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h4 className="font-medium text-sm">Shipment #{shipment.id.slice(0, 8)}</h4>
+                                    <Badge variant="outline" className={`${getStatusColor(shipment.status)} text-[10px] uppercase`}>
+                                      {shipment.status}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    To: {shipment.destination_address?.full_name || 'N/A'} ({shipment.destination_address?.city})
+                                  </p>
+                                </div>
+                                <Select
+                                  value={shipment.status}
+                                  onValueChange={(val) => updateShipmentStatus(shipment.id, val)}
+                                >
+                                  <SelectTrigger className="h-8 w-[130px] text-xs">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="pending">Pending</SelectItem>
+                                    <SelectItem value="processing">Processing</SelectItem>
+                                    <SelectItem value="shipped">Shipped</SelectItem>
+                                    <SelectItem value="delivered">Delivered</SelectItem>
+                                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              
+                              <div className="space-y-2">
+                                {shipment.items.map((item: any, idx: number) => (
+                                  <div key={idx} className="flex justify-between text-xs">
+                                    <span className="text-muted-foreground">{item.product.name} × {item.quantity}</span>
+                                    <span className="font-mono">
+                                      {(item.product.weight || 0).toFixed(2)}kg
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                              
+                              {shipment.tracking_number && (
+                                <div className="mt-3 pt-2 border-t border-dashed flex gap-2 text-xs">
+                                  <span className="text-muted-foreground">Tracking:</span>
+                                  <span className="font-mono">{shipment.tracking_number}</span>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    )}
+
                     {/* Items Section */}
                     <section>
                       <h3 className="text-sm font-semibold mb-4 flex items-center gap-2 text-foreground/80">

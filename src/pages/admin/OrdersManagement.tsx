@@ -76,6 +76,29 @@ export function OrdersManagement() {
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [communications, setCommunications] = useState<OrderCommunication[]>([]);
   const [communicationsLoading, setCommunicationsLoading] = useState(false);
+  const [emailTemplate, setEmailTemplate] = useState<string>('');
+  const [emailTemplateSubject, setEmailTemplateSubject] = useState<string>('');
+
+  useEffect(() => {
+    const fetchTemplate = async () => {
+      try {
+        const { data } = await supabase
+          .from('email_templates')
+          .select('subject, html_content')
+          .eq('template_id', 'order_update')
+          .maybeSingle();
+        
+        if (data) {
+          setEmailTemplateSubject(data.subject);
+          setEmailTemplate(data.html_content);
+        }
+      } catch (error) {
+        console.error('Error fetching email template:', error);
+      }
+    };
+    
+    fetchTemplate();
+  }, []);
 
   const fetchCommunications = async (orderId: string) => {
     setCommunicationsLoading(true);
@@ -99,13 +122,18 @@ export function OrdersManagement() {
 
     setIsSendingEmail(true);
     try {
+      // Format message: convert newlines to <br> if no HTML tags are present
+      // This is needed because the edge function minifies HTML (removing newlines)
+      const hasHtmlTags = /<[a-z][\s\S]*>/i.test(emailMessage);
+      const formattedMessage = hasHtmlTags ? emailMessage : emailMessage.replace(/\n/g, '<br>');
+
       const { data, error } = await supabase.functions.invoke('send-order-update', {
         body: {
           orderId: selectedOrder.id,
           customerEmail: selectedOrder.customer_email,
           customerName: selectedOrder.shipping_address?.fullName || 'Customer',
           subject: emailSubject,
-          message: emailMessage,
+          message: formattedMessage,
           status: selectedOrder.status
         }
       });
@@ -133,8 +161,34 @@ export function OrdersManagement() {
 
   const openEmailDialog = (order: Order) => {
     setSelectedOrder(order);
-    setEmailSubject(`Update on Order #${order.id.slice(0, 8)}`);
-    setEmailMessage(`Hi ${order.shipping_address?.fullName || 'there'},\n\nWe wanted to give you an update on your order.\n\n`);
+    
+    // Default values
+    let subject = `Update on Order #${order.id.slice(0, 8)}`;
+    let message = `Hi ${order.shipping_address?.fullName || 'there'},\n\nWe wanted to give you an update on your order.\n\n`;
+
+    // Use template if available
+    if (emailTemplate) {
+       const customerName = order.shipping_address?.fullName || 'Customer';
+       const orderId = order.id.slice(0, 8);
+       const status = order.status;
+
+       // Replace variables in subject
+       if (emailTemplateSubject) {
+         subject = emailTemplateSubject
+           .replace(/{{customerName}}/g, customerName)
+           .replace(/{{orderId}}/g, orderId)
+           .replace(/{{status}}/g, status);
+       }
+
+       // Replace variables in body
+       message = emailTemplate
+         .replace(/{{customerName}}/g, customerName)
+         .replace(/{{orderId}}/g, orderId)
+         .replace(/{{status}}/g, status);
+    }
+
+    setEmailSubject(subject);
+    setEmailMessage(message);
     setIsEmailDialogOpen(true);
   };
 

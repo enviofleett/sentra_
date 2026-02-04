@@ -11,6 +11,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Loader2, Send, Eye } from 'lucide-react';
 import { getEmailTemplate } from '@/utils/emailTemplates';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { EmailTemplatesManager } from '@/components/admin/EmailTemplatesManager';
 
 export const EmailManagement = () => {
   const { toast } = useToast();
@@ -103,126 +105,139 @@ export const EmailManagement = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Email Campaigns</h2>
-        <p className="text-muted-foreground">Send bulk emails to your waiting list or customers.</p>
+        <h2 className="text-3xl font-bold tracking-tight">Email Management</h2>
+        <p className="text-muted-foreground">Manage email campaigns and templates.</p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card className="md:col-span-1">
-          <CardHeader>
-            <CardTitle>Compose Email</CardTitle>
-            <CardDescription>Create your email campaign content.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="recipient">Recipients</Label>
-              <Select value={recipientFilter} onValueChange={setRecipientFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select recipients" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="waiting_list_all">Waiting List - All</SelectItem>
-                  <SelectItem value="waiting_list_verified">Waiting List - Verified Only</SelectItem>
-                  <SelectItem value="waiting_list_pending">Waiting List - Pending Only</SelectItem>
-                  <SelectItem value="customers">All Customers</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+      <Tabs defaultValue="campaigns" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="campaigns">Bulk Campaigns</TabsTrigger>
+          <TabsTrigger value="templates">Templates</TabsTrigger>
+        </TabsList>
 
-            <div className="space-y-2">
-              <Label htmlFor="subject">Subject</Label>
-              <Input 
-                id="subject" 
-                placeholder="Enter email subject" 
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-              />
-            </div>
+        <TabsContent value="campaigns" className="space-y-4">
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card className="md:col-span-1">
+              <CardHeader>
+                <CardTitle>Compose Email</CardTitle>
+                <CardDescription>Create your email campaign content.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="recipient">Recipients</Label>
+                  <Select value={recipientFilter} onValueChange={setRecipientFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select recipients" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="waiting_list_all">Waiting List - All</SelectItem>
+                      <SelectItem value="waiting_list_verified">Waiting List - Verified Only</SelectItem>
+                      <SelectItem value="waiting_list_pending">Waiting List - Pending Only</SelectItem>
+                      <SelectItem value="customers">All Customers</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="message">Message Body (HTML supported)</Label>
-              <Textarea 
-                id="message" 
-                placeholder="Type your message here... You can use {{name}} variable." 
-                className="min-h-[200px]"
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                The message will be wrapped in the standard Sentra email template.
-                You can use <code>{'{{name}}'}</code> to insert the recipient's name.
-              </p>
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="subject">Subject</Label>
+                  <Input 
+                    id="subject" 
+                    placeholder="Enter email subject" 
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                  />
+                </div>
 
-            <div className="pt-4 flex flex-col gap-3">
-              <div className="flex gap-2 items-end">
-                 <div className="flex-1 space-y-2">
-                    <Label htmlFor="test-email">Test Email Address</Label>
-                    <Input 
-                      id="test-email" 
-                      placeholder="your@email.com" 
-                      value={testEmail}
-                      onChange={(e) => setTestEmail(e.target.value)}
-                    />
-                 </div>
-                 <Button 
-                   variant="outline" 
-                   onClick={() => handleSend(true)}
-                   disabled={isLoading || !testEmail}
-                 >
-                   {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                   Send Test
-                 </Button>
-              </div>
-              
-              <div className="flex gap-2 mt-4">
-                <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="secondary" className="flex-1">
-                      <Eye className="mr-2 h-4 w-4" /> Preview
+                <div className="space-y-2">
+                  <Label htmlFor="message">Message Body (HTML supported)</Label>
+                  <Textarea 
+                    id="message" 
+                    placeholder="Type your message here... You can use {{name}} variable." 
+                    className="min-h-[200px]"
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    The message will be wrapped in the standard Sentra email template.
+                    You can use <code>{'{{name}}'}</code> to insert the recipient's name.
+                  </p>
+                </div>
+
+                <div className="pt-4 flex flex-col gap-3">
+                  <div className="flex gap-2 items-end">
+                     <div className="flex-1 space-y-2">
+                        <Label htmlFor="test-email">Test Email Address</Label>
+                        <Input 
+                          id="test-email" 
+                          placeholder="your@email.com" 
+                          value={testEmail}
+                          onChange={(e) => setTestEmail(e.target.value)}
+                        />
+                     </div>
+                     <Button 
+                       variant="outline" 
+                       onClick={() => handleSend(true)}
+                       disabled={isLoading || !testEmail}
+                     >
+                       {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                       Send Test
+                     </Button>
+                  </div>
+                  
+                  <div className="flex gap-2 mt-4">
+                    <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+                      <DialogTrigger asChild>
+                        <Button variant="secondary" className="flex-1">
+                          <Eye className="mr-2 h-4 w-4" /> Preview
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-[800px] h-[80vh] overflow-y-auto">
+                        <DialogHeader>
+                          <DialogTitle>Email Preview</DialogTitle>
+                        </DialogHeader>
+                        <div className="border rounded-md p-4 bg-gray-50 min-h-[400px]">
+                          <iframe 
+                            srcDoc={generatedHtml} 
+                            className="w-full h-[600px] border-none bg-white"
+                            title="Email Preview"
+                          />
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+
+                    <Button 
+                      className="flex-1" 
+                      onClick={() => handleSend(false)}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                      Send Bulk Email
                     </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-[800px] h-[80vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle>Email Preview</DialogTitle>
-                    </DialogHeader>
-                    <div className="border rounded-md p-4 bg-gray-50 min-h-[400px]">
-                      <iframe 
-                        srcDoc={generatedHtml} 
-                        className="w-full h-[600px] border-none bg-white"
-                        title="Email Preview"
-                      />
-                    </div>
-                  </DialogContent>
-                </Dialog>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-                <Button 
-                  className="flex-1" 
-                  onClick={() => handleSend(false)}
-                  disabled={isLoading}
-                >
-                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                  Send Bulk Email
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            <Card className="md:col-span-1 hidden md:block">
+               <CardHeader>
+                <CardTitle>Live Preview</CardTitle>
+                <CardDescription>This is how your email will look.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                 <div className="border rounded-md overflow-hidden bg-gray-100 p-4 flex justify-center items-start h-[600px] overflow-y-auto">
+                   <div className="bg-white shadow-sm max-w-[600px] w-full origin-top transform scale-90">
+                     <div dangerouslySetInnerHTML={{ __html: generatedHtml }} />
+                   </div>
+                 </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
 
-        <Card className="md:col-span-1 hidden md:block">
-           <CardHeader>
-            <CardTitle>Live Preview</CardTitle>
-            <CardDescription>This is how your email will look.</CardDescription>
-          </CardHeader>
-          <CardContent>
-             <div className="border rounded-md overflow-hidden bg-gray-100 p-4 flex justify-center items-start h-[600px] overflow-y-auto">
-               <div className="bg-white shadow-sm max-w-[600px] w-full origin-top transform scale-90">
-                 <div dangerouslySetInnerHTML={{ __html: generatedHtml }} />
-               </div>
-             </div>
-          </CardContent>
-        </Card>
-      </div>
+        <TabsContent value="templates">
+          <EmailTemplatesManager />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

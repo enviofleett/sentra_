@@ -41,6 +41,7 @@ const App = () => (
                 <Route path="/products" element={<MembershipGuard><Products /></MembershipGuard>} />
                 <Route path="/products/:id" element={<MembershipGuard><ProductDetail /></MembershipGuard>} />
                 <Route path="/cart" element={<MembershipGuard><Cart /></MembershipGuard>} />
+                <Route path="/checkout" element={<MembershipGuard><Checkout /></MembershipGuard>} />
                 <Route path="/checkout/success" element={<CheckoutSuccess />} />
                 <Route path="/orders/:orderId/track" element={<OrderTracking />} />
                 <Route path="/auth" element={<Auth />} />

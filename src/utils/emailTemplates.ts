@@ -1,7 +1,8 @@
 
 export const getEmailTemplate = (title: string, bodyContent: string) => {
-  // Convert newlines to <br> for the body content if it's plain text
-  const formattedBody = bodyContent.replace(/\n/g, '<br>');
+  // Convert newlines to <br> for the body content if it's plain text and doesn't contain HTML tags
+  const hasHtmlTags = /<[a-z][\s\S]*>/i.test(bodyContent);
+  const formattedBody = hasHtmlTags ? bodyContent : bodyContent.replace(/\n/g, '<br>');
 
   return `
 <!DOCTYPE html>
@@ -10,117 +11,45 @@ export const getEmailTemplate = (title: string, bodyContent: string) => {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title}</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
-      line-height: 1.6;
-      color: #374151;
-      margin: 0;
-      padding: 0;
-      background-color: #f3f4f6;
-      -webkit-font-smoothing: antialiased;
-    }
-    .wrapper {
-      width: 100%;
-      background-color: #f3f4f6;
-      padding: 40px 0;
-    }
-    .container {
-      max-width: 600px;
-      margin: 0 auto;
-      background-color: #ffffff;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    }
-    .header {
-      padding: 32px 40px;
-      text-align: center;
-      background-color: #ffffff;
-      border-bottom: 1px solid #f3f4f6;
-    }
-    .logo-text {
-      font-size: 28px;
-      font-weight: 800;
-      letter-spacing: -1px;
-      color: #111827;
-      text-decoration: none;
-      display: inline-block;
-    }
-    .content {
-      padding: 40px 40px;
-      background-color: #ffffff;
-    }
-    .content h1 {
-      margin-top: 0;
-      margin-bottom: 24px;
-      color: #111827;
-      font-size: 24px;
-      font-weight: 700;
-      line-height: 1.3;
-    }
-    .content p {
-      margin-bottom: 24px;
-      color: #4b5563;
-      font-size: 16px;
-      line-height: 1.6;
-    }
-    .footer {
-      padding: 32px 40px;
-      background-color: #f9fafb;
-      text-align: center;
-      border-top: 1px solid #f3f4f6;
-    }
-    .footer p {
-      margin: 0;
-      color: #9ca3af;
-      font-size: 12px;
-      line-height: 1.5;
-    }
-    .footer a {
-      color: #6b7280;
-      text-decoration: underline;
-    }
-    
-    /* Button styles for use in body */
-    .btn {
-      display: inline-block;
-      padding: 12px 28px;
-      background-color: #111827;
-      color: #ffffff !important;
-      text-decoration: none;
-      border-radius: 8px;
-      font-weight: 600;
-      font-size: 16px;
-      margin: 16px 0;
-      text-align: center;
-    }
-    
-    @media only screen and (max-width: 640px) {
-      .wrapper { padding: 20px 0; }
-      .container { border-radius: 0; }
-      .header { padding: 24px 20px; }
-      .content { padding: 32px 20px; }
-      .footer { padding: 24px 20px; }
-    }
-  </style>
 </head>
-<body>
-  <div class="wrapper">
-    <div class="container">
-      <div class="header">
-        <span class="logo-text">SENTRA</span>
-      </div>
-      <div class="content">
-        <!-- Main Content -->
-        ${formattedBody}
-      </div>
-      <div class="footer">
-        <p>&copy; ${new Date().getFullYear()} Sentra. All rights reserved.</p>
-        <p style="margin-top: 8px;">You are receiving this email because you signed up for updates.</p>
-      </div>
-    </div>
-  </div>
+<body style="margin: 0; padding: 0; background-color: #0a0a0a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #0a0a0a; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 16px; overflow: hidden;">
+          <!-- Header -->
+          <tr>
+            <td style="padding: 40px 40px 20px; text-align: center;">
+              <h1 style="color: #d4af37; font-size: 28px; margin: 0; font-weight: 700;">SENTRA</h1>
+              <p style="color: #888; font-size: 12px; margin: 8px 0 0; letter-spacing: 2px;">PREMIUM FRAGRANCES</p>
+            </td>
+          </tr>
+          
+          <!-- Main Content -->
+          <tr>
+            <td style="padding: 20px 40px 40px;">
+              <h2 style="color: #ffffff; font-size: 24px; margin: 0 0 16px; text-align: center;">${title}</h2>
+              
+              <div style="color: #cccccc; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
+                ${formattedBody}
+              </div>
+              
+              <div style="text-align: center; margin-top: 32px;">
+                <a href="https://sentra.shop/account" style="display: inline-block; background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%); color: #0a0a0a; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-weight: 600; font-size: 16px;">Visit Account</a>
+              </div>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 24px 40px; background: rgba(0, 0, 0, 0.3); text-align: center;">
+              <p style="color: #666; font-size: 12px; margin: 0;">&copy; ${new Date().getFullYear()} Sentra. All rights reserved.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>
   `;

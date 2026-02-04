@@ -1948,6 +1948,116 @@ export type Database = {
           },
         ]
       }
+      user_addresses: {
+        Row: {
+          id: string
+          user_id: string
+          label: string | null
+          full_name: string
+          phone: string
+          email: string | null
+          street: string
+          city: string
+          state: string
+          region_id: string | null
+          is_default: boolean | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          label?: string | null
+          full_name: string
+          phone: string
+          email?: string | null
+          street: string
+          city: string
+          state: string
+          region_id?: string | null
+          is_default?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          label?: string | null
+          full_name?: string
+          phone?: string
+          email?: string | null
+          street?: string
+          city?: string
+          state?: string
+          region_id?: string | null
+          is_default?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_addresses_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_addresses_region_id_fkey"
+            columns: ["region_id"]
+            isOneToOne: false
+            referencedRelation: "shipping_regions"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      order_shipments: {
+        Row: {
+          id: string
+          order_id: string | null
+          shipping_address: Json
+          items: Json
+          shipping_method: string | null
+          shipping_cost: number | null
+          tracking_number: string | null
+          status: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          order_id?: string | null
+          shipping_address: Json
+          items: Json
+          shipping_method?: string | null
+          shipping_cost?: number | null
+          tracking_number?: string | null
+          status?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          order_id?: string | null
+          shipping_address?: Json
+          items?: Json
+          shipping_method?: string | null
+          shipping_cost?: number | null
+          tracking_number?: string | null
+          status?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_shipments_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       product_profitability: {

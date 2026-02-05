@@ -33,6 +33,8 @@ interface CartContextType {
   clearCart: () => Promise<void>;
   totalItems: number;
   subtotal: number;
+  taxAmount: number;
+  vatRate: number;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -61,9 +63,11 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [vatRate, setVatRate] = useState(0);
 
   // Sync guest cart to DB on login, or load appropriate cart
   useEffect(() => {
+    fetchVatRate();
     const syncAndLoad = async () => {
       setLoading(true);
       
@@ -112,6 +116,22 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
     syncAndLoad();
   }, [user]);
+
+  const fetchVatRate = async () => {
+    try {
+      const { data } = await supabase
+        .from('vat_settings')
+        .select('rate')
+        .eq('is_active', true)
+        .maybeSingle();
+      
+      if (data) {
+        setVatRate(Number(data.rate));
+      }
+    } catch (err) {
+      console.error('Failed to fetch VAT rate', err);
+    }
+  };
 
   const loadUserCart = async () => {
     if (!user) return;
@@ -327,6 +347,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
   const subtotal = items.reduce((sum, item) => sum + (item.product?.price || 0) * item.quantity, 0);
+  const taxAmount = (subtotal * vatRate) / 100;
 
   return (
     <CartContext.Provider
@@ -338,7 +359,9 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         updateQuantity,
         clearCart,
         totalItems,
-        subtotal
+        subtotal,
+        taxAmount,
+        vatRate
       }}
     >
       {children}

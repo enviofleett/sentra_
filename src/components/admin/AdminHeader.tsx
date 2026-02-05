@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Package, ShoppingCart, FolderTree, Store, Settings, Menu, Users, Sparkles, Tag, UserPlus, Wallet, FileText, LogOut, Mail } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingCart, FolderTree, Store, Settings, Menu, Users, Sparkles, Tag, UserPlus, Wallet, FileText, LogOut, Mail, Percent, BarChart3 } from 'lucide-react';
 import sentraLogo from '@/assets/sentra-logo.png';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -46,6 +46,10 @@ const navigation = [{
   href: '/admin/waitlist',
   icon: UserPlus
 }, {
+  name: 'Emails',
+  href: '/admin/emails',
+  icon: Mail
+}, {
   name: 'Articles',
   href: '/admin/articles',
   icon: FileText
@@ -53,6 +57,14 @@ const navigation = [{
   name: 'Content',
   href: '/admin/content',
   icon: FileText
+}, {
+  name: 'Tax Management',
+  href: '/admin/tax',
+  icon: Percent
+}, {
+  name: 'Tax Reports',
+  href: '/admin/tax-reports',
+  icon: BarChart3
 }, {
   name: 'Settings',
   href: '/admin/settings',

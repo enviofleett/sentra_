@@ -19,7 +19,7 @@ import { MIN_ORDER_UNITS } from '@/utils/constants';
 
 export default function Checkout() {
   const navigate = useNavigate();
-  const { items, subtotal, totalItems, clearCart } = useCart();
+  const { items, subtotal, totalItems, clearCart, taxAmount, vatRate } = useCart();
   const { user } = useAuth();
   
   const [mode, setMode] = useState<'single' | 'multi'>('single');
@@ -230,8 +230,9 @@ export default function Checkout() {
           status: 'pending',
           payment_status: 'pending',
           subtotal: subtotal,
+          tax: taxAmount,
           shipping_cost: totalShipping,
-          total_amount: subtotal + totalShipping,
+          total_amount: subtotal + totalShipping + taxAmount,
           shipping_address: masterAddress, // Primary contact
           billing_address: masterAddress,
           items: items, // Keep full cart snapshot
@@ -370,6 +371,11 @@ export default function Checkout() {
                     <span className="text-muted-foreground">Subtotal ({items.length} items)</span>
                     <span>₦{subtotal.toLocaleString()}</span>
                   </div>
+
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">VAT ({vatRate}%)</span>
+                    <span>₦{taxAmount.toLocaleString()}</span>
+                  </div>
                   
                   {mode === 'single' ? (
                     <div className="flex justify-between">
@@ -400,7 +406,7 @@ export default function Checkout() {
                   <div className="border-t pt-2 mt-2">
                     <div className="flex justify-between font-bold text-lg">
                       <span>Total</span>
-                      <span>₦{(subtotal + totalShipping).toLocaleString()}</span>
+                      <span>₦{(subtotal + totalShipping + taxAmount).toLocaleString()}</span>
                     </div>
                   </div>
                 </div>

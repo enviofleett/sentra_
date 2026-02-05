@@ -9,11 +9,14 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Plus, Mail, Users, FileText, Image as ImageIcon, Link, Rocket, Upload, PieChart, TrendingUp, ExternalLink, Crown, Truck } from 'lucide-react';
+import { Loader2, Plus, Mail, Users, FileText, Image as ImageIcon, Link, Rocket, Upload, PieChart, TrendingUp, ExternalLink, Crown, Truck, Percent, BarChart3 } from 'lucide-react';
 import { useBranding } from '@/hooks/useBranding';
 import { ShippingRateManager } from '@/components/admin/ShippingRateManager';
 import { ShippingRegionsManager } from '@/components/admin/shipping/ShippingRegionsManager';
 import { ShippingMatrixManager } from '@/components/admin/shipping/ShippingMatrixManager';
+import { EmailManagement } from './EmailManagement';
+import TaxManagement from './TaxManagement';
+import TaxReports from './TaxReports';
 
 // Preview Store Button Component
 function PreviewStoreButton({ isPrelaunchEnabled }: { isPrelaunchEnabled: boolean }) {
@@ -1885,7 +1888,7 @@ export default function SettingsManagement() {
       <Card>
         <Tabs defaultValue="membership" className="w-full">
           <CardHeader className="p-0 overflow-x-auto">
-            <TabsList className="grid w-full grid-cols-9 h-auto rounded-none border-b bg-transparent p-0 min-w-[900px]">
+            <TabsList className="grid w-full grid-cols-11 h-auto rounded-none border-b bg-transparent p-0 min-w-[1100px]">
               <TabsTrigger value="membership" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
                 <Crown className="h-4 w-4 mr-2" /> Membership
               </TabsTrigger>
@@ -1901,8 +1904,14 @@ export default function SettingsManagement() {
               <TabsTrigger value="roles" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
                 <Users className="h-4 w-4 mr-2" /> Roles
               </TabsTrigger>
-              <TabsTrigger value="templates" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
+              <TabsTrigger value="emails" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
                 <Mail className="h-4 w-4 mr-2" /> Emails
+              </TabsTrigger>
+              <TabsTrigger value="tax" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
+                <Percent className="h-4 w-4 mr-2" /> Tax
+              </TabsTrigger>
+              <TabsTrigger value="tax-reports" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
+                <BarChart3 className="h-4 w-4 mr-2" /> Tax Reports
               </TabsTrigger>
               <TabsTrigger value="terms" className="rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary">
                 <FileText className="h-4 w-4 mr-2" /> T&C
@@ -1944,8 +1953,16 @@ export default function SettingsManagement() {
             <UserRoleManager />
           </TabsContent>
           
-          <TabsContent value="templates" className="p-6">
-            <EmailTemplateManager />
+          <TabsContent value="emails" className="p-6">
+            <EmailManagement />
+          </TabsContent>
+
+          <TabsContent value="tax" className="p-6">
+            <TaxManagement />
+          </TabsContent>
+
+          <TabsContent value="tax-reports" className="p-6">
+            <TaxReports />
           </TabsContent>
 
           <TabsContent value="terms" className="p-6">

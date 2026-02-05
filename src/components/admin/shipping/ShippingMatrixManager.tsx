@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Plus, Trash2, Route, Loader2, ArrowRight } from 'lucide-react';
+import { Plus, Trash2, Route, Loader2, ArrowRight, Info } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface ShippingRegion {
   id: string;
@@ -164,6 +165,26 @@ export function ShippingMatrixManager() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
+        <Alert className="bg-blue-50/50 border-blue-200">
+          <Info className="h-4 w-4 text-blue-600" />
+          <AlertTitle className="text-blue-800 font-medium">ML to KG Weight Calculation Logic</AlertTitle>
+          <AlertDescription className="text-blue-700 text-sm mt-2 space-y-2">
+            <p>
+              Shipping rates are calculated in <strong>KG</strong>. Since products are listed in <strong>ML</strong>, 
+              the system automatically converts volume to weight using a tiered model that accounts for glass bottles and packaging:
+            </p>
+            <ul className="list-disc pl-5 space-y-1 font-mono text-xs">
+              <li><strong>≤ 30ml:</strong> 0.15kg base + liquid weight (e.g., 30ml ≈ 0.18kg)</li>
+              <li><strong>≤ 60ml:</strong> 0.20kg base + liquid weight (e.g., 50ml ≈ 0.25kg)</li>
+              <li><strong>≤ 100ml:</strong> 0.30kg base + liquid weight (e.g., 100ml ≈ 0.40kg)</li>
+              <li><strong>&gt; 100ml:</strong> 0.50kg base + liquid weight (e.g., 200ml ≈ 0.70kg)</li>
+            </ul>
+            <p className="pt-1 text-xs italic">
+              * Note: Liquid density is estimated at 1g/ml.
+            </p>
+          </AlertDescription>
+        </Alert>
+
         {/* Add Route Form */}
         <div className="border rounded-lg p-4 bg-muted/30 space-y-4">
           <h4 className="font-medium">Add New Route</h4>

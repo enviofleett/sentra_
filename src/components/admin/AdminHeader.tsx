@@ -46,10 +46,6 @@ const navigation = [{
   href: '/admin/waitlist',
   icon: UserPlus
 }, {
-  name: 'Emails',
-  href: '/admin/emails',
-  icon: Mail
-}, {
   name: 'Articles',
   href: '/admin/articles',
   icon: FileText
@@ -57,14 +53,6 @@ const navigation = [{
   name: 'Content',
   href: '/admin/content',
   icon: FileText
-}, {
-  name: 'Tax Management',
-  href: '/admin/tax',
-  icon: Percent
-}, {
-  name: 'Tax Reports',
-  href: '/admin/tax-reports',
-  icon: BarChart3
 }, {
   name: 'Settings',
   href: '/admin/settings',

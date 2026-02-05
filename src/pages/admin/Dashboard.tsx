@@ -18,10 +18,6 @@ import AffiliatesManagement from './AffiliatesManagement';
 import ContentManagement from './ContentManagement';
 import ArticlesManagement from './ArticlesManagement';
 
-import { EmailManagement } from './EmailManagement';
-import TaxManagement from './TaxManagement';
-import TaxReports from './TaxReports';
-
 export default function AdminDashboard() {
   const { user } = useAuth();
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
@@ -90,9 +86,6 @@ export default function AdminDashboard() {
           <Route path="/affiliates" element={<AffiliatesManagement />} />
           <Route path="/content" element={<ContentManagement />} />
           <Route path="/articles" element={<ArticlesManagement />} />
-          <Route path="/emails" element={<EmailManagement />} />
-          <Route path="/tax" element={<TaxManagement />} />
-          <Route path="/tax-reports" element={<TaxReports />} />
         </Routes>
       </main>
     </div>

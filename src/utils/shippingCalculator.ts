@@ -1,10 +1,9 @@
 import { supabase } from '@/integrations/supabase/client';
 
 // Constants for weight calculation
-const PACKAGING_OVERHEAD_KG = 0.2; // Glass bottle + box weight
 const DEFAULT_WEIGHT_KG = 0.5; // Fallback weight for products without weight data
 
-interface CartItem {
+export interface CartItem {
   product_id: string;
   quantity: number;
   product?: {
@@ -66,8 +65,22 @@ export function getProductWeight(product: CartItem['product']): number {
     if (mlMatch) {
       const mlValue = parseFloat(mlMatch[1]);
       // Convert ml to kg (1000ml = 1kg for liquid) + packaging overhead
-      const liquidWeight = mlValue / 1000;
-      return liquidWeight + PACKAGING_OVERHEAD_KG;
+      const liquidWeight = mlValue / 1000; // 1ml ≈ 0.001kg (assuming water density for safety)
+      
+      // Tiered Glass & Packaging Weight Estimation
+      // Perfume bottles are heavy (glass) relative to their content
+      let containerWeight = 0;
+      if (mlValue <= 30) {
+        containerWeight = 0.15; // ~150g for small bottle + box
+      } else if (mlValue <= 60) {
+        containerWeight = 0.20; // ~200g for medium bottle + box
+      } else if (mlValue <= 100) {
+        containerWeight = 0.30; // ~300g for standard bottle + box (often heavy glass)
+      } else {
+        containerWeight = 0.50; // ~500g for large/jumbo bottle + box
+      }
+
+      return liquidWeight + containerWeight;
     }
   }
 
@@ -77,10 +90,14 @@ export function getProductWeight(product: CartItem['product']): number {
 
 /**
  * Calculate total weight for an array of cart items
+ * @param enforceMinPerProduct If true, enforces a minimum weight of 0.5kg per product unit
  */
-export function calculateTotalWeight(cartItems: CartItem[]): number {
+export function calculateTotalWeight(cartItems: CartItem[], enforceMinPerProduct: boolean = false): number {
   return cartItems.reduce((sum, item) => {
-    const weight = getProductWeight(item.product);
+    let weight = getProductWeight(item.product);
+    if (enforceMinPerProduct) {
+      weight = Math.max(weight, 0.5);
+    }
     return sum + weight * item.quantity;
   }, 0);
 }
@@ -91,7 +108,8 @@ export function calculateTotalWeight(cartItems: CartItem[]): number {
  */
 export async function calculateShipping(
   cartItems: CartItem[],
-  customerRegionId?: string
+  customerRegionId?: string,
+  options: { enforceMinPerProduct?: boolean } = {}
 ): Promise<ShippingCalculationResult> {
   // Default result
   const result: ShippingCalculationResult = {
@@ -104,12 +122,8 @@ export async function calculateShipping(
     hasLocationBasedPricing: false,
   };
 
-  if (!cartItems || cartItems.length === 0) {
-    return result;
-  }
-
   // Step 1: Calculate total cart weight using smart weight calculation
-  result.totalWeight = calculateTotalWeight(cartItems);
+  result.totalWeight = calculateTotalWeight(cartItems, options.enforceMinPerProduct);
 
   // Calculate total quantity across all items for bulk order override
   const totalQuantity = cartItems.reduce((sum, item) => sum + item.quantity, 0);

@@ -7,7 +7,7 @@ import sentraLogo from '@/assets/sentra-logo.png';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { NavigationMenu, NavigationMenuContent, NavigationMenuItem, NavigationMenuLink, NavigationMenuList, NavigationMenuTrigger } from '@/components/ui/navigation-menu';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandItem, CommandGroup } from '@/components/ui/command';
 import { supabase } from '@/integrations/supabase/client';
 import { useState, useEffect } from 'react';
@@ -268,7 +268,11 @@ export const Navbar = () => {
 
       {/* Search Modal */}
       <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
-        <DialogContent className="overflow-hidden p-0 max-w-lg bg-background border-border">
+        <DialogContent className="overflow-hidden p-0 max-w-lg bg-background border-border" aria-describedby="search-modal-description">
+          <div className="sr-only">
+             <DialogTitle>Search Products</DialogTitle>
+             <p id="search-modal-description">Search for perfumes and products in the catalog.</p>
+          </div>
           <Command className="bg-transparent" shouldFilter={false}>
             <form onSubmit={handleSearchSubmit}>
               <div className="flex items-center border-b border-border px-4">

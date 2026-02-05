@@ -921,7 +921,13 @@ export function OrdersManagement() {
       </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0 gap-0 bg-background">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0 gap-0 bg-background" aria-describedby="order-details-description">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Order Details #{selectedOrder?.id}</DialogTitle>
+            <DialogDescription id="order-details-description">
+              Detailed view of order #{selectedOrder?.id}, including items, shipments, and customer info.
+            </DialogDescription>
+          </DialogHeader>
           {selectedOrder ? (
             <div className="flex flex-col h-full">
               {/* Header */}

@@ -63,11 +63,12 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [vatRate, setVatRate] = useState(0);
+  // Hardcoded VAT rate for production stability
+  const [vatRate] = useState(7.5);
 
   // Sync guest cart to DB on login, or load appropriate cart
   useEffect(() => {
-    fetchVatRate();
+    // fetchVatRate(); // Disabled dynamic fetching
     const syncAndLoad = async () => {
       setLoading(true);
       

@@ -18,25 +18,16 @@ export default function TaxManagement() {
   const [history, setHistory] = useState<any[]>([]);
 
   useEffect(() => {
-    fetchData();
+    // Manually set rate for UI consistency with hardcoded backend
+    setCurrentRate(7.5);
+    setNewRate('7.5');
+    // Still fetch history if available
+    fetchHistory();
   }, []);
 
-  const fetchData = async () => {
+  const fetchHistory = async () => {
     setLoading(true);
     try {
-      // Fetch active rate
-      const { data: settings } = await supabase
-        .from('vat_settings')
-        .select('rate')
-        .eq('is_active', true)
-        .maybeSingle();
-      
-      if (settings) {
-        setCurrentRate(Number(settings.rate));
-        setNewRate(settings.rate.toString());
-      }
-
-      // Fetch audit logs
       const { data: logs } = await supabase
         .from('vat_audit_logs')
         .select(`
@@ -48,73 +39,17 @@ export default function TaxManagement() {
       
       setHistory(logs || []);
     } catch (error) {
-      console.error('Error fetching tax data:', error);
+      console.error('Error fetching tax history:', error);
     } finally {
       setLoading(false);
     }
   };
 
   const handleUpdateRate = async () => {
-    const rateValue = parseFloat(newRate);
-    if (isNaN(rateValue) || rateValue < 0 || rateValue > 100) {
-      toast({
-        title: "Validation Error",
-        description: "VAT rate must be between 0 and 100%",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (rateValue === currentRate) {
-      toast({
-        title: "No Change",
-        description: "The new rate is the same as the current rate.",
-      });
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Unauthorized');
-
-      // 1. Log the change
-      const { error: logError } = await supabase.from('vat_audit_logs').insert({
-        old_rate: currentRate,
-        new_rate: rateValue,
-        changed_by: user.id
-      });
-      if (logError) throw logError;
-
-      // 2. Update the setting
-      const { error: settingError } = await supabase
-        .from('vat_settings')
-        .update({ 
-          rate: rateValue, 
-          updated_at: new Date().toISOString(),
-          updated_by: user.id
-        })
-        .eq('is_active', true);
-
-      if (settingError) throw settingError;
-
-      setCurrentRate(rateValue);
-      fetchData(); // Refresh logs
-
-      toast({
-        title: "Success",
-        description: `VAT Rate updated to ${rateValue}%`,
-      });
-    } catch (error: any) {
-      console.error('Error updating rate:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update VAT rate",
-        variant: "destructive",
-      });
-    } finally {
-      setSaving(false);
-    }
+    toast({
+      title: "System Update",
+      description: "VAT Rate is currently hardcoded to 7.5% for production stability. Database updates are disabled.",
+    });
   };
 
   return (
@@ -148,8 +83,9 @@ export default function TaxManagement() {
                   value={newRate}
                   onChange={(e) => setNewRate(e.target.value)}
                   placeholder="e.g. 7.5"
+                  disabled={true}
                 />
-                <Button onClick={handleUpdateRate} disabled={saving || loading}>
+                <Button onClick={handleUpdateRate} disabled={true}>
                   {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Update Rate'}
                 </Button>
               </div>
@@ -157,9 +93,9 @@ export default function TaxManagement() {
 
             <Alert className="bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800">
               <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              <AlertTitle>Important</AlertTitle>
+              <AlertTitle>System Locked</AlertTitle>
               <AlertDescription className="text-amber-700 dark:text-amber-300">
-                Updating this rate will immediately affect all new checkouts. Existing orders will not be changed.
+                VAT rate is currently hardcoded to 7.5% for production stability. Please contact the development team to re-enable dynamic updates.
               </AlertDescription>
             </Alert>
           </CardContent>

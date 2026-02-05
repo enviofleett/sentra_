@@ -13,6 +13,7 @@ import { getEmailTemplate } from '@/utils/emailTemplates';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EmailTemplatesManager } from '@/components/admin/EmailTemplatesManager';
+import { RichTextEditor } from '@/components/admin/RichTextEditor';
 
 export const EmailManagement = () => {
   const { toast } = useToast();
@@ -150,12 +151,9 @@ export const EmailManagement = () => {
 
                 <div className="space-y-2">
                   <Label htmlFor="message">Message Body (HTML supported)</Label>
-                  <Textarea 
-                    id="message" 
-                    placeholder="Type your message here... You can use {{name}} variable." 
-                    className="min-h-[200px]"
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
+                  <RichTextEditor
+                    content={message}
+                    onChange={setMessage}
                   />
                   <p className="text-xs text-muted-foreground">
                     The message will be wrapped in the standard Sentra email template.

@@ -35,6 +35,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { cn } from '@/lib/utils';
+import { ProductImage } from '@/components/common/ProductImage';
 
 import AddressesProfile from './profile/AddressesProfile';
 import OrderDetail from './profile/OrderDetail';
@@ -272,8 +273,19 @@ function Orders() {
             >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Package className="h-5 w-5 text-primary" />
+                  <div className="w-12 h-12 rounded-lg flex-shrink-0 border bg-muted/30 overflow-hidden">
+                    {order.items && order.items.length > 0 ? (
+                      <ProductImage 
+                        src={order.items[0].image_url} 
+                        alt={order.items[0].product_name || order.items[0].name || 'Order Item'} 
+                        containerClassName="w-full h-full border-none"
+                        fallbackSize={16}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-primary/5">
+                        <Package className="h-5 w-5 text-primary/40" />
+                      </div>
+                    )}
                   </div>
                   <div>
                     <p className="font-medium">#{order.id.slice(0, 8)}</p>

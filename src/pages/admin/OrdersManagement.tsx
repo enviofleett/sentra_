@@ -16,6 +16,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { DateRange } from 'react-day-picker';
+import { ProductImage } from '@/components/common/ProductImage';
+import { RichTextEditor } from '@/components/admin/RichTextEditor';
 
 interface Vendor {
   id: string;
@@ -134,18 +136,17 @@ export function OrdersManagement() {
 
     setIsSendingEmail(true);
     try {
-      // Format message: convert newlines to <br> if no HTML tags are present
-      // This is needed because the edge function minifies HTML (removing newlines)
-      const hasHtmlTags = /<[a-z][\s\S]*>/i.test(emailMessage);
-      const formattedMessage = hasHtmlTags ? emailMessage : emailMessage.replace(/\n/g, '<br>');
-
+      // Use the rich text content directly
+      // The edge function likely wraps this in the main template, or we should wrap it here if needed.
+      // Assuming send-order-update expects the body content.
+      
       const { data, error } = await supabase.functions.invoke('send-order-update', {
         body: {
           orderId: selectedOrder.id,
           customerEmail: selectedOrder.customer_email,
           customerName: selectedOrder.shipping_address?.fullName || 'Customer',
           subject: emailSubject,
-          message: formattedMessage,
+          message: emailMessage, // Rich text HTML
           status: selectedOrder.status
         }
       });
@@ -1018,15 +1019,12 @@ export function OrdersManagement() {
                       <div className="space-y-4">
                         {selectedOrder.items?.map((item: any, idx: number) => (
                           <div key={idx} className="flex gap-4 p-4 rounded-lg border bg-card hover:bg-accent/5 transition-colors">
-                            <div className="h-16 w-16 rounded-md bg-muted overflow-hidden flex-shrink-0 border">
-                              {item.image_url ? (
-                                <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
-                              ) : (
-                                <div className="h-full w-full flex items-center justify-center text-muted-foreground">
-                                  <Package className="h-6 w-6 opacity-20" />
-                                </div>
-                              )}
-                            </div>
+                            <ProductImage 
+                              src={item.image_url} 
+                              alt={item.name}
+                              containerClassName="h-16 w-16 rounded-md bg-muted flex-shrink-0 border"
+                              fallbackSize={20}
+                            />
                             <div className="flex-1 min-w-0">
                               <div className="flex justify-between items-start mb-1">
                                 <h4 className="font-medium text-sm line-clamp-2 pr-4">{item.name}</h4>
@@ -1216,12 +1214,9 @@ export function OrdersManagement() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="message">Message</Label>
-              <Textarea
-                id="message"
-                value={emailMessage}
-                onChange={(e) => setEmailMessage(e.target.value)}
-                className="min-h-[150px]"
-                placeholder="Type your message here..."
+              <RichTextEditor
+                content={emailMessage}
+                onChange={setEmailMessage}
               />
             </div>
           </div>

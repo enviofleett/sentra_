@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { ArrowLeft, Package, MapPin, CreditCard, Clock } from 'lucide-react';
+import { ProductImage } from '@/components/common/ProductImage';
 
 interface OrderItem {
   product_id: string;
@@ -183,13 +184,12 @@ export default function OrderDetail() {
           <div className="space-y-4">
             {Array.isArray(order.items) && order.items.map((item, index) => (
               <div key={index} className="flex gap-4 pb-4 border-b last:border-b-0">
-                {item.image_url && (
-                  <img 
-                    src={item.image_url} 
-                    alt={item.product_name}
-                    className="w-20 h-20 object-cover rounded"
-                  />
-                )}
+                <ProductImage 
+                  src={item.image_url} 
+                  alt={item.product_name}
+                  containerClassName="w-20 h-20 rounded-lg flex-shrink-0"
+                  fallbackSize={24}
+                />
                 <div className="flex-1">
                   <h4 className="font-semibold">{item.product_name}</h4>
                   <p className="text-sm text-muted-foreground">Quantity: {item.quantity}</p>

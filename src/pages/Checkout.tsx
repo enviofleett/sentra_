@@ -20,7 +20,7 @@ import { MIN_ORDER_UNITS } from '@/utils/constants';
 export default function Checkout() {
   const navigate = useNavigate();
   const { items, subtotal, totalItems, clearCart, taxAmount, vatRate } = useCart();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   
   const [mode, setMode] = useState<'single' | 'multi'>('single');
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
@@ -29,6 +29,14 @@ export default function Checkout() {
   const [processing, setProcessing] = useState(false);
   const [shippingCosts, setShippingCosts] = useState<Record<string, number>>({});
   const [totalShipping, setTotalShipping] = useState(0);
+
+  // Redirect if not logged in
+  useEffect(() => {
+    if (!authLoading && !user) {
+      const redirectPath = encodeURIComponent(window.location.pathname);
+      navigate(`/auth?redirect=${redirectPath}`);
+    }
+  }, [user, authLoading, navigate]);
 
   // Redirect if empty or MOQ not met
   useEffect(() => {

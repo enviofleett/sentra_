@@ -32,7 +32,7 @@ interface AddressBookProps {
 }
 
 export function AddressBook({ onSelect, selectedAddressId }: AddressBookProps) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -54,11 +54,16 @@ export function AddressBook({ onSelect, selectedAddressId }: AddressBookProps) {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (user) {
-      fetchAddresses();
-      loadRegions();
+    if (authLoading) return;
+
+    if (!user) {
+      setLoading(false);
+      return;
     }
-  }, [user]);
+
+    fetchAddresses();
+    loadRegions();
+  }, [user, authLoading]);
 
   const loadRegions = async () => {
     const data = await getShippingRegions();
@@ -185,7 +190,15 @@ export function AddressBook({ onSelect, selectedAddressId }: AddressBookProps) {
     }
   };
 
-  if (loading) return <div className="p-4 flex justify-center"><Loader2 className="animate-spin" /></div>;
+  if (loading || authLoading) return <div className="p-4 flex justify-center"><Loader2 className="animate-spin" /></div>;
+
+  if (!user) {
+    return (
+      <div className="text-center p-8 border border-dashed rounded-lg text-muted-foreground">
+        Please log in to view your addresses.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -215,6 +228,11 @@ export function AddressBook({ onSelect, selectedAddressId }: AddressBookProps) {
                   <p className="font-medium">{addr.label} - {addr.full_name}</p>
                   <p className="text-sm text-muted-foreground">{addr.street}</p>
                   <p className="text-sm text-muted-foreground">{addr.city}, {addr.state}</p>
+                  {addr.region_id && (
+                    <p className="text-xs text-primary/80 font-medium">
+                      Region: {regions.find(r => r.id === addr.region_id)?.name || 'Loading...'}
+                    </p>
+                  )}
                   <p className="text-sm text-muted-foreground mt-1">{addr.phone}</p>
                 </div>
               </div>

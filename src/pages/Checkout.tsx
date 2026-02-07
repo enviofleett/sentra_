@@ -142,9 +142,9 @@ export default function Checkout() {
     calc();
   }, [mode, selectedAddress, shipments, items]);
 
-  const handlePlaceOrder = async () => {
-    const promoDiscount = usePromo && promoData ? promoData.applicable_discount : 0;
+  const promoDiscount = usePromo && promoData ? promoData.applicable_discount : 0;
 
+  const handlePlaceOrder = async () => {
     if (mode === 'single' && !selectedAddress) {
       toast.error('Please select a shipping address');
       return;

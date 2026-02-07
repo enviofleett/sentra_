@@ -10,6 +10,8 @@ import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { AddressBook, Address } from '@/components/checkout/AddressBook';
 import { ShipmentSplitter, ShipmentGroup } from '@/components/checkout/ShipmentSplitter';
 import { calculateShipping } from '@/utils/shippingCalculator';
@@ -29,6 +31,43 @@ export default function Checkout() {
   const [processing, setProcessing] = useState(false);
   const [shippingCosts, setShippingCosts] = useState<Record<string, number>>({});
   const [totalShipping, setTotalShipping] = useState(0);
+
+  // Promo Wallet State
+  const [promoData, setPromoData] = useState<any>(null);
+  const [usePromo, setUsePromo] = useState(false);
+  const [promoLoading, setPromoLoading] = useState(false);
+
+  // Fetch Promo Discount Eligibility
+  useEffect(() => {
+    const fetchPromo = async () => {
+      if (!user || items.length === 0) return;
+      
+      setPromoLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const { data, error } = await supabase.functions.invoke('calculate-promo-discount', {
+            body: { items: items.map(i => ({ product_id: i.product_id, quantity: i.quantity })) },
+            headers: {
+                Authorization: `Bearer ${session?.access_token}`
+            }
+        });
+
+        if (error) {
+            console.error('Error fetching promo discount:', error);
+            return;
+        }
+
+        setPromoData(data);
+        // Auto-enable if user has used it before? No, let them choose.
+      } catch (err) {
+        console.error('Error in promo fetch:', err);
+      } finally {
+        setPromoLoading(false);
+      }
+    };
+    
+    fetchPromo();
+  }, [user, items]);
 
   // Redirect if not logged in
   useEffect(() => {
@@ -104,6 +143,8 @@ export default function Checkout() {
   }, [mode, selectedAddress, shipments, items]);
 
   const handlePlaceOrder = async () => {
+    const promoDiscount = usePromo && promoData ? promoData.applicable_discount : 0;
+
     if (mode === 'single' && !selectedAddress) {
       toast.error('Please select a shipping address');
       return;
@@ -184,7 +225,7 @@ export default function Checkout() {
           orderId: order.id,
           customerEmail: user!.email!,
           customerName: masterAddress.full_name,
-          promoDiscount: 0 // We can add promo logic here later if needed
+          promoDiscount: promoDiscount
         }
       });
 
@@ -282,6 +323,40 @@ export default function Checkout() {
                     <span className="text-muted-foreground">VAT ({vatRate}%)</span>
                     <span>₦{taxAmount.toLocaleString()}</span>
                   </div>
+
+                  {/* Promo Wallet Section */}
+                  {promoData && promoData.promo_balance > 0 && (
+                    <div className="py-3 border-y border-dashed space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                                <Label htmlFor="promo-mode" className="text-sm font-medium flex items-center gap-2">
+                                  <Building className="h-3 w-3 text-primary" />
+                                  Use Promo Balance
+                                </Label>
+                                <p className="text-xs text-muted-foreground">
+                                    Available: ₦{promoData.promo_balance.toLocaleString()}
+                                </p>
+                            </div>
+                            <Switch 
+                                id="promo-mode" 
+                                checked={usePromo} 
+                                onCheckedChange={setUsePromo} 
+                                disabled={promoLoading || promoData.eligible_discount <= 0}
+                            />
+                        </div>
+                        {usePromo && (
+                            <div className="flex justify-between text-sm font-medium text-green-600">
+                                <span>Promo Discount ({promoData.promo_percentage}%)</span>
+                                <span>-₦{promoDiscount.toLocaleString()}</span>
+                            </div>
+                        )}
+                        {promoData.eligible_discount > 0 && !usePromo && (
+                             <p className="text-xs text-muted-foreground">
+                                You can save up to ₦{Math.min(promoData.eligible_discount, promoData.promo_balance).toLocaleString()} on this order based on profit sharing.
+                             </p>
+                        )}
+                    </div>
+                  )}
                   
                   {mode === 'single' ? (
                     <div className="flex justify-between">
@@ -312,7 +387,7 @@ export default function Checkout() {
                   <div className="border-t pt-2 mt-2">
                     <div className="flex justify-between font-bold text-lg">
                       <span>Total</span>
-                      <span>₦{(subtotal + totalShipping + taxAmount).toLocaleString()}</span>
+                      <span>₦{(subtotal + totalShipping + taxAmount - promoDiscount).toLocaleString()}</span>
                     </div>
                   </div>
                 </div>

@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.debug-order]
 verify_jwt = false
+
+[functions.admin-credit-wallet]
+verify_jwt = true

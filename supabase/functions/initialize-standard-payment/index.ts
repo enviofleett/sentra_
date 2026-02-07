@@ -236,8 +236,19 @@ Deno.serve(async (req) => {
 
     console.log('[Initialize Payment] MOQ validation passed');
 
+    // Fetch promo margin percentage from config
+    const { data: promoConfigData } = await supabase
+      .from("app_config")
+      .select("value")
+      .eq("key", "promo_margin_percentage")
+      .maybeSingle();
+
+    const promoPercentage = (promoConfigData?.value as any)?.percentage || 50;
+    console.log(`[Initialize Payment] Promo percentage: ${promoPercentage}%`);
+
     // Recalculate total from current database prices
     let verifiedTotal = 0;
+    let maxEligibleDiscount = 0;
     const outOfStock: string[] = [];
 
     for (const item of orderItems) {
@@ -256,8 +267,18 @@ Deno.serve(async (req) => {
       }
 
       // Use database price, not submitted price
-      verifiedTotal += Number(product.price) * item.quantity;
+      const price = Number(product.price);
+      verifiedTotal += price * item.quantity;
+
+      // Calculate eligible discount
+      const costPrice = Number(product.cost_price) || 0;
+      const grossMargin = Math.max(0, (price - costPrice) * item.quantity);
+      const itemMaxDiscount = Math.round((grossMargin * promoPercentage / 100) * 100) / 100;
+      maxEligibleDiscount += itemMaxDiscount;
     }
+    
+    maxEligibleDiscount = Math.round(maxEligibleDiscount * 100) / 100;
+    console.log(`[Initialize Payment] Max eligible discount: ₦${maxEligibleDiscount}`);
 
     if (outOfStock.length > 0) {
       console.error('[Initialize Payment] Out of stock:', outOfStock);
@@ -290,7 +311,7 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       const promoBalance = wallet?.balance_promo || 0;
-      actualPromoDiscount = Math.min(requestedPromoDiscount, promoBalance, verifiedTotal);
+      actualPromoDiscount = Math.min(requestedPromoDiscount, promoBalance, verifiedTotal, maxEligibleDiscount);
       
       if (actualPromoDiscount > 0) {
         // Debit promo wallet using the RPC

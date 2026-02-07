@@ -6,9 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Mail, Phone, MapPin, ShoppingBag, DollarSign, KeyRound, Loader2 } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, MapPin, ShoppingBag, DollarSign, KeyRound, Loader2, Plus, CreditCard } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 interface Profile {
   id: string;
@@ -41,6 +46,13 @@ export function UserDetailPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [sendingReset, setSendingReset] = useState(false);
+
+  // Credit Wallet State
+  const [creditDialogOpen, setCreditDialogOpen] = useState(false);
+  const [creditAmount, setCreditAmount] = useState('');
+  const [creditType, setCreditType] = useState<'real' | 'promo'>('real');
+  const [creditReason, setCreditReason] = useState('');
+  const [crediting, setCrediting] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -124,6 +136,84 @@ export function UserDetailPage() {
       toast.error(error.message || 'Failed to send password reset email');
     } finally {
       setSendingReset(false);
+    }
+  };
+
+  const handleCreditWallet = async () => {
+    if (!profile || !creditAmount || !creditReason) {
+      toast.error('Please fill in all fields');
+      return;
+    }
+
+    setCrediting(true);
+    try {
+      // Get current admin user
+      const { data: { user: adminUser } } = await supabase.auth.getUser();
+
+      if (!adminUser) {
+        throw new Error('Admin session expired. Please login again.');
+      }
+
+      const payload = {
+        userId: profile.id,
+        amount: parseFloat(creditAmount),
+        type: creditType,
+        description: creditReason,
+        adminId: adminUser.id
+      };
+
+      console.log('Sending credit request:', payload);
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      let accessToken = sessionData?.session?.access_token || null;
+      const nowSec = Math.floor(Date.now() / 1000);
+      const expiresAt = sessionData?.session?.expires_at || 0;
+      if (!accessToken || expiresAt < nowSec + 30) {
+        const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError) {
+          throw new Error(refreshError.message || 'Failed to refresh session');
+        }
+        accessToken = refreshed.session?.access_token || null;
+      }
+
+      const { data, error } = await supabase.functions.invoke('admin-credit-wallet', {
+        body: payload,
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined
+      });
+
+      if (error) {
+        // If the error is a FunctionsHttpError, try to parse the response body if available
+        let errorMessage = error.message || 'Failed to credit wallet';
+        if (error instanceof Error && 'context' in error) {
+             // @ts-ignore
+             const context = error.context as any;
+             if (context?.response?.json) {
+                 try {
+                     const errorBody = await context.response.json();
+                     errorMessage = errorBody.error || errorMessage;
+                 } catch (e) {
+                     // ignore json parse error
+                 }
+             }
+        }
+        throw new Error(errorMessage);
+      }
+
+      if (data?.success) {
+        toast.success('Wallet credited successfully');
+        setCreditDialogOpen(false);
+        setCreditAmount('');
+        setCreditReason('');
+        // Refresh data
+        fetchUserData();
+      } else {
+        throw new Error(data?.error || 'Failed to credit wallet');
+      }
+    } catch (error: any) {
+      console.error('Error crediting wallet:', error);
+      toast.error(error.message || 'Failed to credit wallet');
+    } finally {
+      setCrediting(false);
     }
   };
 
@@ -286,26 +376,87 @@ export function UserDetailPage() {
                 </div>
               </div>
 
-              <div className="pt-4 border-t">
-              <Button
-                variant="outline"
-                onClick={handleSendPasswordReset}
-                disabled={sendingReset}
-                className="w-full"
-              >
-                {sendingReset ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <KeyRound className="h-4 w-4 mr-2" />
-                    Send Password Reset Email
-                  </>
-                )}
-              </Button>
-            </div>
+              <div className="pt-4 border-t flex flex-col gap-2">
+                <Dialog open={creditDialogOpen} onOpenChange={setCreditDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="default" className="w-full">
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      Credit User Wallet
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Credit User Wallet</DialogTitle>
+                      <DialogDescription>
+                        Add funds to {profile.full_name}'s wallet. They will receive an email notification.
+                      </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label>Wallet Type</Label>
+                        <RadioGroup value={creditType} onValueChange={(v) => setCreditType(v as 'real' | 'promo')} className="flex gap-4">
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="real" id="real" />
+                            <Label htmlFor="real">Main Wallet (Real Money)</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="promo" id="promo" />
+                            <Label htmlFor="promo">Promo Wallet (Credits)</Label>
+                          </div>
+                        </RadioGroup>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Amount (₦)</Label>
+                        <Input 
+                          type="number" 
+                          placeholder="0.00" 
+                          value={creditAmount}
+                          onChange={(e) => setCreditAmount(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Reason / Note</Label>
+                        <Textarea 
+                          placeholder="e.g. Refund for Order #123, Bonus credit, etc." 
+                          value={creditReason}
+                          onChange={(e) => setCreditReason(e.target.value)}
+                        />
+                        <p className="text-xs text-muted-foreground">This note will be visible to the user in the email.</p>
+                      </div>
+                    </div>
+
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setCreditDialogOpen(false)}>Cancel</Button>
+                      <Button onClick={handleCreditWallet} disabled={crediting}>
+                        {crediting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                        Credit Wallet
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+
+                <Button
+                  variant="outline"
+                  onClick={handleSendPasswordReset}
+                  disabled={sendingReset}
+                  className="w-full"
+                >
+                  {sendingReset ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <KeyRound className="h-4 w-4 mr-2" />
+                      Send Password Reset Email
+                    </>
+                  )}
+                </Button>
+              </div>
           </CardContent>
         </Card>
 

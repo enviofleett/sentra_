@@ -21,14 +21,7 @@ import {
   XCircle,
   CreditCard
 } from 'lucide-react';
-
-interface OrderItem {
-  product_id: string;
-  name: string;
-  quantity: number;
-  price: number;
-  image_url?: string;
-}
+import { NormalizedOrderItem, normalizeOrderItems } from '@/utils/orderItems';
 
 interface Order {
   id: string;
@@ -39,7 +32,7 @@ interface Order {
   total_amount: number;
   subtotal: number;
   shipping_cost: number;
-  items: OrderItem[];
+  items: NormalizedOrderItem[];
   shipping_address: any;
   tracking_number?: string;
   customer_email: string;
@@ -103,7 +96,7 @@ export default function OrderTracking() {
 
       setOrder({
         ...data,
-        items: data.items as unknown as OrderItem[],
+        items: normalizeOrderItems(data.items as any[]),
         shipping_address: data.shipping_address,
       } as Order);
       setError(null);
@@ -136,7 +129,7 @@ export default function OrderTracking() {
               return {
                 ...prev,
                 ...payload.new,
-                items: (payload.new as any).items as OrderItem[],
+                items: normalizeOrderItems((payload.new as any).items as any[]),
                 shipping_address: (payload.new as any).shipping_address,
               } as Order;
             });

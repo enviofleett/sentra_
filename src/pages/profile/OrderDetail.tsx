@@ -8,14 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { ArrowLeft, Package, MapPin, CreditCard, Clock } from 'lucide-react';
 import { ProductImage } from '@/components/common/ProductImage';
-
-interface OrderItem {
-  product_id: string;
-  product_name: string;
-  quantity: number;
-  price: number;
-  image_url?: string;
-}
+import { NormalizedOrderItem, normalizeOrderItems } from '@/utils/orderItems';
 
 interface Order {
   id: string;
@@ -25,7 +18,7 @@ interface Order {
   subtotal: number;
   shipping_cost: number;
   tax: number;
-  items: OrderItem[];
+  items: NormalizedOrderItem[];
   shipping_address: any;
   billing_address: any;
 }
@@ -53,7 +46,7 @@ export default function OrderDetail() {
     if (data) {
       setOrder({
         ...data,
-        items: data.items as unknown as OrderItem[],
+        items: normalizeOrderItems(data.items as any[]),
         shipping_address: data.shipping_address,
         billing_address: data.billing_address,
       } as Order);
@@ -186,12 +179,12 @@ export default function OrderDetail() {
               <div key={index} className="flex gap-4 pb-4 border-b last:border-b-0">
                 <ProductImage 
                   src={item.image_url} 
-                  alt={item.product_name}
+                  alt={item.name}
                   containerClassName="w-20 h-20 rounded-lg flex-shrink-0"
                   fallbackSize={24}
                 />
                 <div className="flex-1">
-                  <h4 className="font-semibold">{item.product_name}</h4>
+                  <h4 className="font-semibold">{item.name}</h4>
                   <p className="text-sm text-muted-foreground">Quantity: {item.quantity}</p>
                   <p className="text-sm text-muted-foreground">
                     ₦{item.price.toLocaleString()} each

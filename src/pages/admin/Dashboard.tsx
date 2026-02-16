@@ -17,7 +17,6 @@ import WaitlistManagement from './WaitlistManagement';
 import AffiliatesManagement from './AffiliatesManagement';
 import ContentManagement from './ContentManagement';
 import ArticlesManagement from './ArticlesManagement';
-import AgentPlansManagement from './AgentPlansManagement';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -87,7 +86,6 @@ export default function AdminDashboard() {
           <Route path="/affiliates" element={<AffiliatesManagement />} />
           <Route path="/content" element={<ContentManagement />} />
           <Route path="/articles" element={<ArticlesManagement />} />
-          <Route path="/agent-plans" element={<AgentPlansManagement />} />
         </Routes>
       </main>
     </div>

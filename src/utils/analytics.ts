@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { startOfDay, startOfWeek, startOfMonth, subDays, subWeeks, subMonths, format } from 'date-fns';
+import { normalizeOrderItems } from './orderItems';
 
 /**
  * CRITICAL BUSINESS RULE:
@@ -108,10 +109,13 @@ export async function getTopProductsByViews(days: number, limit: number = 10): P
   const productCounts = new Map<string, { name: string; count: number; revenue: number }>();
   
   data?.forEach(order => {
-    const items = order.items as any[];
+    const items = normalizeOrderItems(order.items as any[]);
     items?.forEach((item: any) => {
-      const current = productCounts.get(item.product_id) || { name: item.name, count: 0, revenue: 0 };
-      productCounts.set(item.product_id, {
+      const productId = item.product_id || '';
+      if (!productId) return;
+
+      const current = productCounts.get(productId) || { name: item.name, count: 0, revenue: 0 };
+      productCounts.set(productId, {
         name: item.name,
         count: current.count + 1,
         revenue: current.revenue + (item.price * item.quantity)

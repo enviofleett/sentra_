@@ -16,7 +16,7 @@ interface CreditWalletRequest {
   adminId: string;
 }
 
-serve(async (req) => {
+serve(async (req: Request) => {
   // Handle CORS preflight request
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -45,8 +45,7 @@ serve(async (req) => {
     const userSupabase = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
-    const token = authHeader.replace("Bearer ", "");
-    const { data: authData, error: authError } = await userSupabase.auth.getUser(token);
+    const { data: authData, error: authError } = await userSupabase.auth.getUser();
     if (authError || !authData?.user) {
       return new Response(
         JSON.stringify({ success: false, error: "Invalid token" }),
@@ -192,8 +191,8 @@ serve(async (req) => {
         });
 
         await smtpClient.close();
-      } catch (emailError) {
-        emailError;
+      } catch (_emailError) {
+        // swallow email errors to avoid blocking wallet credit
       }
     }
 
@@ -209,9 +208,9 @@ serve(async (req) => {
       }
     );
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 500,

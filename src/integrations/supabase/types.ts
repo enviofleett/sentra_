@@ -2271,6 +2271,7 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      has_active_agent_subscription: { Args: { p_user_id: string }; Returns: boolean }
       is_product_manager: { Args: never; Returns: boolean }
       process_withdrawal: {
         Args: {

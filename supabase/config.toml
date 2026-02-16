@@ -53,3 +53,9 @@ verify_jwt = false
 
 [functions.admin-credit-wallet]
 verify_jwt = true
+
+[functions.search-market-prices-ng]
+verify_jwt = true
+
+[functions.generate-reseller-sales-brief]
+verify_jwt = false

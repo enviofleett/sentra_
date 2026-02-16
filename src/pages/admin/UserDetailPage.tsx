@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Mail, Phone, MapPin, ShoppingBag, DollarSign, KeyRound, Loader2, Plus, CreditCard } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, MapPin, ShoppingBag, DollarSign, KeyRound, Loader2, CreditCard } from 'lucide-react';
 import { format } from 'date-fns';
+import type { Tables } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -28,16 +29,10 @@ interface Profile {
   membership_balance?: number;
 }
 
-interface Order {
-  id: string;
-  created_at: string;
-  total_amount: number;
-  status: string;
-  payment_status: string;
-  paystack_status?: string;
-  items: any;
-  promo_discount_applied?: number;
-}
+type Order = Pick<
+  Tables<'orders'>,
+  'id' | 'created_at' | 'total_amount' | 'status' | 'payment_status' | 'paystack_status' | 'items' | 'promo_discount_applied'
+>;
 
 export function UserDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -63,11 +58,12 @@ export function UserDetailPage() {
   const fetchUserData = async () => {
     setLoading(true);
     try {
+      const userId = id as string;
       // Fetch user profile
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', id)
+        .eq('id', userId)
         .single();
 
       if (profileError) throw profileError;
@@ -76,13 +72,13 @@ export function UserDetailPage() {
       const { data: userWallet } = await supabase
         .from('user_wallets')
         .select('balance_real, balance_promo')
-        .eq('user_id', id)
+        .eq('user_id', userId)
         .maybeSingle();
 
       const { data: membershipWallet } = await supabase
         .from('membership_wallets')
         .select('balance')
-        .eq('user_id', id)
+        .eq('user_id', userId)
         .maybeSingle();
 
       setProfile({
@@ -96,15 +92,24 @@ export function UserDetailPage() {
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select('id, created_at, total_amount, status, payment_status, paystack_status, items, promo_discount_applied')
-        .eq('user_id', id)
+        .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
       if (ordersError) throw ordersError;
-      setOrders(ordersData || []);
-    } catch (error) {
+      setOrders((ordersData || []) as Order[]);
+    } catch (error: unknown) {
       console.error('Error fetching user data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const formatDateSafe = (iso: string | null, pattern: string) => {
+    if (!iso) return 'Unknown date';
+    try {
+      return format(new Date(iso), pattern);
+    } catch {
+      return 'Unknown date';
     }
   };
 
@@ -131,9 +136,10 @@ export function UserDetailPage() {
         const errorMsg = data?.results?.[0]?.error || 'Failed to send email';
         toast.error(`Failed to send: ${errorMsg}`);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error sending password reset:', error);
-      toast.error(error.message || 'Failed to send password reset email');
+      const msg = error instanceof Error ? error.message : 'Failed to send password reset email';
+      toast.error(msg);
     } finally {
       setSendingReset(false);
     }
@@ -217,7 +223,7 @@ export function UserDetailPage() {
     }
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string | null) => {
     switch (status) {
       case 'delivered':
         return 'bg-green-500/10 text-green-500 border-green-500/20';
@@ -287,7 +293,7 @@ export function UserDetailPage() {
               <div>
                 <CardTitle>{profile.full_name || 'No name provided'}</CardTitle>
                 <CardDescription>
-                  Registered {format(new Date(profile.created_at), 'MMM d, yyyy')}
+                  Registered {formatDateSafe(profile.created_at, 'MMM d, yyyy')}
                 </CardDescription>
               </div>
             </div>
@@ -482,10 +488,10 @@ export function UserDetailPage() {
                       <div>
                         <p className="font-medium text-sm">Order #{order.id.slice(0, 8)}</p>
                         <p className="text-xs text-muted-foreground">
-                          {format(new Date(order.created_at), 'MMM d, yyyy h:mm a')}
+                          {formatDateSafe(order.created_at, 'MMM d, yyyy h:mm a')}
                         </p>
                       </div>
-                      <Badge className={getStatusColor(order.status)}>
+                      <Badge className={getStatusColor(order.status ?? 'pending')}>
                         {order.status}
                       </Badge>
                     </div>
@@ -534,13 +540,13 @@ export function UserDetailPage() {
                       <TableCell className="font-mono text-xs">
                         {order.id.slice(0, 8)}...
                       </TableCell>
-                      <TableCell>{format(new Date(order.created_at), 'MMM d, yyyy')}</TableCell>
+                      <TableCell>{formatDateSafe(order.created_at, 'MMM d, yyyy')}</TableCell>
                       <TableCell>{Array.isArray(order.items) ? order.items.length : 0}</TableCell>
                       <TableCell className="font-semibold">
                         ₦{Number(order.total_amount).toLocaleString()}
                       </TableCell>
                       <TableCell>
-                        <Badge className={getStatusColor(order.status)}>
+                        <Badge className={getStatusColor(order.status ?? 'pending')}>
                           {order.status}
                         </Badge>
                       </TableCell>

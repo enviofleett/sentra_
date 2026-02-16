@@ -36,6 +36,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { cn } from '@/lib/utils';
 import { ProductImage } from '@/components/common/ProductImage';
+import { normalizeOrderItems } from '@/utils/orderItems';
 
 import AddressesProfile from './profile/AddressesProfile';
 import OrderDetail from './profile/OrderDetail';
@@ -228,7 +229,14 @@ function Orders() {
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
-    if (data) setOrders(data);
+    if (data) {
+      setOrders(
+        data.map((order: any) => ({
+          ...order,
+          items: normalizeOrderItems(order.items as any[]),
+        }))
+      );
+    }
     setLoading(false);
   };
 
@@ -277,7 +285,7 @@ function Orders() {
                     {order.items && order.items.length > 0 ? (
                       <ProductImage 
                         src={order.items[0].image_url} 
-                        alt={order.items[0].product_name || order.items[0].name || 'Order Item'} 
+                        alt={order.items[0].name || 'Order Item'} 
                         containerClassName="w-full h-full border-none"
                         fallbackSize={16}
                       />

@@ -1,7 +1,6 @@
 
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import Underline from '@tiptap/extension-underline';
 import { Button } from '@/components/ui/button';
 import { Bold, Italic, Underline as UnderlineIcon, List, ListOrdered, Undo, Redo, Code } from 'lucide-react';
 import { Toggle } from '@/components/ui/toggle';
@@ -15,7 +14,6 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
   const editor = useEditor({
     extensions: [
       StarterKit,
-      Underline,
     ],
     content,
     onUpdate: ({ editor }) => {

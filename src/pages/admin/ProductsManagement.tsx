@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Pencil, Trash2, Plus, Upload, X, AlertTriangle, TrendingUp, TrendingDown, Search, CheckSquare, Square, Power, PowerOff, Radar, Zap, ArrowDown, Check, Loader2, RefreshCw, XCircle, CheckCircle, Edit3, Save, Bomb } from 'lucide-react';
+import { Pencil, Trash2, Plus, Upload, X, AlertTriangle, TrendingUp, TrendingDown, Search, CheckSquare, Square, Power, PowerOff, Radar, Zap, ArrowDown, Check, Loader2, RefreshCw, XCircle, CheckCircle, Edit3, Save, Bomb, Sparkles } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ProductPerformanceChart } from '@/components/admin/ProductPerformanceChart';
 import { TopProductsWidget } from '@/components/admin/TopProductsWidget';
@@ -49,6 +49,7 @@ interface Product {
   weight: number | null;
   margin_override_allowed: boolean | null;
   price_intelligence?: PriceIntelligence | null;
+  metadata?: any;
 }
 
 interface Category {
@@ -165,6 +166,14 @@ export function ProductsManagement() {
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
   const [defaultVendorId, setDefaultVendorId] = useState<string>('');
+
+  // Reseller sales brief generation state (admin-only)
+  const [briefLoading, setBriefLoading] = useState(false);
+  const [briefConcentration, setBriefConcentration] = useState<
+    "EDT" | "EDP" | "Parfum" | "Extrait" | "Cologne" | "EDC" | "Elixir" | "Unknown"
+  >("Unknown");
+  const [briefSizes, setBriefSizes] = useState<string>("");
+  const [briefInspiration, setBriefInspiration] = useState<string>("");
   
   // Live margin calculation state
   const [livePrice, setLivePrice] = useState<number>(0);
@@ -187,6 +196,44 @@ export function ProductsManagement() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deletingAll, setDeletingAll] = useState(false);
   const [savingPriceId, setSavingPriceId] = useState<string | null>(null);
+
+  const getBriefGenerationError = (error: unknown): { title: string; description?: string } => {
+    const rawMessage =
+      typeof error === 'object' && error && 'message' in error
+        ? String((error as any).message || '')
+        : '';
+    const rawName =
+      typeof error === 'object' && error && 'name' in error
+        ? String((error as any).name || '')
+        : '';
+    const combined = `${rawName} ${rawMessage}`.toLowerCase();
+
+    if (
+      combined.includes('functionsfetcherror') ||
+      combined.includes('failed to send a request') ||
+      combined.includes('cors') ||
+      combined.includes('err_failed') ||
+      combined.includes('failed to fetch')
+    ) {
+      return {
+        title: 'Brief generator is unreachable',
+        description:
+          'Could not reach Edge Function `generate-reseller-sales-brief`. Deploy/update the function and verify Supabase function config (CORS + `verify_jwt`) for this environment.',
+      };
+    }
+
+    if (combined.includes('401') || combined.includes('403') || combined.includes('forbidden') || combined.includes('unauthorized')) {
+      return {
+        title: 'Not authorized to generate brief',
+        description: 'This action requires an authenticated admin session. Please sign in again and retry.',
+      };
+    }
+
+    return {
+      title: 'Failed to generate reseller brief',
+      description: rawMessage || undefined,
+    };
+  };
 
   const emptyProduct: Omit<Product, 'id'> = {
     name: '',
@@ -843,6 +890,9 @@ export function ProductsManagement() {
     setLivePrice(product?.price || 0);
     setLiveCostPrice(product?.cost_price || null);
     setMarginOverride(product?.margin_override_allowed || false);
+    setBriefConcentration("Unknown");
+    setBriefSizes(product?.size || "");
+    setBriefInspiration("");
     clearImages();
     if (product?.images && Array.isArray(product.images)) {
       setImagePreviews(product.images as string[]);
@@ -850,6 +900,65 @@ export function ProductsManagement() {
       setImagePreviews([product.image_url]);
     }
     setIsDialogOpen(true);
+  };
+
+  const generateResellerSalesBrief = async () => {
+    if (!editingProduct) return;
+    if (!editingProduct.brand) {
+      toast.error("Brand is required to generate a reseller brief");
+      return;
+    }
+
+    const sizes = briefSizes
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (sizes.length === 0) {
+      toast.error("At least one size is required");
+      return;
+    }
+
+    const knownNotes = (editingProduct as any)?.metadata?.scentNotes || null;
+
+    setBriefLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-reseller-sales-brief", {
+        body: {
+          product_id: editingProduct.id,
+          fragrance_name: editingProduct.name,
+          brand: editingProduct.brand,
+          concentration: briefConcentration,
+          sizes,
+          known_notes: knownNotes,
+          inspiration_or_style: briefInspiration ? briefInspiration : null,
+          constraints: { max_bullets_per_section: 6, region: "NG" },
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Generation failed");
+
+      toast.success(data.cached ? "Reseller brief loaded from cache" : "Reseller brief generated");
+
+      // Refresh products so the dialog reflects updated metadata.
+      await fetchProducts();
+
+      // Copy WhatsApp script for convenience.
+      const dmLines = data?.content?.sales_scripts?.whatsapp_dm;
+      if (Array.isArray(dmLines) && dmLines.length > 0) {
+        try {
+          await navigator.clipboard.writeText(dmLines.join("\n"));
+          toast.success("WhatsApp DM script copied to clipboard");
+        } catch {}
+      }
+    } catch (e: any) {
+      console.error("Brief generation error:", e);
+      const mapped = getBriefGenerationError(e);
+      toast.error(mapped.title, mapped.description ? { description: mapped.description } : undefined);
+    } finally {
+      setBriefLoading(false);
+    }
   };
 
   const handleDeleteAll = async () => {
@@ -1025,6 +1134,62 @@ export function ProductsManagement() {
               <DialogTitle>{editingProduct ? 'Edit Product' : 'Add Product'}</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {editingProduct && (
+                <div className="rounded-lg border p-4 bg-muted/20 space-y-3">
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div>
+                      <div className="text-sm font-semibold">Reseller Sales Brief</div>
+                      <div className="text-xs text-muted-foreground">
+                        Generates structured reseller copy and stores it in <span className="font-mono">products.metadata.reseller_sales</span>.
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={generateResellerSalesBrief}
+                      disabled={briefLoading}
+                      className="gap-2"
+                    >
+                      {briefLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                      Generate Brief
+                    </Button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <Label>Concentration</Label>
+                      <Select value={briefConcentration} onValueChange={(v: any) => setBriefConcentration(v)}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {["Unknown", "EDT", "EDP", "Parfum", "Extrait", "Cologne", "EDC", "Elixir"].map((c) => (
+                            <SelectItem key={c} value={c}>
+                              {c}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="md:col-span-2">
+                      <Label>Sizes (comma-separated)</Label>
+                      <Input
+                        value={briefSizes}
+                        onChange={(e) => setBriefSizes(e.target.value)}
+                        placeholder="e.g., 100ml, 50ml, 3.4oz"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label>Inspiration / Style Reference (optional)</Label>
+                    <Input
+                      value={briefInspiration}
+                      onChange={(e) => setBriefInspiration(e.target.value)}
+                      placeholder='e.g., "blue fresh", "tobacco vanilla style", "inspired by Aventus vibe"'
+                    />
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="name">Product Name</Label>

@@ -1,6 +1,5 @@
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import Underline from '@tiptap/extension-underline';
 import { Button } from './button';
 import { 
   Bold, 
@@ -23,7 +22,6 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
   const editor = useEditor({
     extensions: [
       StarterKit,
-      Underline,
     ],
     content,
     onUpdate: ({ editor }) => {

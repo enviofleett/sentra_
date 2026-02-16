@@ -18,6 +18,7 @@ import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { DateRange } from 'react-day-picker';
 import { ProductImage } from '@/components/common/ProductImage';
 import { RichTextEditor } from '@/components/admin/RichTextEditor';
+import { normalizeOrderItems } from '@/utils/orderItems';
 
 interface Vendor {
   id: string;
@@ -90,6 +91,7 @@ export function OrdersManagement() {
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [communications, setCommunications] = useState<OrderCommunication[]>([]);
   const [communicationsLoading, setCommunicationsLoading] = useState(false);
+  const [communicationsTableAvailable, setCommunicationsTableAvailable] = useState(true);
   const [emailTemplate, setEmailTemplate] = useState<string>('');
   const [emailTemplateSubject, setEmailTemplateSubject] = useState<string>('');
 
@@ -115,6 +117,11 @@ export function OrdersManagement() {
   }, []);
 
   const fetchCommunications = async (orderId: string) => {
+    if (!communicationsTableAvailable) {
+      setCommunications([]);
+      return;
+    }
+
     setCommunicationsLoading(true);
     const { data, error } = await supabase
       .from('order_communications' as any)
@@ -122,7 +129,20 @@ export function OrdersManagement() {
       .eq('order_id', orderId)
       .order('created_at', { ascending: false });
     
-    if (!error && data) {
+    if (error) {
+      // Table may not exist yet in some environments.
+      if ((error as any).code === 'PGRST205') {
+        setCommunicationsTableAvailable(false);
+        setCommunications([]);
+        setCommunicationsLoading(false);
+        return;
+      }
+      console.error('Error fetching order communications:', error);
+      setCommunicationsLoading(false);
+      return;
+    }
+
+    if (data) {
       setCommunications(data as unknown as OrderCommunication[]);
     }
     setCommunicationsLoading(false);
@@ -366,6 +386,10 @@ export function OrdersManagement() {
       console.error(error);
     } else {
       let filteredOrders: any[] = data || [];
+      filteredOrders = filteredOrders.map((order) => ({
+        ...order,
+        items: normalizeOrderItems(order.items as any[]),
+      }));
 
       // Fetch additional user details (profiles and wallets)
       if (filteredOrders.length > 0) {
@@ -388,6 +412,7 @@ export function OrdersManagement() {
 
           filteredOrders = filteredOrders.map(order => ({
             ...order,
+            items: normalizeOrderItems(order.items as any[]),
             registration_date: profilesMap.get(order.user_id),
             promo_wallet_balance: walletsMap.get(order.user_id) || 0
           }));
@@ -457,7 +482,12 @@ export function OrdersManagement() {
           .select(`*, shipments:order_shipments(*)`)
           .eq('id', selectedOrder.id)
           .single();
-        if (data) setSelectedOrder(data as any);
+        if (data) {
+          setSelectedOrder({
+            ...(data as any),
+            items: normalizeOrderItems((data as any).items as any[]),
+          });
+        }
       }
     }
   };
@@ -816,7 +846,7 @@ export function OrdersManagement() {
                       <div className="text-sm space-y-1">
                         {order.items?.map((item: any, idx: number) => (
                           <div key={idx} className="text-muted-foreground">
-                            {item.name} - {getVendorName(item.vendor_id)}
+                            {item.name} - {item.vendor_name || getVendorName(item.vendor_id)}
                           </div>
                         ))}
                       </div>
@@ -863,7 +893,10 @@ export function OrdersManagement() {
                               size="sm"
                               variant="outline"
                               onClick={() => {
-                                setSelectedOrder(order);
+                                setSelectedOrder({
+                                  ...order,
+                                  items: normalizeOrderItems(order.items as any[]),
+                                });
                                 setIsDialogOpen(true);
                                 fetchCommunications(order.id);
                               }}
@@ -997,9 +1030,9 @@ export function OrdersManagement() {
                               <div className="space-y-2">
                                 {shipment.items.map((item: any, idx: number) => (
                                   <div key={idx} className="flex justify-between text-xs">
-                                    <span className="text-muted-foreground">{item.product.name} × {item.quantity}</span>
+                                    <span className="text-muted-foreground">{item.name || item.product?.name || 'Product'} × {item.quantity}</span>
                                     <span className="font-mono">
-                                      {(item.product.weight || 0).toFixed(2)}kg
+                                      {(Number(item.weight ?? item.product?.weight ?? 0)).toFixed(2)}kg
                                     </span>
                                   </div>
                                 ))}
@@ -1036,7 +1069,7 @@ export function OrdersManagement() {
                                 <h4 className="font-medium text-sm line-clamp-2 pr-4">{item.name}</h4>
                                 <span className="font-semibold text-sm">₦{(item.price * item.quantity).toLocaleString()}</span>
                               </div>
-                              <p className="text-xs text-muted-foreground mb-2">{getVendorName(item.vendor_id)}</p>
+                              <p className="text-xs text-muted-foreground mb-2">{item.vendor_name || getVendorName(item.vendor_id)}</p>
                               <div className="flex items-center text-xs text-muted-foreground bg-muted/50 w-fit px-2 py-1 rounded">
                                 <span>₦{item.price?.toLocaleString()}</span>
                                 <span className="mx-1">×</span>

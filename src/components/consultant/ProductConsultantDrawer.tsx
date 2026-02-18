@@ -35,7 +35,7 @@ export default function ProductConsultantDrawer({
                 <Sparkles className="h-4 w-4 text-primary" />
               </div>
               <div className="min-w-0">
-                <div className="text-sm font-semibold leading-tight">Business Advice</div>
+                <div className="text-sm font-semibold leading-tight">Iris</div>
                 <div className="text-xs text-muted-foreground truncate">
                   {(productBrand ? `${productBrand} ` : "") + (productName || "Product")}
                 </div>
@@ -57,4 +57,3 @@ export default function ProductConsultantDrawer({
     </Sheet>
   );
 }
-

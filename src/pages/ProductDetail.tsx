@@ -34,7 +34,6 @@ export default function ProductDetail() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [engaged, setEngaged] = useState(false);
   const [consultantOpen, setConsultantOpen] = useState(false);
-  const [consultantInitMessage, setConsultantInitMessage] = useState<string | undefined>(undefined);
   const autoOpenHandledRef = useRef(false);
   const iconLoggedRef = useRef(false);
 
@@ -167,24 +166,6 @@ export default function ProductDetail() {
       localStorage.setItem(abKey, abVariant);
     }
 
-    let suggestions = '';
-    try {
-      let query = supabase
-        .from('products')
-        .select('id, name, brand, price, scent_profile')
-        .eq('is_active', true)
-        .neq('id', product.id);
-      const filters: string[] = [];
-      if (product.scent_profile) filters.push(`scent_profile.eq.${product.scent_profile}`);
-      if (product.brand) filters.push(`brand.eq.${product.brand}`);
-      if (filters.length > 0) query = query.or(filters.join(','));
-      const { data: related } = await query.limit(5);
-      suggestions = (related || [])
-        .slice(0, 3)
-        .map((p: any) => `${p.brand} ${p.name} (₦${p.price})`)
-        .join(', ');
-    } catch {}
-
     let promoBalance = 0;
     if (user) {
       try {
@@ -199,27 +180,9 @@ export default function ProductDetail() {
     }
 
     const scentNotes = parseScentNotes();
-    const pyramid = [
-      scentNotes.top?.length ? `Top: ${scentNotes.top.join(', ')}` : null,
-      scentNotes.heart?.length ? `Middle: ${scentNotes.heart.join(', ')}` : null,
-      scentNotes.base?.length ? `Base: ${scentNotes.base.join(', ')}` : null,
-    ].filter(Boolean).join(' | ');
     const moq = 4;
-    const promoLine = promoBalance > 0
-      ? `You have ₦${promoBalance.toLocaleString()} promo credit available.`
-      : `No promo credit detected.`;
 
-    const initMessage = [
-      `Hi Consultant, the user is viewing ${product.brand || ''} ${product.name}.`,
-      `Scent profile: ${product.scent_profile || 'unknown'}. ${pyramid || ''}`,
-      `Price: ₦${product.price.toLocaleString()}. MOQ: ${moq} units for reseller checkout.`,
-      `Suggest upsells and combinations (2–3 options) for casual users, collectors, and gift buyers. Include bundle pricing examples with 10–15% discounts.`,
-      `Recommend 3–5 complementary items based on fragrance families, seasonality, and purchase patterns. Candidates: ${suggestions || 'none found'}.`,
-      `${promoLine} Calculate potential savings now and if they add more to meet MOQ or maximize credit.`,
-      `Provide market insight, profit margin guidance, and inventory recommendations tailored to Nigeria.`,
-    ].join('\n');
-
-    return { initMessage, abVariant: abVariant || null, promoBalance, moq };
+    return { abVariant: abVariant || null, promoBalance, moq };
   };
 
   const openConsultant = async () => {
@@ -243,8 +206,7 @@ export default function ProductDetail() {
       return false;
     }
 
-    const { initMessage, abVariant, promoBalance, moq } = await buildInitMessage();
-    setConsultantInitMessage(initMessage);
+    const { abVariant, promoBalance, moq } = await buildInitMessage();
     setConsultantOpen(true);
     setEngaged(true);
 
@@ -615,7 +577,6 @@ export default function ProductDetail() {
         onOpenChange={setConsultantOpen}
         productName={product?.name}
         productBrand={product?.brand}
-        initialMessage={consultantInitMessage}
         sessionKey={product?.id ? `product:${product.id}` : undefined}
         onRequireAccess={() => {
           const returnTo = product?.id ? `/products/${product.id}?consult=1` : location.pathname;

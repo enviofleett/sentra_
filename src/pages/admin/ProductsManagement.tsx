@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,13 +8,14 @@ import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Pencil, Trash2, Plus, Upload, X, AlertTriangle, TrendingUp, TrendingDown, Search, CheckSquare, Square, Power, PowerOff, Radar, Zap, ArrowDown, Check, Loader2, RefreshCw, XCircle, CheckCircle, Edit3, Save, Bomb, Sparkles } from 'lucide-react';
+import { Pencil, Trash2, Plus, Upload, X, AlertTriangle, TrendingUp, TrendingDown, Search, Power, PowerOff, Radar, Zap, ArrowDown, Check, Loader2, RefreshCw, XCircle, CheckCircle, Edit3, Save, Bomb, Sparkles } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ProductPerformanceChart } from '@/components/admin/ProductPerformanceChart';
 import { TopProductsWidget } from '@/components/admin/TopProductsWidget';
 import { getTopProductsByViews, getTopProductsByPurchases } from '@/utils/analytics';
+import type { ProductAnalytics } from '@/utils/analytics';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/contexts/AuthContext';
 import { Progress } from '@/components/ui/progress';
@@ -40,7 +41,7 @@ interface Product {
   category_id: string | null;
   vendor_id: string | null;
   image_url: string | null;
-  images: any;
+  images: unknown;
   is_featured: boolean;
   is_active: boolean | null;
   scent_profile: string | null;
@@ -49,8 +50,11 @@ interface Product {
   weight: number | null;
   margin_override_allowed: boolean | null;
   price_intelligence?: PriceIntelligence | null;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
+
+const getErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : "Unknown error";
 
 interface Category {
   id: string;
@@ -89,7 +93,6 @@ function MarginCalculator({
   const isNegative = marginAmount < 0;
   const isLow = marginPercentage >= 0 && marginPercentage < 20;
   const isCriticallyLow = marginPercentage >= 0 && marginPercentage < 10;
-  const isHealthy = marginPercentage >= 20;
 
   return (
     <div className={`p-3 rounded-lg border ${
@@ -159,8 +162,8 @@ export function ProductsManagement() {
   const [uploading, setUploading] = useState(false);
   const [description, setDescription] = useState('');
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('today');
-  const [topByViews, setTopByViews] = useState<any[]>([]);
-  const [topByPurchases, setTopByPurchases] = useState<any[]>([]);
+  const [topByViews, setTopByViews] = useState<ProductAnalytics[]>([]);
+  const [topByPurchases, setTopByPurchases] = useState<ProductAnalytics[]>([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
@@ -200,11 +203,11 @@ export function ProductsManagement() {
   const getBriefGenerationError = (error: unknown): { title: string; description?: string } => {
     const rawMessage =
       typeof error === 'object' && error && 'message' in error
-        ? String((error as any).message || '')
+        ? String((error as { message?: unknown }).message || '')
         : '';
     const rawName =
       typeof error === 'object' && error && 'name' in error
-        ? String((error as any).name || '')
+        ? String((error as { name?: unknown }).name || '')
         : '';
     const combined = `${rawName} ${rawMessage}`.toLowerCase();
 
@@ -235,25 +238,6 @@ export function ProductsManagement() {
     };
   };
 
-  const emptyProduct: Omit<Product, 'id'> = {
-    name: '',
-    description: '',
-    price: 0,
-    cost_price: null,
-    original_price: null,
-    stock_quantity: 0,
-    category_id: null,
-    vendor_id: null,
-    image_url: null,
-    images: [],
-    is_featured: false,
-    is_active: true,
-    scent_profile: null,
-    brand: null,
-    size: null,
-    weight: null,
-    margin_override_allowed: false
-  };
   useEffect(() => {
     fetchProducts();
     fetchCategories();
@@ -448,7 +432,7 @@ export function ProductsManagement() {
       images: finalImages,
       is_featured: formData.get('is_featured') === 'true',
       is_active: formData.get('is_active') === 'true',
-      scent_profile: (scentValue && validScents.includes(scentValue) ? scentValue : null) as any,
+      scent_profile: scentValue && validScents.includes(scentValue) ? scentValue : null,
       brand: formData.get('brand') as string || null,
       size: formData.get('size') as string || null,
       weight: weightValue ? parseFloat(weightValue) : null,
@@ -584,43 +568,11 @@ export function ProductsManagement() {
       } else {
         toast.error(data.error || 'Failed to scan prices');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Scan error:', error);
-      toast.error(error.message || 'Failed to scan prices');
+      toast.error(getErrorMessage(error) || 'Failed to scan prices');
     } finally {
       setScanningProductId(null);
-    }
-  };
-
-  const handleAutoMatch = async (product: Product) => {
-    if (!product.price_intelligence?.average_market_price) {
-      toast.error('Please scan competitor prices first');
-      return;
-    }
-
-    setMatchingProductId(product.id);
-    try {
-      const { data, error } = await supabase.functions.invoke('auto-match-price', {
-        body: { product_id: product.id, user_id: user?.id },
-      });
-
-      if (error) throw error;
-
-      if (data.success) {
-        if (data.data.no_change) {
-          toast.info('Price is already optimal');
-        } else {
-          toast.success(`Price updated: ₦${data.data.old_price.toLocaleString()} → ₦${data.data.new_price.toLocaleString()}`);
-          fetchProducts();
-        }
-      } else {
-        toast.error(data.error || 'Failed to auto-match price');
-      }
-    } catch (error: any) {
-      console.error('Auto-match error:', error);
-      toast.error(error.message || 'Failed to auto-match price');
-    } finally {
-      setMatchingProductId(null);
     }
   };
 
@@ -641,9 +593,9 @@ export function ProductsManagement() {
       } else {
         toast.error(data.error || 'Bulk match failed');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Bulk match error:', error);
-      toast.error(error.message || 'Failed to run bulk match');
+      toast.error(getErrorMessage(error) || 'Failed to run bulk match');
     } finally {
       setBulkMatching(false);
     }
@@ -664,7 +616,6 @@ export function ProductsManagement() {
     
     let offset = 0;
     const batchSize = 15;
-    let totalScanned = 0;
     let totalWithData = 0;
     let totalFailed = 0;
     let hasMore = true;
@@ -679,7 +630,6 @@ export function ProductsManagement() {
 
         if (data.success) {
           const { summary, pagination } = data;
-          totalScanned += summary.scanned;
           totalWithData += summary.with_data;
           totalFailed += summary.failed;
           
@@ -704,9 +654,9 @@ export function ProductsManagement() {
         `Scan complete! ${totalWithData} products with competitor data, ${totalFailed} failed`
       );
       fetchProducts();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Bulk scan error:', error);
-      toast.error(error.message || 'Failed to run bulk scan');
+      toast.error(getErrorMessage(error) || 'Failed to run bulk scan');
     } finally {
       setBulkScanning(false);
       setBulkScanProgress({ current: 0, total: 0 });
@@ -764,9 +714,9 @@ export function ProductsManagement() {
       setEditingPriceId(null);
       setEditingPriceValue('');
       fetchProducts();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Price update error:', error);
-      toast.error(error.message || 'Failed to update price');
+      toast.error(getErrorMessage(error) || 'Failed to update price');
     } finally {
       setSavingPriceId(null);
     }
@@ -819,9 +769,9 @@ export function ProductsManagement() {
 
       toast.success(`Price updated: ₦${product.price.toLocaleString()} → ₦${newPrice.toLocaleString()}`);
       fetchProducts();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Apply competitor price error:', error);
-      toast.error(error.message || 'Failed to apply price');
+      toast.error(getErrorMessage(error) || 'Failed to apply price');
     } finally {
       setMatchingProductId(null);
     }
@@ -919,7 +869,9 @@ export function ProductsManagement() {
       return;
     }
 
-    const knownNotes = (editingProduct as any)?.metadata?.scentNotes || null;
+    const knownNotes = editingProduct?.metadata && typeof editingProduct.metadata === "object"
+      ? (editingProduct.metadata as { scentNotes?: unknown }).scentNotes ?? null
+      : null;
 
     setBriefLoading(true);
     try {
@@ -952,7 +904,7 @@ export function ProductsManagement() {
           toast.success("WhatsApp DM script copied to clipboard");
         } catch {}
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Brief generation error:", e);
       const mapped = getBriefGenerationError(e);
       toast.error(mapped.title, mapped.description ? { description: mapped.description } : undefined);

@@ -1,5 +1,6 @@
 project_id = "oczsddmantovkqfwczqk"
 
+# Public/webhook-style functions (no user JWT at gateway).
 [functions.paystack-webhook]
 verify_jwt = false
 
@@ -57,5 +58,46 @@ verify_jwt = true
 [functions.search-market-prices-ng]
 verify_jwt = true
 
+# Admin functions that perform explicit in-function auth checks.
 [functions.generate-reseller-sales-brief]
+verify_jwt = false
+
+# User-facing authenticated functions (strict JWT required).
+[functions.ai-business-consultant]
+verify_jwt = true
+
+[functions.initialize-subscription-payment]
+verify_jwt = true
+
+[functions.admin-grant-trial]
+verify_jwt = false
+
+[functions.initialize-standard-payment]
+verify_jwt = false
+
+[functions.pay-with-membership]
+verify_jwt = false
+
+[functions.send-order-update]
+verify_jwt = false
+
+[functions.send-email]
+verify_jwt = false
+
+[functions.grant-admin]
+verify_jwt = false
+
+[functions.debug-order-v2]
+verify_jwt = false
+
+[functions.finalize-group-buy-payment]
+verify_jwt = false
+
+[functions.commit-to-group-buy]
+verify_jwt = false
+
+[functions.generate-reseller-description]
+verify_jwt = false
+
+[functions.bulk-classify-products]
 verify_jwt = false

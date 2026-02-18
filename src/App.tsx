@@ -28,8 +28,14 @@ import ConsultantPlans from "./pages/consultant/Plans";
 import NotFound from "./pages/NotFound";
 import { Link, useLocation } from "react-router-dom";
 import { Sparkles } from "lucide-react";
+import { useRuntimeErrorBuffer } from "./hooks/useRuntimeErrorBuffer";
 
 const queryClient = new QueryClient();
+
+const RuntimeErrorBufferBootstrap = () => {
+  useRuntimeErrorBuffer();
+  return null;
+};
 
 const AgentButton = () => {
   const location = useLocation();
@@ -41,7 +47,7 @@ const AgentButton = () => {
   return (
     <Link
       to="/consultant"
-      aria-label="Open AI Consultant"
+      aria-label="Open Iris"
       className={`fixed ${bottomClass} left-6 md:left-8 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-foreground text-background shadow-lg transition-transform duration-300 hover:scale-110 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-foreground focus:ring-offset-2`}
     >
       <Sparkles className="h-7 w-7" />
@@ -55,6 +61,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <RuntimeErrorBufferBootstrap />
         <AuthProvider>
           <ConversationProvider>
           <BrandingProvider>

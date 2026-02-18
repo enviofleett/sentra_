@@ -69,8 +69,6 @@ export default function ConsultantPlans() {
       const { data, error } = await supabase.functions.invoke("initialize-subscription-payment", {
         body: {
           plan_id: plan.id,
-          user_id: user.id,
-          user_email: user.email,
           return_to: returnTo,
         }
       });
@@ -80,9 +78,17 @@ export default function ConsultantPlans() {
       if (!data.paymentUrl) throw new Error("No payment URL returned");
 
       window.location.href = data.paymentUrl;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Subscription error:", error);
-      toast.error(error.message || "Failed to initialize payment");
+      const message = error instanceof Error ? error.message : "Failed to initialize payment";
+      const lower = message.toLowerCase();
+      if (lower.includes("unauthorized") || lower.includes("401")) {
+        toast.error("Please sign in to continue.");
+      } else if (lower.includes("forbidden") || lower.includes("403")) {
+        toast.error("You do not have permission to initialize subscription payment.");
+      } else {
+        toast.error(message);
+      }
       setProcessingId(null);
     }
   };

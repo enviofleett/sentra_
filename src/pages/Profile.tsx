@@ -29,7 +29,8 @@ import {
   Calendar,
   Settings,
   LogOut,
-  ChevronRight
+  ChevronRight,
+  Sparkles
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -43,6 +44,7 @@ import OrderDetail from './profile/OrderDetail';
 import SecurityProfile from './profile/SecurityProfile';
 import WalletProfile from './profile/WalletProfile';
 import MembershipWalletProfile from './profile/MembershipWalletProfile';
+import ConsultantArchiveProfile from './profile/ConsultantArchiveProfile';
 
 const profileSchema = z.object({
   full_name: z.string().max(100, 'Name must be less than 100 characters').optional(),
@@ -430,7 +432,7 @@ function MobileNav({ currentPath }: { currentPath: string }) {
   const navItems = [
     { to: '/profile', icon: <UserIcon className="h-5 w-5" />, label: 'Profile', exact: true },
     { to: '/profile/orders', icon: <Package className="h-5 w-5" />, label: 'Orders' },
-
+    { to: '/profile/consultant-archive', icon: <Sparkles className="h-5 w-5" />, label: 'Chat Archive' },
     { to: '/profile/wallet', icon: <Wallet className="h-5 w-5" />, label: 'Wallet' },
   ];
 
@@ -464,7 +466,7 @@ function DesktopSidebar({ currentPath }: { currentPath: string }) {
     { to: '/profile', icon: <UserIcon className="h-5 w-5" />, label: 'Profile Info', exact: true },
     { to: '/profile/orders', icon: <Package className="h-5 w-5" />, label: 'My Orders' },
     { to: '/profile/addresses', icon: <MapPin className="h-5 w-5" />, label: 'Addresses' },
-
+    { to: '/profile/consultant-archive', icon: <Sparkles className="h-5 w-5" />, label: 'Chat Archive' },
     { to: '/profile/wallet', icon: <Wallet className="h-5 w-5" />, label: 'Wallet' },
     { to: '/profile/security', icon: <Shield className="h-5 w-5" />, label: 'Security' },
   ];
@@ -599,7 +601,7 @@ export default function Profile() {
                 <Route path="orders" element={<Orders />} />
                 <Route path="orders/:orderId" element={<OrderDetail />} />
                 <Route path="addresses" element={<AddressesProfile />} />
-
+                <Route path="consultant-archive" element={<ConsultantArchiveProfile />} />
                 <Route path="security" element={<SecurityProfile />} />
                 <Route path="wallet" element={<WalletProfile />} />
                 <Route path="membership" element={<MembershipWalletProfile />} />

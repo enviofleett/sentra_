@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
@@ -712,10 +712,11 @@ function TermsAndConditionsManager() {
 }
 
 // 2. Email Template Management
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function EmailTemplateManager() {
-  const [templates, setTemplates] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<Array<{ id: string; template_id: string; name: string; subject: string; html_content: string; text_content: string }>>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
-  const [currentTemplate, setCurrentTemplate] = useState<any>(null);
+  const [currentTemplate, setCurrentTemplate] = useState<{ id: string; template_id: string; subject: string; html_content: string; text_content: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [testEmail, setTestEmail] = useState('');
@@ -761,11 +762,11 @@ function EmailTemplateManager() {
     }
   };
 
-  const handleUpdate = (field: string, value: string) => {
-    setCurrentTemplate((prev: any) => ({
+  const handleUpdate = (field: "subject" | "html_content" | "text_content", value: string) => {
+    setCurrentTemplate((prev) => (prev ? {
       ...prev,
       [field]: value
-    }));
+    } : prev));
   };
 
   const handleSave = async () => {
@@ -822,9 +823,9 @@ function EmailTemplateManager() {
       } else {
         throw new Error(data?.error || 'Failed to send test email');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Test email error:', error);
-      toast({ title: 'Error sending test email', description: error.message, variant: 'destructive' });
+      toast({ title: 'Error sending test email', description: error instanceof Error ? error.message : 'Unknown error', variant: 'destructive' });
     }
 
     setIsTesting(false);
@@ -1214,7 +1215,7 @@ function BrandingManager() {
   };
 
   const uploadFile = async (file: File, path: string) => {
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from('branding')
       .upload(path, file, { upsert: true });
 
@@ -1244,8 +1245,8 @@ function BrandingManager() {
       toast({ title: 'Success', description: 'Logo uploaded successfully' });
       setLogoFile(null);
       setLogoPreview('');
-    } catch (error: any) {
-      toast({ title: 'Error uploading logo', description: error.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Error uploading logo', description: error instanceof Error ? error.message : 'Unknown error', variant: 'destructive' });
     } finally {
       setIsUploading(false);
     }
@@ -1268,8 +1269,8 @@ function BrandingManager() {
       toast({ title: 'Success', description: 'Favicon uploaded successfully' });
       setFaviconFile(null);
       setFaviconPreview('');
-    } catch (error: any) {
-      toast({ title: 'Error uploading favicon', description: error.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Error uploading favicon', description: error instanceof Error ? error.message : 'Unknown error', variant: 'destructive' });
     } finally {
       setIsUploading(false);
     }
@@ -1554,15 +1555,15 @@ function ProfitSplitManager() {
         admin_percentage: Number(configData.admin_percentage),
         growth_percentage: Number(configData.growth_percentage),
         marketing_percentage: Number(configData.marketing_percentage),
-        capital_subaccount_code: (configData as any).capital_subaccount_code || '',
-        admin_subaccount_code: (configData as any).admin_subaccount_code || '',
-        growth_subaccount_code: (configData as any).growth_subaccount_code || '',
-        marketing_subaccount_code: (configData as any).marketing_subaccount_code || ''
+        capital_subaccount_code: (configData as { capital_subaccount_code?: string }).capital_subaccount_code || '',
+        admin_subaccount_code: (configData as { admin_subaccount_code?: string }).admin_subaccount_code || '',
+        growth_subaccount_code: (configData as { growth_subaccount_code?: string }).growth_subaccount_code || '',
+        marketing_subaccount_code: (configData as { marketing_subaccount_code?: string }).marketing_subaccount_code || ''
       });
     }
 
     // Load totals
-    const { data: totalsData, error: totalsError } = await supabase
+    const { data: totalsData } = await supabase
       .from('profit_bucket_totals')
       .select('*')
       .single();

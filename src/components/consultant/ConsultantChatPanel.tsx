@@ -11,20 +11,54 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Bot, ChevronDown, ChevronUp, Loader2, Lock, Paperclip, Send, Sparkles, User, X } from "lucide-react";
 import { toast } from "sonner";
 import { isConsultantFreeAccessActive } from "@/utils/consultantAccess";
+import { capturePageContext, type PageContext } from "@/utils/pageContext";
+import { resolveStartupMode } from "@/components/consultant/startupMode";
 
 interface Message {
+  id: string;
   role: "user" | "assistant" | "system";
   content: string;
   image_url?: string | null;
 }
+
+interface ConsultantMessageRecord {
+  role: "user" | "assistant" | "system";
+  content: string;
+  image_url?: string | null;
+}
+
+interface ConsultantSessionRecord {
+  id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+const CONSULTANT_SESSIONS_TABLE = "consultant_sessions" as never;
+const CONSULTANT_MESSAGES_TABLE = "consultant_messages" as never;
+const CONSULTANT_ENGAGEMENTS_TABLE = "consultant_engagements" as never;
+
+const createMessageId = () => {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
+
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error && error.message) return error.message;
+  return "Something went wrong";
+};
 
 export interface ConsultantChatPanelProps {
   embedded?: boolean;
   className?: string;
   initialMessage?: string;
   sessionKey?: string;
+  forcedSessionId?: string;
   onRequireAccess?: () => void;
   cartContextSummary?: string;
+  proactiveStarter?: boolean;
 }
 
 export default function ConsultantChatPanel({
@@ -32,8 +66,10 @@ export default function ConsultantChatPanel({
   className,
   initialMessage,
   sessionKey,
+  forcedSessionId,
   onRequireAccess,
   cartContextSummary,
+  proactiveStarter = true,
 }: ConsultantChatPanelProps) {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
@@ -44,13 +80,16 @@ export default function ConsultantChatPanel({
   const [isTyping, setIsTyping] = useState(false);
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionHydrated, setSessionHydrated] = useState(false);
+  const [sessionArchive, setSessionArchive] = useState<ConsultantSessionRecord[]>([]);
+  const [archiveLoading, setArchiveLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Prevent repeated initial prompt sends on state churn.
-  const sentInitialRef = useRef<string | null>(null);
+  // Prevent repeated auto-start sends on state churn.
+  const startupTriggeredRef = useRef(false);
   const initialKey = useMemo(() => {
     const raw = sessionKey || initialMessage || "";
     return raw ? `init:${raw}` : null;
@@ -72,24 +111,13 @@ export default function ConsultantChatPanel({
       loadActiveSession();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [user?.id, forcedSessionId, persistentKey]);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, isTyping]);
-
-  useEffect(() => {
-    if (!user || !hasAccess || !initialMessage || !initialKey) return;
-    if (sentInitialRef.current === initialKey) return;
-    if (messages.length > 0) {
-      sentInitialRef.current = initialKey;
-      return;
-    }
-    sentInitialRef.current = initialKey;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, hasAccess, initialMessage, initialKey, messages.length]);
 
   const checkSubscription = async () => {
     if (!user) return;
@@ -117,17 +145,45 @@ export default function ConsultantChatPanel({
     setHasAccess(hasSub);
   };
 
+  const loadSessionArchive = async () => {
+    if (!user) return;
+    setArchiveLoading(true);
+    const { data, error } = await supabase
+      .from(CONSULTANT_SESSIONS_TABLE)
+      .select("id,title,created_at,updated_at")
+      .eq("user_id", user.id)
+      .order("updated_at", { ascending: false })
+      .limit(100);
+    if (error) {
+      console.error("Error loading session archive:", error);
+      setArchiveLoading(false);
+      return;
+    }
+    setSessionArchive((data || []) as ConsultantSessionRecord[]);
+    setArchiveLoading(false);
+  };
+
   const loadActiveSession = async () => {
     if (!user) return;
+    setSessionHydrated(false);
+    void loadSessionArchive();
+    if (forcedSessionId) {
+      setSessionId(forcedSessionId);
+      conversation.setSessionIdForKey(persistentKey, forcedSessionId);
+      await loadMessages(forcedSessionId);
+      setSessionHydrated(true);
+      return;
+    }
     const existing = conversation.getSessionIdForKey(persistentKey);
     if (existing) {
       setSessionId(existing);
       await loadMessages(existing);
+      setSessionHydrated(true);
       return;
     }
 
     const { data: newSession, error } = await supabase
-      .from("consultant_sessions" as any)
+      .from(CONSULTANT_SESSIONS_TABLE)
       .insert({ user_id: user.id, title: "New Conversation" })
       .select()
       .single();
@@ -141,12 +197,13 @@ export default function ConsultantChatPanel({
       setSessionId(newSession.id);
       conversation.setSessionIdForKey(persistentKey, newSession.id);
       await loadMessages(newSession.id);
+      setSessionHydrated(true);
     }
   };
 
   const loadMessages = async (sid: string) => {
     const { data, error } = await supabase
-      .from("consultant_messages" as any)
+      .from(CONSULTANT_MESSAGES_TABLE)
       .select("*")
       .eq("session_id", sid)
       .order("created_at", { ascending: true });
@@ -158,13 +215,15 @@ export default function ConsultantChatPanel({
 
     if (data) {
       setMessages(
-        (data as any[]).map((m) => ({
-          role: m.role as any,
+        (data as ConsultantMessageRecord[]).map((m) => ({
+          id: createMessageId(),
+          role: m.role,
           content: m.content,
           image_url: m.image_url,
         })),
       );
     }
+    if (!data) setMessages([]);
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -194,7 +253,7 @@ export default function ConsultantChatPanel({
     if (!user) return;
 
     const { data: newSession, error } = await supabase
-      .from("consultant_sessions" as any)
+      .from(CONSULTANT_SESSIONS_TABLE)
       .insert({ user_id: user.id, title: "New Conversation" })
       .select()
       .single();
@@ -207,12 +266,163 @@ export default function ConsultantChatPanel({
     if (newSession?.id) {
       setSessionId(newSession.id);
       conversation.setSessionIdForKey(persistentKey, newSession.id);
+      setSessionHydrated(true);
+      await loadSessionArchive();
     }
+  };
+
+  const handleSelectSession = async (targetSessionId: string) => {
+    if (!targetSessionId || targetSessionId === sessionId) return;
+    setIsTyping(false);
+    clearImage();
+    setSessionId(targetSessionId);
+    conversation.setSessionIdForKey(persistentKey, targetSessionId);
+    await loadMessages(targetSessionId);
+    setSessionHydrated(true);
   };
 
   const handleRequireAccess = () => {
     if (onRequireAccess) return onRequireAccess();
     navigate("/consultant/plans");
+  };
+
+  const captureSafePageContext = (): PageContext | null => {
+    try {
+      return capturePageContext({
+        path: location.pathname,
+        url: location.pathname + location.search,
+      });
+    } catch {
+      return {
+        url: location.pathname + location.search,
+        path: location.pathname,
+        title: typeof document !== "undefined" ? document.title || "Current page" : "Current page",
+        headings: [],
+        primaryActions: [],
+        visibleErrors: [],
+        recentRuntimeErrors: [],
+        capturedAt: new Date().toISOString(),
+      };
+    }
+  };
+
+  const ensureActiveSession = async (): Promise<string | null> => {
+    if (sessionId) return sessionId;
+    if (!user) return null;
+    const { data: newSession, error } = await supabase
+      .from(CONSULTANT_SESSIONS_TABLE)
+      .insert({ user_id: user.id, title: "New Conversation" })
+      .select()
+      .single();
+    if (error || !newSession?.id) {
+      console.error("Error creating session:", error);
+      return null;
+    }
+    setSessionId(newSession.id);
+    conversation.setSessionIdForKey(persistentKey, newSession.id);
+    setSessionHydrated(true);
+    await loadSessionArchive();
+    return newSession.id;
+  };
+
+  const executeAssistantRequest = async (params: {
+    outgoingMessages: Message[];
+    currentSessionId: string | null;
+    imageUrl: string | null;
+    assistantStarter: boolean;
+    pageContext: PageContext | null;
+  }) => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-business-consultant`;
+    const response = await fetch(functionUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session?.access_token}`,
+      },
+      body: JSON.stringify({
+        messages: params.outgoingMessages.map((m) => ({ role: m.role, content: m.content, image_url: m.image_url })),
+        session_id: params.currentSessionId,
+        image_url: params.imageUrl,
+        assistant_starter: params.assistantStarter,
+        page_context: params.pageContext,
+        // Default to reseller-first behavior unless the app sets something more explicit later.
+        preferences: { mode: "reseller", require_user_initiation: true },
+        cart_context: cartContextSummary ? { summary: cartContextSummary } : null,
+        product_context: conversation.state.lastProduct || null,
+        page_url: location.pathname + location.search,
+        browsing_history: conversation.state.browsingHistory,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      if (response.status === 401) {
+        toast.error("Please sign in to continue.");
+        navigate(`/auth?redirect=${encodeURIComponent(location.pathname + location.search)}`);
+        return;
+      }
+      if (response.status === 403 && errorText.includes("NO_SUBSCRIPTION")) {
+        setHasAccess(false);
+        handleRequireAccess();
+        return;
+      }
+      throw new Error(`Failed to send message: ${response.status} ${errorText}`);
+    }
+
+    try {
+      await supabase.from(CONSULTANT_ENGAGEMENTS_TABLE).insert({
+        user_id: user?.id || null,
+        session_id: params.currentSessionId || null,
+        event_type: params.assistantStarter ? "consultant_starter_sent" : "message_sent",
+      });
+    } catch {
+      // Non-blocking metrics write.
+    }
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    if (!reader) throw new Error("No reader available");
+
+    let aiContent = "";
+    const assistantMessageId = createMessageId();
+    setMessages((prev) => [...prev, { id: assistantMessageId, role: "assistant", content: "" }]);
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value);
+      const lines = chunk.split("\n");
+      for (const line of lines) {
+        if (!line) continue;
+        if (line.startsWith(":")) continue;
+        if (line === "data: [DONE]") continue;
+        if (!line.startsWith("data: ")) continue;
+        const payload = line.slice(6);
+        try {
+          const json = JSON.parse(payload) as {
+            choices?: Array<{ delta?: { content?: string } }>;
+          };
+          const delta = json?.choices?.[0]?.delta;
+          const text = typeof delta?.content === "string" ? delta.content : "";
+          if (!text) continue;
+          aiContent += text;
+          setMessages((prev) =>
+            prev.map((message) =>
+              message.id === assistantMessageId && message.role === "assistant"
+                ? { ...message, content: aiContent }
+                : message,
+            ),
+          );
+        } catch {
+          // ignore partial lines
+        }
+      }
+    }
   };
 
   const handleSendMessage = async (e?: React.FormEvent, customMessage?: string) => {
@@ -256,114 +466,87 @@ export default function ConsultantChatPanel({
       clearImage();
     }
 
-    const newMessage: Message = { role: "user", content: userMessageContent, image_url: imageUrl };
+    const newMessage: Message = { id: createMessageId(), role: "user", content: userMessageContent, image_url: imageUrl };
     setMessages((prev) => [...prev, newMessage]);
     setIsTyping(true);
 
-    let currentSessionId = sessionId;
-    if (!currentSessionId && user) {
-      const { data: newSession } = await supabase
-        .from("consultant_sessions" as any)
-        .insert({ user_id: user.id })
-        .select()
-        .single();
-      if (newSession) {
-        setSessionId(newSession.id);
-        currentSessionId = newSession.id;
-        conversation.setSessionIdForKey(persistentKey, newSession.id);
-      }
-    }
+    const currentSessionId = await ensureActiveSession();
 
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-business-consultant`;
-      const response = await fetch(functionUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-        body: JSON.stringify({
-          messages: [...messages, newMessage].map((m) => ({ role: m.role, content: m.content, image_url: m.image_url })),
-          user_id: user?.id,
-          session_id: currentSessionId,
-          image_url: imageUrl,
-          // Default to reseller-first behavior unless the app sets something more explicit later.
-          preferences: { mode: "reseller", require_user_initiation: true },
-          cart_context: cartContextSummary ? { summary: cartContextSummary } : null,
-          product_context: conversation.state.lastProduct || null,
-          page_url: location.pathname + location.search,
-          browsing_history: conversation.state.browsingHistory,
-        }),
+      await executeAssistantRequest({
+        outgoingMessages: [...messages, newMessage],
+        currentSessionId,
+        imageUrl,
+        assistantStarter: false,
+        pageContext: captureSafePageContext(),
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        // Backend returns 403 with NO_SUBSCRIPTION code; handle it without leaking details.
-        if (response.status === 403 && errorText.includes("NO_SUBSCRIPTION")) {
-          setHasAccess(false);
-          handleRequireAccess();
-          return;
-        }
-        throw new Error(`Failed to send message: ${response.status} ${errorText}`);
-      }
-
-      try {
-        await supabase.from("consultant_engagements" as any).insert({
-          user_id: user?.id || null,
-          session_id: currentSessionId || null,
-          event_type: "message_sent",
-        });
-      } catch {}
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      if (!reader) throw new Error("No reader available");
-
-      let aiContent = "";
-      setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value);
-        const lines = chunk.split("\n");
-        for (const line of lines) {
-          if (!line) continue;
-          if (line.startsWith(":")) continue;
-          if (line === "data: [DONE]") continue;
-          if (!line.startsWith("data: ")) continue;
-          const payload = line.slice(6);
-          try {
-            const json = JSON.parse(payload);
-            const delta = json?.choices?.[0]?.delta;
-            const text = typeof delta?.content === "string" ? delta.content : "";
-            if (!text) continue;
-            aiContent += text;
-            setMessages((prev) => {
-              const next = [...prev];
-              const last = next[next.length - 1];
-              if (last.role === "assistant") last.content = aiContent;
-              return next;
-            });
-          } catch {
-            // ignore partial lines
-          }
-        }
-      }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Chat execution error:", error);
-      toast.error(`Error: ${error.message || "Something went wrong"}`);
+      toast.error(`Error: ${getErrorMessage(error)}`);
     } finally {
       setIsTyping(false);
+      void loadSessionArchive();
     }
   };
 
+  const sendAssistantStarterOnOpen = async () => {
+    if (!user || !hasAccess || isTyping) return;
+    const currentSessionId = await ensureActiveSession();
+    setIsTyping(true);
+    try {
+      await executeAssistantRequest({
+        outgoingMessages: messages,
+        currentSessionId,
+        imageUrl: null,
+        assistantStarter: true,
+        pageContext: captureSafePageContext(),
+      });
+    } catch (error) {
+      console.error("Starter execution error:", error);
+      toast.error(`Error: ${getErrorMessage(error)}`);
+    } finally {
+      setIsTyping(false);
+      void loadSessionArchive();
+    }
+  };
+
+  useEffect(() => {
+    const mode = resolveStartupMode({
+      hasAccess: hasAccess === true,
+      hasUser: Boolean(user),
+      hasSession: Boolean(sessionId) && sessionHydrated,
+      messageCount: messages.length,
+      hasInitialMessage: Boolean(initialMessage && initialMessage.trim()),
+      proactiveStarter,
+      hasTriggered: startupTriggeredRef.current,
+    });
+    if (mode === "none") return;
+
+    startupTriggeredRef.current = true;
+    if (mode === "initial_message") {
+      void handleSendMessage(undefined, initialMessage);
+      return;
+    }
+    void sendAssistantStarterOnOpen();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, hasAccess, sessionId, sessionHydrated, messages.length, initialKey, proactiveStarter]);
+
   const [expandedMap, setExpandedMap] = useState<Record<number, boolean>>({});
+  const archiveGroups = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat(undefined, { year: "numeric", month: "long", day: "numeric" });
+    const grouped = new Map<string, ConsultantSessionRecord[]>();
+    for (const session of sessionArchive) {
+      const label = formatter.format(new Date(session.updated_at || session.created_at));
+      const prev = grouped.get(label) || [];
+      prev.push(session);
+      grouped.set(label, prev);
+    }
+    return Array.from(grouped.entries()).map(([label, sessions]) => ({ label, sessions }));
+  }, [sessionArchive]);
+
+  const formatArchiveTime = (value: string) =>
+    new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(value));
+
   const normalizeContent = (text: string) => {
     const disallowedStarts = [/^in summary:?/i, /^here'?s a strategy:?/i, /^conclusion:?/i];
     const lines = text.split("\n").map((l) => l.replace(/\s+/g, " ").trim());
@@ -394,18 +577,20 @@ export default function ConsultantChatPanel({
     const flushList = () => {
       if (listItems.length > 0 && listType) {
         if (listType === "ul") {
+          const listKey = nextBlockKey();
           blocks.push(
-            <ul key={nextBlockKey()} className="list-disc pl-6">
+            <ul key={listKey} className="list-disc pl-6">
               {listItems.map((it, i) => (
-                <li key={`li-${i}`}>{it}</li>
+                <li key={`${listKey}-li-${i}`}>{it}</li>
               ))}
             </ul>,
           );
         } else {
+          const listKey = nextBlockKey();
           blocks.push(
-            <ol key={nextBlockKey()} className="list-decimal pl-6">
+            <ol key={listKey} className="list-decimal pl-6">
               {listItems.map((it, i) => (
-                <li key={`li-${i}`}>{it}</li>
+                <li key={`${listKey}-li-${i}`}>{it}</li>
               ))}
             </ol>,
           );
@@ -440,7 +625,7 @@ export default function ConsultantChatPanel({
       const reason = (data["reason"] || "").trim();
 
       blocks.push(
-        <Card key={`card-${idx}-${cardIndex}`} className="border-primary/40 bg-background/80">
+        <Card key={`card-${idx}-${cardIndex}-${nextBlockKey()}`} className="border-primary/40 bg-background/80">
           <div className="flex gap-3">
             {image && (
               <img src={image} alt={name || id || "Product"} className="w-16 h-16 rounded-md object-cover flex-shrink-0" />
@@ -586,26 +771,46 @@ export default function ConsultantChatPanel({
     );
   }
 
-  return (
-    <div className={`${className || ""} flex flex-col ${embedded ? "h-full" : ""}`}>
-      {!embedded && (
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-              <Sparkles className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold">Sentra Consultant</h1>
-              <p className="text-xs text-muted-foreground">Expert Business Advice</p>
-            </div>
-          </div>
-          <Button variant="outline" size="sm" onClick={handleNewChat}>
-            New Chat
-          </Button>
+  const archivePanel = (
+    <Card className="border md:h-full md:min-h-0">
+      <div className="px-4 py-3 border-b">
+        <h2 className="text-sm font-semibold">Archived Chats</h2>
+        <p className="text-xs text-muted-foreground">Grouped by date and subject</p>
+      </div>
+      <ScrollArea className="max-h-56 md:max-h-none md:h-[calc(100vh-260px)]">
+        <div className="p-3 space-y-3">
+          {archiveLoading && <p className="text-xs text-muted-foreground">Loading archive...</p>}
+          {!archiveLoading && archiveGroups.length === 0 && (
+            <p className="text-xs text-muted-foreground">No previous chats yet.</p>
+          )}
+          {!archiveLoading &&
+            archiveGroups.map((group) => (
+              <div key={group.label} className="space-y-1">
+                <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">{group.label}</p>
+                {group.sessions.map((session) => (
+                  <button
+                    key={session.id}
+                    type="button"
+                    onClick={() => void handleSelectSession(session.id)}
+                    className={`w-full text-left rounded-md px-2 py-1.5 border text-xs ${
+                      session.id === sessionId ? "border-primary bg-primary/5" : "border-transparent hover:bg-muted"
+                    }`}
+                  >
+                    <p className="font-medium truncate">{session.title?.trim() || "New Conversation"}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {formatArchiveTime(session.updated_at || session.created_at)}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            ))}
         </div>
-      )}
+      </ScrollArea>
+    </Card>
+  );
 
-      <Card className={`flex-1 flex flex-col overflow-hidden border-2 ${embedded ? "min-h-0" : ""}`}>
+  const chatCard = (
+    <Card className={`flex-1 flex flex-col overflow-hidden border-2 ${embedded ? "min-h-0" : "min-h-0 h-full"}`}>
         <ScrollArea className="flex-1 p-4">
           <div className="space-y-4 max-w-3xl mx-auto">
             {messages.length === 0 && (
@@ -659,8 +864,8 @@ export default function ConsultantChatPanel({
               </div>
             )}
 
-            {messages.map((m, i) => (
-              <div key={i} className={`flex gap-3 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+            {messages.map((m, messageIndex) => (
+              <div key={m.id} className={`flex gap-3 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                 {m.role === "assistant" && (
                   <Avatar className="h-8 w-8 border">
                     <AvatarImage src="/bot-avatar.png" />
@@ -679,7 +884,7 @@ export default function ConsultantChatPanel({
                   {m.image_url && (
                     <img src={m.image_url} alt="Attachment" className="max-w-full h-auto rounded-md mb-2 max-h-60" />
                   )}
-                  {m.role === "assistant" ? renderAssistantBlocks(m.content, i) : sanitizeMdInline(m.content)}
+                  {m.role === "assistant" ? renderAssistantBlocks(m.content, messageIndex) : sanitizeMdInline(m.content)}
                 </div>
                 {m.role === "user" && (
                   <Avatar className="h-8 w-8 border">
@@ -758,6 +963,33 @@ export default function ConsultantChatPanel({
           </form>
         </div>
       </Card>
+  );
+
+  if (embedded) {
+    return <div className={`${className || ""} flex flex-col h-full`}>{chatCard}</div>;
+  }
+
+  return (
+    <div className={`${className || ""} flex flex-col h-full`}>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+            <Sparkles className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold">Iris</h1>
+            <p className="text-xs text-muted-foreground">Expert Business Advice</p>
+          </div>
+        </div>
+        <Button variant="outline" size="sm" onClick={handleNewChat}>
+          New Chat
+        </Button>
+      </div>
+
+      <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[280px_minmax(0,1fr)] gap-4">
+        {archivePanel}
+        <div className="min-h-0">{chatCard}</div>
+      </div>
     </div>
   );
 }

@@ -13,16 +13,35 @@ serve(async (req) => {
   }
 
   try {
-    const { plan_id, user_id, user_email, return_to } = await req.json();
-
-    if (!plan_id || !user_id || !user_email) {
-      throw new Error("Missing required fields");
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
+
+    const { plan_id, return_to } = await req.json();
+    if (!plan_id) throw new Error("Missing required fields");
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    const token = authHeader.replace("Bearer ", "");
+    const {
+      data: { user: authUser },
+      error: authError,
+    } = await supabase.auth.getUser(token);
+    if (authError || !authUser?.id || !authUser.email) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    const effectiveUserId = authUser.id;
+    const effectiveUserEmail = authUser.email;
 
     // Fetch plan details
     const { data: plan, error: planError } = await supabase
@@ -60,12 +79,12 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        email: user_email,
+        email: effectiveUserEmail,
         amount: amountKobo,
         callback_url: callbackUrl,
         metadata: {
           type: "agent_subscription",
-          user_id: user_id,
+          user_id: effectiveUserId,
           plan_id: plan_id,
           plan_name: plan.name,
           duration_days: plan.duration_days
@@ -87,10 +106,10 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Payment init error:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

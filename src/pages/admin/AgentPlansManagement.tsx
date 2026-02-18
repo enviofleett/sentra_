@@ -31,6 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Loader2, Plus, Pencil, Trash2, Bot, Settings, Users } from "lucide-react";
+import type { Json } from "@/integrations/supabase/types";
 
 interface AgentPlan {
   id: string;
@@ -41,6 +42,28 @@ interface AgentPlan {
   features: string[];
   is_active: boolean;
 }
+
+type AgentPlanPayload = Omit<AgentPlan, "id">;
+type AgentTrialConfig = {
+  enabled?: boolean;
+  days?: number;
+};
+
+const AGENT_PLANS_TABLE = "agent_plans" as never;
+const RPC_ADMIN_GRANT_TRIAL_TO_ALL = "admin_grant_trial_to_all" as never;
+
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  return "Unknown error";
+};
+
+const isAgentTrialConfig = (value: Json): value is AgentTrialConfig => {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+};
+
+const isErrorWithCode = (value: unknown): value is { code: string } => {
+  return typeof value === "object" && value !== null && "code" in value;
+};
 
 export default function AgentPlansManagement() {
   const queryClient = useQueryClient();
@@ -61,12 +84,15 @@ export default function AgentPlansManagement() {
         .select("value")
         .eq("key", "agent_trial_config")
         .single();
-      
-      if (data?.value) {
-        // Safe casting from JSON
-        const config = data.value as any;
-        setTrialEnabled(config.enabled || false);
-        setTrialDays(config.days || 7);
+
+      if (error) {
+        toast.error(`Failed to load trial settings: ${error.message}`);
+        return;
+      }
+
+      if (data?.value && isAgentTrialConfig(data.value)) {
+        setTrialEnabled(Boolean(data.value.enabled));
+        setTrialDays(Number(data.value.days) || 7);
       }
     };
     fetchSettings();
@@ -86,7 +112,7 @@ export default function AgentPlansManagement() {
     queryKey: ["agent-plans"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("agent_plans" as any)
+        .from(AGENT_PLANS_TABLE)
         .select("*")
         .order("price", { ascending: true });
 
@@ -101,8 +127,8 @@ export default function AgentPlansManagement() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (newPlan: any) => {
-      const { error } = await supabase.from("agent_plans" as any).insert([newPlan]);
+    mutationFn: async (newPlan: AgentPlanPayload) => {
+      const { error } = await supabase.from(AGENT_PLANS_TABLE).insert([newPlan]);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -112,15 +138,15 @@ export default function AgentPlansManagement() {
       resetForm();
     },
     onError: (error) => {
-      toast.error(`Error creating plan: ${error.message}`);
+      toast.error(`Error creating plan: ${getErrorMessage(error)}`);
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (plan: any) => {
+    mutationFn: async (plan: AgentPlanPayload & { id: string }) => {
       const { id, ...updates } = plan;
       const { error } = await supabase
-        .from("agent_plans" as any)
+        .from(AGENT_PLANS_TABLE)
         .update(updates)
         .eq("id", id);
       if (error) throw error;
@@ -132,13 +158,13 @@ export default function AgentPlansManagement() {
       resetForm();
     },
     onError: (error) => {
-      toast.error(`Error updating plan: ${error.message}`);
+      toast.error(`Error updating plan: ${getErrorMessage(error)}`);
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("agent_plans" as any).delete().eq("id", id);
+      const { error } = await supabase.from(AGENT_PLANS_TABLE).delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -146,7 +172,7 @@ export default function AgentPlansManagement() {
       toast.success("Plan deleted successfully");
     },
     onError: (error) => {
-      toast.error(`Error deleting plan: ${error.message}`);
+      toast.error(`Error deleting plan: ${getErrorMessage(error)}`);
     },
   });
 
@@ -167,8 +193,8 @@ export default function AgentPlansManagement() {
 
       if (error) throw error;
       toast.success("Trial settings saved successfully");
-    } catch (error: any) {
-      toast.error(`Failed to save settings: ${error.message}`);
+    } catch (error) {
+      toast.error(`Failed to save settings: ${getErrorMessage(error)}`);
     } finally {
       setIsSavingSettings(false);
     }
@@ -181,13 +207,13 @@ export default function AgentPlansManagement() {
 
     setIsGrantingTrial(true);
     try {
-      const { data, error } = await supabase.rpc("admin_grant_trial_to_all" as any, {
+      const { data, error } = await supabase.rpc(RPC_ADMIN_GRANT_TRIAL_TO_ALL, {
         p_days: trialDays
       });
 
       if (error) {
         const msg = String(error.message || "").toLowerCase();
-        if (msg.includes("schema cache") || msg.includes("not found") || (error as any).code === "404") {
+        if (msg.includes("schema cache") || msg.includes("not found") || (isErrorWithCode(error) && error.code === "404")) {
           const { data: fnData, error: fnError } = await supabase.functions.invoke("admin-grant-trial", {
             body: { days: trialDays }
           });
@@ -200,8 +226,8 @@ export default function AgentPlansManagement() {
       } else {
         toast.success(`Successfully granted trial to ${data} users.`);
       }
-    } catch (error: any) {
-      toast.error(`Failed to grant trials: ${error.message}`);
+    } catch (error) {
+      toast.error(`Failed to grant trials: ${getErrorMessage(error)}`);
     } finally {
       setIsGrantingTrial(false);
     }

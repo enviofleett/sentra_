@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import type { Json } from "@/integrations/supabase/types";
 
 export interface ProductConversationContext {
   id: string;
@@ -6,7 +7,7 @@ export interface ProductConversationContext {
   brand?: string | null;
   category?: string | null;
   price?: number | null;
-  attributes?: Record<string, any> | null;
+  attributes?: Record<string, Json> | null;
   image_url?: string | null;
   url?: string;
 }
@@ -80,6 +81,7 @@ export function ConversationProvider({ children }: { children: React.ReactNode }
       if (typeof window === "undefined") return;
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {
+      // Ignore storage write failures (private mode/quota).
     }
   }, [state]);
 

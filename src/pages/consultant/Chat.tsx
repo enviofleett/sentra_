@@ -16,15 +16,23 @@ export default function ConsultantChat() {
       return init;
     }
   }, [searchParams]);
+  const forcedSessionId = useMemo(() => {
+    const raw = searchParams.get("session");
+    return raw?.trim() ? raw.trim() : undefined;
+  }, [searchParams]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
       <main className="flex-1 container mx-auto px-4 py-6 flex flex-col h-[calc(100vh-80px)]">
-        <ConsultantChatPanel embedded={false} initialMessage={initialMessage} sessionKey={initialMessage} />
+        <ConsultantChatPanel
+          embedded={false}
+          initialMessage={initialMessage}
+          sessionKey={initialMessage}
+          forcedSessionId={forcedSessionId}
+        />
       </main>
       <Footer />
     </div>
   );
 }
-

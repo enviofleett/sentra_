@@ -12,13 +12,13 @@ import { getOrderStatusBreakdown, getOrdersTimeline, OrderStatusBreakdown } from
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip as UITooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { DateRange } from 'react-day-picker';
 import { ProductImage } from '@/components/common/ProductImage';
 import { RichTextEditor } from '@/components/admin/RichTextEditor';
 import { normalizeOrderItems } from '@/utils/orderItems';
+import type { NormalizedOrderItem } from '@/utils/orderItems';
 
 interface Vendor {
   id: string;
@@ -36,9 +36,9 @@ interface Order {
   paystack_status: string | null;
   payment_reference: string | null;
   created_at: string;
-  items: any;
-  shipping_address: any;
-  billing_address: any;
+  items: NormalizedOrderItem[];
+  shipping_address: Record<string, unknown> | null;
+  billing_address: Record<string, unknown> | null;
   promo_discount_applied?: number;
   registration_date?: string;
   promo_wallet_balance?: number;
@@ -51,8 +51,8 @@ interface Shipment {
   tracking_number: string | null;
   carrier: string | null;
   status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
-  items: any[];
-  destination_address: any;
+  items: NormalizedOrderItem[];
+  destination_address: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -62,8 +62,20 @@ interface OrderCommunication {
   subject: string;
   content: string;
   created_at: string;
-  metadata?: any;
+  metadata?: Record<string, unknown> | null;
 }
+
+type TimelinePoint = Awaited<ReturnType<typeof getOrdersTimeline>>[number];
+type OrderStatus = Order["status"];
+
+const getErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : "Unknown error";
+
+const isErrorWithCode = (value: unknown): value is { code: string } =>
+  typeof value === "object" && value !== null && "code" in value;
+
+const isOrderStatus = (value: string): value is OrderStatus =>
+  ["pending", "processing", "shipped", "delivered", "cancelled"].includes(value);
 
 export function OrdersManagement() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -72,7 +84,7 @@ export function OrdersManagement() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [statusBreakdown, setStatusBreakdown] = useState<OrderStatusBreakdown[]>([]);
-  const [timelineData, setTimelineData] = useState<any[]>([]);
+  const [timelineData, setTimelineData] = useState<TimelinePoint[]>([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
   const [selectedVendor, setSelectedVendor] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -124,14 +136,14 @@ export function OrdersManagement() {
 
     setCommunicationsLoading(true);
     const { data, error } = await supabase
-      .from('order_communications' as any)
+      .from('order_communications' as never)
       .select('*')
       .eq('order_id', orderId)
       .order('created_at', { ascending: false });
     
     if (error) {
       // Table may not exist yet in some environments.
-      if ((error as any).code === 'PGRST205') {
+      if (isErrorWithCode(error) && error.code === 'PGRST205') {
         setCommunicationsTableAvailable(false);
         setCommunications([]);
         setCommunicationsLoading(false);
@@ -184,9 +196,9 @@ export function OrdersManagement() {
       } else {
         toast.error('Failed to send email', { description: data.error });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error sending email:', error);
-      toast.error('Error sending email', { description: error.message });
+      toast.error('Error sending email', { description: getErrorMessage(error) });
     } finally {
       setIsSendingEmail(false);
     }
@@ -374,7 +386,7 @@ export function OrdersManagement() {
 
     // Apply status filter
     if (statusFilter !== 'all') {
-      query = query.eq('status', statusFilter as any);
+      query = query.eq('status', statusFilter as OrderStatus);
     }
 
     // Removed server-side search to allow robust client-side product searching
@@ -385,15 +397,15 @@ export function OrdersManagement() {
       toast.error('Failed to load orders');
       console.error(error);
     } else {
-      let filteredOrders: any[] = data || [];
+      let filteredOrders: Order[] = (data as Order[]) || [];
       filteredOrders = filteredOrders.map((order) => ({
         ...order,
-        items: normalizeOrderItems(order.items as any[]),
+        items: normalizeOrderItems(order.items as unknown[]),
       }));
 
       // Fetch additional user details (profiles and wallets)
       if (filteredOrders.length > 0) {
-        const userIds = [...new Set(filteredOrders.map((o: any) => o.user_id).filter(Boolean))];
+          const userIds = [...new Set(filteredOrders.map((o) => o.user_id).filter(Boolean))];
         
         if (userIds.length > 0) {
           const [profilesResponse, walletsResponse] = await Promise.all([
@@ -412,7 +424,7 @@ export function OrdersManagement() {
 
           filteredOrders = filteredOrders.map(order => ({
             ...order,
-            items: normalizeOrderItems(order.items as any[]),
+            items: normalizeOrderItems(order.items as unknown[]),
             registration_date: profilesMap.get(order.user_id),
             promo_wallet_balance: walletsMap.get(order.user_id) || 0
           }));
@@ -423,7 +435,7 @@ export function OrdersManagement() {
       if (selectedVendor !== 'all') {
         filteredOrders = filteredOrders.filter(order => {
           const items = Array.isArray(order.items) ? order.items : [];
-          return items.some((item: any) => item.vendor_id === selectedVendor);
+          return items.some((item) => item.vendor_id === selectedVendor);
         });
       }
 
@@ -436,7 +448,7 @@ export function OrdersManagement() {
           
           // Search in Items (Product Names)
           const items = Array.isArray(order.items) ? order.items : [];
-          const matchesProduct = items.some((item: any) => 
+          const matchesProduct = items.some((item) => 
             item.name?.toLowerCase().includes(lowerQuery)
           );
 
@@ -483,9 +495,10 @@ export function OrdersManagement() {
           .eq('id', selectedOrder.id)
           .single();
         if (data) {
+          const typedOrder = data as Order;
           setSelectedOrder({
-            ...(data as any),
-            items: normalizeOrderItems((data as any).items as any[]),
+            ...typedOrder,
+            items: normalizeOrderItems(typedOrder.items as unknown[]),
           });
         }
       }
@@ -499,9 +512,14 @@ export function OrdersManagement() {
     if (!confirm) return;
 
     setLoading(true);
+    if (!isOrderStatus(newStatus)) {
+      toast.error('Invalid order status');
+      return;
+    }
+
     const { error } = await supabase
       .from('orders')
-      .update({ status: newStatus as any })
+      .update({ status: newStatus })
       .in('id', selectedOrders);
 
     if (error) {
@@ -553,8 +571,8 @@ export function OrdersManagement() {
           description: data?.message || 'Transaction not found in Paystack'
         });
       }
-    } catch (err: any) {
-      toast.error('Verification error', { description: err.message });
+    } catch (err: unknown) {
+      toast.error('Verification error', { description: getErrorMessage(err) });
     } finally {
       setVerifyingOrderId(null);
     }
@@ -763,7 +781,7 @@ export function OrdersManagement() {
             <div className="w-full md:w-48">
               <Label>Time Period</Label>
               <div className="flex gap-2">
-                <Select value={timePeriod} onValueChange={(v: any) => setTimePeriod(v)}>
+                <Select value={timePeriod} onValueChange={(v: 'day' | 'week' | 'month' | 'year' | 'custom') => setTimePeriod(v)}>
                   <SelectTrigger className="w-[180px]">
                     <SelectValue placeholder="Select Period" />
                   </SelectTrigger>
@@ -844,7 +862,7 @@ export function OrdersManagement() {
                     <TableCell>{order.customer_email}</TableCell>
                     <TableCell>
                       <div className="text-sm space-y-1">
-                        {order.items?.map((item: any, idx: number) => (
+                        {order.items?.map((item: NormalizedOrderItem, idx: number) => (
                           <div key={idx} className="text-muted-foreground">
                             {item.name} - {item.vendor_name || getVendorName(item.vendor_id)}
                           </div>
@@ -895,7 +913,7 @@ export function OrdersManagement() {
                               onClick={() => {
                                 setSelectedOrder({
                                   ...order,
-                                  items: normalizeOrderItems(order.items as any[]),
+                                  items: normalizeOrderItems(order.items as unknown[]),
                                 });
                                 setIsDialogOpen(true);
                                 fetchCommunications(order.id);
@@ -1028,7 +1046,7 @@ export function OrdersManagement() {
                               </div>
                               
                               <div className="space-y-2">
-                                {shipment.items.map((item: any, idx: number) => (
+                                {shipment.items.map((item: NormalizedOrderItem, idx: number) => (
                                   <div key={idx} className="flex justify-between text-xs">
                                     <span className="text-muted-foreground">{item.name || item.product?.name || 'Product'} × {item.quantity}</span>
                                     <span className="font-mono">
@@ -1056,7 +1074,7 @@ export function OrdersManagement() {
                         <Package className="h-4 w-4" /> Order Items ({selectedOrder.items?.length || 0})
                       </h3>
                       <div className="space-y-4">
-                        {selectedOrder.items?.map((item: any, idx: number) => (
+                        {selectedOrder.items?.map((item: NormalizedOrderItem, idx: number) => (
                           <div key={idx} className="flex gap-4 p-4 rounded-lg border bg-card hover:bg-accent/5 transition-colors">
                             <ProductImage 
                               src={item.image_url} 
@@ -1168,7 +1186,7 @@ export function OrdersManagement() {
                       <Label className="text-xs">Order Status</Label>
                       <Select
                         value={selectedOrder.status}
-                        onValueChange={(value) => updateOrderStatus(selectedOrder.id, value as any)}
+                        onValueChange={(value) => updateOrderStatus(selectedOrder.id, value as OrderStatus)}
                       >
                         <SelectTrigger className="w-full bg-background">
                           <SelectValue />

@@ -9,6 +9,26 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+function streamTextAsSse(text: string): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const chunkSize = 80;
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        for (let i = 0; i < text.length; i += chunkSize) {
+          const piece = text.slice(i, i + chunkSize);
+          const payload = { choices: [{ delta: { content: piece } }] };
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+          await new Promise((r) => setTimeout(r, 0));
+        }
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      } finally {
+        controller.close();
+      }
+    },
+  });
+}
+
 serve(async (req) => {
   // Handle CORS preflight request
   if (req.method === "OPTIONS") {
@@ -18,7 +38,6 @@ serve(async (req) => {
   try {
     const {
       messages,
-      user_id,
       session_id,
       image_url,
       preferences,
@@ -26,6 +45,8 @@ serve(async (req) => {
       product_context,
       page_url,
       browsing_history,
+      assistant_starter,
+      page_context,
     } = await req.json();
 
     // 1. Initialize Supabase Client
@@ -34,23 +55,26 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // 2. Verify User Subscription
-    const authHeader = req.headers.get('Authorization');
-    let authenticatedUserId = user_id;
-    
-    if (authHeader) {
-      const token = authHeader.replace('Bearer ', '');
-      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-      if (!authError && user) {
-        authenticatedUserId = user.id;
-      }
-    }
-
-    if (!authenticatedUserId) {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
       return new Response(
         JSON.stringify({ error: "Unauthorized" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    const token = authHeader.replace("Bearer ", "");
+    const {
+      data: { user: authUser },
+      error: authError,
+    } = await supabase.auth.getUser(token);
+    if (authError || !authUser?.id) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const authenticatedUserId = authUser.id;
 
     // Check subscription
     const { data: hasSub } = await supabase.rpc('has_active_agent_subscription', { p_user_id: authenticatedUserId });
@@ -68,8 +92,19 @@ serve(async (req) => {
     }
 
     // 2.1 Persistence: Save User Message with context
-    if (session_id) {
+    if (session_id && !assistant_starter && Array.isArray(messages) && messages.length > 0) {
         const lastUser = messages[messages.length - 1];
+        const deriveSessionSubject = (raw: string) => {
+          const cleaned = String(raw || "")
+            .replace(/\s+/g, " ")
+            .replace(/[*_`#>[\]()]/g, "")
+            .trim();
+          if (!cleaned) return "New Conversation";
+          const firstSentence = cleaned.split(/[.!?\n]/)[0]?.trim() || cleaned;
+          const words = firstSentence.split(" ").filter(Boolean).slice(0, 10);
+          const subject = words.join(" ").trim();
+          return subject || "New Conversation";
+        };
         const userMsg = {
             session_id,
             role: 'user',
@@ -81,9 +116,29 @@ serve(async (req) => {
               product_context: product_context || null,
               cart_context: cart_context || null,
               browsing_history: Array.isArray(browsing_history) ? browsing_history : null,
+              page_context: page_context && typeof page_context === "object" ? page_context : null,
             },
         };
         await supabase.from('consultant_messages').insert(userMsg);
+
+        const lastUserTextForTitle = typeof lastUser?.content === "string" ? lastUser.content.trim() : "";
+        const { data: existingSession } = await supabase
+          .from("consultant_sessions")
+          .select("title")
+          .eq("id", session_id)
+          .maybeSingle();
+
+        const normalizedTitle = String(existingSession?.title || "").trim().toLowerCase();
+        const shouldSetTitle = Boolean(lastUserTextForTitle) && (!normalizedTitle || normalizedTitle === "new conversation");
+        const nextTitle = shouldSetTitle ? deriveSessionSubject(lastUserTextForTitle) : null;
+
+        await supabase
+          .from("consultant_sessions")
+          .update({
+            updated_at: new Date().toISOString(),
+            ...(nextTitle ? { title: nextTitle } : {}),
+          })
+          .eq("id", session_id);
     }
 
     const STOPWORDS = new Set([
@@ -331,6 +386,12 @@ serve(async (req) => {
 
     const safeProductContext = product_context && typeof product_context === "object" ? product_context : null;
     const safeHistory = Array.isArray(browsing_history) ? browsing_history : [];
+    const safePageContext = page_context && typeof page_context === "object"
+      ? page_context as Record<string, unknown>
+      : null;
+
+    const toStringArray = (value: unknown, max = 5): string[] =>
+      Array.isArray(value) ? value.map((item) => String(item || "").trim()).filter(Boolean).slice(0, max) : [];
 
     const productContextLines = (() => {
       if (!safeProductContext) return "";
@@ -365,8 +426,28 @@ serve(async (req) => {
         : "";
     })();
 
+    const pageContextLines = (() => {
+      if (!safePageContext) return "";
+      const lines: string[] = [];
+      const title = String(safePageContext.title || "").trim();
+      const path = String(safePageContext.path || "").trim();
+      const headings = toStringArray(safePageContext.headings);
+      const actions = toStringArray(safePageContext.primaryActions);
+      const visibleErrors = toStringArray(safePageContext.visibleErrors);
+      const runtimeErrors = toStringArray(safePageContext.recentRuntimeErrors);
+
+      if (title) lines.push(`Title: ${title}`);
+      if (path) lines.push(`Path: ${path}`);
+      if (headings.length) lines.push(`Headings: ${headings.join(" | ")}`);
+      if (actions.length) lines.push(`Primary actions: ${actions.join(" | ")}`);
+      if (visibleErrors.length) lines.push(`Visible errors: ${visibleErrors.join(" | ")}`);
+      if (runtimeErrors.length) lines.push(`Runtime errors: ${runtimeErrors.join(" | ")}`);
+
+      return lines.length ? `PAGE CONTEXT\n${lines.join("\n")}\n\n` : "";
+    })();
+
     const systemPrompt = `ROLE
-You are a professional fragrance consultant and perfume business advisor working exclusively for Sentra.
+You are Iris, a professional fragrance consultant and perfume business advisor working exclusively for Sentra.
 You:
 Help users choose fragrances from our catalog only.
 Help entrepreneurs build and grow perfume businesses.
@@ -520,7 +601,7 @@ Rules:
 
 416→User preferences: ${prefLine || "none"}
 
-${productContextLines}${historyLines}${
+${productContextLines}${historyLines}${pageContextLines}${
       cart_context?.summary ? `LIVE CART SNAPSHOT\n${cart_context.summary}\n\n` : ""
     }TOP DEAL SNAPSHOTS
 The following lines describe some of the best-value single products and bundles based on price, savings, stock, and margin.
@@ -529,8 +610,87 @@ Use them as hints when you recommend or build bundles. Rewrite them in your own 
 ${topDealsNarratives.map((t) => `- ${t}`).join("\n")}
 `;
 
+    const userMessageCount = Array.isArray(messages)
+      ? messages.filter((m: { role?: string }) => m?.role === "user").length
+      : 0;
+    const isConversationStart = userMessageCount <= 1;
+
     // Enforce "intake first": do not recommend until key context is provided.
+    if (assistant_starter) {
+      const pageTitle = String(safePageContext?.title || "this page").trim();
+      const pagePath = String(safePageContext?.path || page_url || "").trim();
+      const visibleErrors = toStringArray(safePageContext?.visibleErrors);
+      const runtimeErrors = toStringArray(safePageContext?.recentRuntimeErrors);
+      const topError = visibleErrors[0] || runtimeErrors[0] || "";
+      const contextLine = pagePath && pagePath !== pageTitle ? `${pageTitle} (${pagePath})` : pageTitle;
+      const isConsultantRoute = pagePath.startsWith("/consultant");
+
+      const starterText = isConsultantRoute
+        ? [
+            "Hi, I’m Iris.",
+            "Welcome.",
+            "How can I help you today?",
+          ].join("\n\n")
+        : [
+            "Hi, I’m Iris.",
+            `I can see you're on ${contextLine}.`,
+            topError ? `I noticed this issue on the page: "${topError}".` : null,
+            "Are you having any challenge on this page?",
+            "What were you trying to do, and what happened when you clicked?",
+          ]
+            .filter(Boolean)
+            .join("\n\n");
+
+      if (session_id && starterText) {
+        await supabase.from("consultant_messages").insert({
+          session_id,
+          role: "assistant",
+          content: starterText,
+          product_id: safeProductContext?.id ?? null,
+          page_url: page_url || null,
+          context: {
+            product_context: safeProductContext || null,
+            cart_context: cart_context || null,
+            browsing_history: safeHistory.length ? safeHistory : null,
+            page_context: safePageContext || null,
+          },
+        });
+      }
+
+      return new Response(streamTextAsSse(starterText), {
+        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+      });
+    }
+
     if (intakeQs.length > 0) {
+      if (isConversationStart) {
+        const welcomeText = [
+          "Hi, I’m Iris.",
+          "How can I help you today?",
+          "Tell me what you want to solve, and I’ll guide you step by step.",
+        ].join("\n\n");
+
+        if (session_id) {
+          await supabase.from("consultant_messages").insert({
+            session_id,
+            role: "assistant",
+            content: welcomeText,
+            product_id: safeProductContext?.id ?? null,
+            page_url: page_url || null,
+            context: {
+              product_context: safeProductContext || null,
+              cart_context: cart_context || null,
+              browsing_history: safeHistory.length ? safeHistory : null,
+              page_context: safePageContext || null,
+            },
+          });
+        }
+
+        return new Response(streamTextAsSse(welcomeText), {
+          headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+        });
+      }
+
       const intro =
         intent === "business"
           ? "Before I advise you, I need a few details so the plan fits your business."
@@ -548,29 +708,14 @@ ${topDealsNarratives.map((t) => `- ${t}`).join("\n")}
             product_context: safeProductContext || null,
             cart_context: cart_context || null,
             browsing_history: safeHistory.length ? safeHistory : null,
+            page_context: safePageContext || null,
           },
         });
       }
 
-      const encoder = new TextEncoder();
-      const chunkSize = 80;
-      const sseStream = new ReadableStream<Uint8Array>({
-        async start(controller) {
-          try {
-            for (let i = 0; i < finalText.length; i += chunkSize) {
-              const piece = finalText.slice(i, i + chunkSize);
-              const payload = { choices: [{ delta: { content: piece } }] };
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
-              await new Promise((r) => setTimeout(r, 0));
-            }
-            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-          } finally {
-            controller.close();
-          }
-        },
+      return new Response(streamTextAsSse(finalText), {
+        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
       });
-
-      return new Response(sseStream, { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } });
     }
 
     // 5. Prepare Messages for OpenRouter (Multimodal Support)
@@ -765,6 +910,7 @@ ${topDealsNarratives.map((t) => `- ${t}`).join("\n")}
           product_context: safeProductContext || null,
           cart_context: cart_context || null,
           browsing_history: safeHistory.length ? safeHistory : null,
+          page_context: safePageContext || null,
         },
       });
     }

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
@@ -16,27 +16,17 @@ import { ScentPyramid } from '@/components/product/ScentPyramid';
 import { MobileBuyBar } from '@/components/product/MobileBuyBar';
 import { motion } from 'framer-motion';
 import { useMetaTags } from '@/hooks/useMetaTags';
-import { useConversationContext } from '@/contexts/ConversationContext';
-import ProductConsultantDrawer from '@/components/consultant/ProductConsultantDrawer';
-import { isConsultantFreeAccessActive } from '@/utils/consultantAccess';
 
 export default function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const [searchParams] = useSearchParams();
   const { addToCart } = useCart();
   const { user } = useAuth();
-  const conversation = useConversationContext();
   const [product, setProduct] = useState<any>(null);
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [engaged, setEngaged] = useState(false);
-  const [consultantOpen, setConsultantOpen] = useState(false);
-  const [consultantInitMessage, setConsultantInitMessage] = useState<string | undefined>(undefined);
-  const autoOpenHandledRef = useRef(false);
-  const iconLoggedRef = useRef(false);
 
   // Generate meta tags config
   const metaConfig = useMemo(() => {
@@ -63,15 +53,15 @@ export default function ProductDetail() {
 
   useEffect(() => {
     if (id) {
-      loadProduct();
+      loadProduct(id);
     }
   }, [id]);
 
-  const loadProduct = async () => {
+  const loadProduct = async (productId: string) => {
     const { data, error } = await supabase
       .from('products')
       .select('*')
-      .eq('id', id)
+      .eq('id', productId)
       .eq('is_active', true)
       .single();
 
@@ -102,25 +92,6 @@ export default function ProductDetail() {
     }
 
     await addToCart(product.id, quantity);
-    if (engaged) {
-      const abVariant = localStorage.getItem('consultant_ab_variant') || null;
-      const { data: wallet } = await supabase
-        .from('user_wallets')
-        .select('balance_promo')
-        .eq('user_id', user?.id || '')
-        .maybeSingle();
-      const promoBalance = wallet?.balance_promo || 0;
-      await supabase
-        .from('consultant_engagements')
-        .insert({
-          user_id: user?.id || null,
-          product_id: product.id,
-          event_type: 'added_to_cart_after_consult',
-          ab_variant: abVariant,
-          promo_balance: promoBalance,
-          moq: 4
-        });
-    }
   };
 
   const parseScentNotes = () => {
@@ -130,162 +101,6 @@ export default function ProductDetail() {
     return { top: [], heart: [], base: [] };
   };
 
-  useEffect(() => {
-    const logIconShown = async () => {
-      if (!product || iconLoggedRef.current) return;
-      iconLoggedRef.current = true;
-
-      const abKey = 'consultant_ab_variant';
-      let abVariant = localStorage.getItem(abKey) || '';
-      if (!abVariant) {
-        abVariant = Math.random() < 0.5 ? 'A' : 'B';
-        localStorage.setItem(abKey, abVariant);
-      }
-
-      try {
-        await supabase
-          .from('consultant_engagements')
-          .insert({
-            user_id: user?.id || null,
-            product_id: product.id,
-            event_type: 'consultant_icon_shown',
-            ab_variant: abVariant,
-            moq: 4
-          });
-      } catch {}
-    };
-    logIconShown();
-  }, [product, user]);
-
-  const buildInitMessage = async () => {
-    if (!product) return { initMessage: '', abVariant: null as string | null, promoBalance: 0, moq: 4 };
-
-    const abKey = 'consultant_ab_variant';
-    let abVariant = localStorage.getItem(abKey) || '';
-    if (!abVariant) {
-      abVariant = Math.random() < 0.5 ? 'A' : 'B';
-      localStorage.setItem(abKey, abVariant);
-    }
-
-    let suggestions = '';
-    try {
-      let query = supabase
-        .from('products')
-        .select('id, name, brand, price, scent_profile')
-        .eq('is_active', true)
-        .neq('id', product.id);
-      const filters: string[] = [];
-      if (product.scent_profile) filters.push(`scent_profile.eq.${product.scent_profile}`);
-      if (product.brand) filters.push(`brand.eq.${product.brand}`);
-      if (filters.length > 0) query = query.or(filters.join(','));
-      const { data: related } = await query.limit(5);
-      suggestions = (related || [])
-        .slice(0, 3)
-        .map((p: any) => `${p.brand} ${p.name} (₦${p.price})`)
-        .join(', ');
-    } catch {}
-
-    let promoBalance = 0;
-    if (user) {
-      try {
-        const { data: wallet } = await supabase
-          .from('user_wallets')
-          .select('balance_promo')
-          .eq('user_id', user.id)
-          .maybeSingle();
-        promoBalance = wallet?.balance_promo || 0;
-        await supabase.from('consultant_ab_assignments').upsert({ user_id: user.id, variant: abVariant });
-      } catch {}
-    }
-
-    const scentNotes = parseScentNotes();
-    const pyramid = [
-      scentNotes.top?.length ? `Top: ${scentNotes.top.join(', ')}` : null,
-      scentNotes.heart?.length ? `Middle: ${scentNotes.heart.join(', ')}` : null,
-      scentNotes.base?.length ? `Base: ${scentNotes.base.join(', ')}` : null,
-    ].filter(Boolean).join(' | ');
-    const moq = 4;
-    const promoLine = promoBalance > 0
-      ? `You have ₦${promoBalance.toLocaleString()} promo credit available.`
-      : `No promo credit detected.`;
-
-    const initMessage = [
-      `Hi Consultant, the user is viewing ${product.brand || ''} ${product.name}.`,
-      `Scent profile: ${product.scent_profile || 'unknown'}. ${pyramid || ''}`,
-      `Price: ₦${product.price.toLocaleString()}. MOQ: ${moq} units for reseller checkout.`,
-      `Suggest upsells and combinations (2–3 options) for casual users, collectors, and gift buyers. Include bundle pricing examples with 10–15% discounts.`,
-      `Recommend 3–5 complementary items based on fragrance families, seasonality, and purchase patterns. Candidates: ${suggestions || 'none found'}.`,
-      `${promoLine} Calculate potential savings now and if they add more to meet MOQ or maximize credit.`,
-      `Provide market insight, profit margin guidance, and inventory recommendations tailored to Nigeria.`,
-    ].join('\n');
-
-    return { initMessage, abVariant: abVariant || null, promoBalance, moq };
-  };
-
-  const openConsultant = async () => {
-    if (!product) return false;
-
-    const returnTo = `/products/${product.id}?consult=1`;
-    let accessOk = isConsultantFreeAccessActive();
-
-    if (!accessOk) {
-      const { data: isAdmin } = await supabase.rpc('is_admin');
-      accessOk = !!isAdmin;
-    }
-
-    if (!accessOk && user?.id) {
-      const { data: hasSub } = await supabase.rpc('has_active_agent_subscription', { p_user_id: user.id });
-      accessOk = !!hasSub;
-    }
-
-    if (!accessOk) {
-      navigate(`/consultant/plans?return_to=${encodeURIComponent(returnTo)}`);
-      return false;
-    }
-
-    const { initMessage, abVariant, promoBalance, moq } = await buildInitMessage();
-    setConsultantInitMessage(initMessage);
-    setConsultantOpen(true);
-    setEngaged(true);
-
-    try {
-      await supabase.from('consultant_engagements').insert({
-        user_id: user?.id || null,
-        product_id: product.id,
-        event_type: 'opened_consultant',
-        ab_variant: abVariant,
-        promo_balance: promoBalance,
-        moq
-      });
-    } catch {}
-
-    return true;
-  };
-
-  useEffect(() => {
-    const consult = searchParams.get('consult');
-    if (!product) return;
-    if (consult !== '1') return;
-    if (autoOpenHandledRef.current) return;
-    autoOpenHandledRef.current = true;
-
-    (async () => {
-      const opened = await openConsultant();
-      if (!opened) return;
-
-      const nextParams = new URLSearchParams(location.search);
-      nextParams.delete('consult');
-      const nextSearch = nextParams.toString();
-      navigate(
-        {
-          pathname: location.pathname,
-          search: nextSearch ? `?${nextSearch}` : '',
-        },
-        { replace: true }
-      );
-    })();
-  }, [product, searchParams, location.pathname, location.search]);
-
   const productImages =
     product?.images && Array.isArray(product.images) && product.images.length > 0
       ? product.images
@@ -294,23 +109,6 @@ export default function ProductDetail() {
       : [];
 
   const primaryImage = productImages[0] || null;
-
-  useEffect(() => {
-    if (!product) return;
-    conversation.setCurrentProduct({
-      id: product.id,
-      name: product.name,
-      brand: product.brand,
-      category: product.gender || product.scent_profile || null,
-      price: product.price,
-      attributes: {
-        scent_profile: product.scent_profile,
-        size: product.size,
-      },
-      image_url: primaryImage,
-      url: location.pathname + location.search,
-    });
-  }, [product, location.pathname, location.search, primaryImage, conversation]);
 
   if (loading) {
     return (
@@ -422,27 +220,6 @@ export default function ProductDetail() {
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-serif leading-tight">
                 {product.name}
               </h1>
-              <div className="flex items-center gap-2">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="gap-2"
-                        onClick={openConsultant}
-                      >
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10">
-                          <Sparkles className="h-3.5 w-3.5 text-primary" />
-                        </span>
-                        Ask an expert
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Ask an expert</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
                 {product.scent_profile && (
                   <span className="capitalize">{product.scent_profile}</span>
@@ -609,19 +386,6 @@ export default function ProductDetail() {
       />
 
       <Footer />
-
-      <ProductConsultantDrawer
-        open={consultantOpen}
-        onOpenChange={setConsultantOpen}
-        productName={product?.name}
-        productBrand={product?.brand}
-        initialMessage={consultantInitMessage}
-        sessionKey={product?.id ? `product:${product.id}` : undefined}
-        onRequireAccess={() => {
-          const returnTo = product?.id ? `/products/${product.id}?consult=1` : location.pathname;
-          navigate(`/consultant/plans?return_to=${encodeURIComponent(returnTo)}`);
-        }}
-      />
     </div>
   );
 }

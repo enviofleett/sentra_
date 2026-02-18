@@ -16,7 +16,6 @@ import { AddressBook, Address } from '@/components/checkout/AddressBook';
 import { ShipmentSplitter, ShipmentGroup } from '@/components/checkout/ShipmentSplitter';
 import { calculateShipping } from '@/utils/shippingCalculator';
 import { Loader2, ArrowRight, CreditCard, Building } from 'lucide-react';
-import ConsultantChatPanel from '@/components/consultant/ConsultantChatPanel';
 
 import { MIN_ORDER_UNITS } from '@/utils/constants';
 import { normalizeOrderItem } from '@/utils/orderItems';
@@ -145,41 +144,6 @@ export default function Checkout() {
   }, [mode, selectedAddress, shipments, items]);
 
   const promoDiscount = usePromo && promoData ? promoData.applicable_discount : 0;
-
-  const buildCartContextSummary = () => {
-    const lines: string[] = [];
-    lines.push(`Mode: ${mode === 'single' ? 'Single address' : 'Multiple addresses'}`);
-    lines.push(`Items: ${items.reduce((sum, i) => sum + i.quantity, 0)} units`);
-    lines.push(`Subtotal: ₦${subtotal.toLocaleString()}`);
-    lines.push(`Estimated shipping: ₦${totalShipping.toLocaleString()}`);
-    lines.push(`Tax (VAT ${vatRate}%): ₦${taxAmount.toLocaleString()}`);
-    lines.push(`Promo discount: ₦${promoDiscount.toLocaleString()}`);
-    lines.push(`Total before payment: ₦${(subtotal + totalShipping + taxAmount - promoDiscount).toLocaleString()}`);
-
-    if (mode === 'single' && selectedAddress) {
-      const city = selectedAddress.city || '';
-      const state = selectedAddress.state || '';
-      if (city || state) {
-        lines.push(`Shipping address: ${city}${city && state ? ', ' : ''}${state}`);
-      }
-      if (selectedAddress.region_id) {
-        lines.push(`Region ID: ${selectedAddress.region_id}`);
-      }
-    }
-
-    if (mode === 'multi' && shipments.length > 0) {
-      shipments.forEach((g, idx) => {
-        const cost = shippingCosts[g.id] || 0;
-        const units = g.items.reduce((sum, i) => sum + i.quantity, 0);
-        const city = g.address.city || '';
-        lines.push(
-          `Shipment ${idx + 1}: ${city || 'Unknown city'} — ${units} units, Shipping: ₦${cost.toLocaleString()}`,
-        );
-      });
-    }
-
-    return lines.join('\n');
-  };
 
   const handlePlaceOrder = async () => {
     if (mode === 'single' && !selectedAddress) {
@@ -461,25 +425,6 @@ export default function Checkout() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Need help from the Consultant?</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xs text-muted-foreground mb-3">
-                  Chat with the AI Consultant using your exact cart, shipping and address snapshot.
-                </p>
-                <div className="border rounded-md max-h-72 overflow-hidden">
-                  <ConsultantChatPanel
-                    embedded
-                    className="h-72"
-                    sessionKey="checkout"
-                    initialMessage="Help me review my cart, shipping and total before I pay."
-                    cartContextSummary={buildCartContextSummary()}
-                  />
-                </div>
-              </CardContent>
-            </Card>
           </div>
         </div>
       </div>

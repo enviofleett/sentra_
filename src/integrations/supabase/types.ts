@@ -1152,6 +1152,14 @@ export type Database = {
           full_name: string | null
           has_reseller_access: boolean | null
           id: string
+          influencer_assigned_at: string | null
+          influencer_assigned_by: string | null
+          influencer_disable_reason: string | null
+          influencer_disabled_at: string | null
+          influencer_last_evaluated_at: string | null
+          influencer_last_paid_orders_30d: number
+          influencer_moq_enabled: boolean
+          is_influencer: boolean
           phone: string | null
           rank_updated_at: string | null
           referred_by: string | null
@@ -1168,6 +1176,14 @@ export type Database = {
           full_name?: string | null
           has_reseller_access?: boolean | null
           id: string
+          influencer_assigned_at?: string | null
+          influencer_assigned_by?: string | null
+          influencer_disable_reason?: string | null
+          influencer_disabled_at?: string | null
+          influencer_last_evaluated_at?: string | null
+          influencer_last_paid_orders_30d?: number
+          influencer_moq_enabled?: boolean
+          is_influencer?: boolean
           phone?: string | null
           rank_updated_at?: string | null
           referred_by?: string | null
@@ -1184,6 +1200,14 @@ export type Database = {
           full_name?: string | null
           has_reseller_access?: boolean | null
           id?: string
+          influencer_assigned_at?: string | null
+          influencer_assigned_by?: string | null
+          influencer_disable_reason?: string | null
+          influencer_disabled_at?: string | null
+          influencer_last_evaluated_at?: string | null
+          influencer_last_paid_orders_30d?: number
+          influencer_moq_enabled?: boolean
+          is_influencer?: boolean
           phone?: string | null
           rank_updated_at?: string | null
           referred_by?: string | null
@@ -2248,16 +2272,44 @@ export type Database = {
         }
         Returns: string
       }
+      admin_set_influencer_profile: {
+        Args: { p_enable_moq?: boolean; p_is_influencer: boolean; p_user_id: string }
+        Returns: {
+          influencer_moq_enabled: boolean
+          is_influencer: boolean
+          paid_orders_last_30d: number
+          required_moq: number
+        }[]
+      }
       ensure_membership_wallet: { Args: { p_user_id: string }; Returns: string }
       ensure_user_wallet: { Args: { p_user_id: string }; Returns: string }
+      evaluate_influencer_compliance: {
+        Args: { p_user_id: string }
+        Returns: {
+          influencer_moq_enabled: boolean
+          is_influencer: boolean
+          paid_orders_last_30d: number
+          required_moq: number
+        }[]
+      }
       generate_affiliate_code: { Args: { p_user_id: string }; Returns: string }
       generate_password_reset_token: {
         Args: { p_expires_in_minutes?: number; p_user_id: string }
         Returns: string
       }
+      get_paid_orders_last_30d: { Args: { p_user_id: string }; Returns: number }
       get_active_reseller_access_id: {
         Args: { p_user_id: string }
         Returns: string
+      }
+      get_user_checkout_policy: {
+        Args: never
+        Returns: {
+          influencer_moq_enabled: boolean
+          is_influencer: boolean
+          paid_orders_last_30d: number
+          required_moq: number
+        }[]
       }
       get_reseller_discount_percentage: {
         Args: { p_user_id: string }
@@ -2271,7 +2323,6 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
-      has_active_agent_subscription: { Args: { p_user_id: string }; Returns: boolean }
       is_product_manager: { Args: never; Returns: boolean }
       process_withdrawal: {
         Args: {

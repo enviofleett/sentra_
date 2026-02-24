@@ -17,8 +17,9 @@ serve(async (req) => {
     const email = url.searchParams.get('e');
     const eventType = url.searchParams.get('t') || 'opened';
     const redirectUrl = url.searchParams.get('r');
+    const unsubscribe = url.searchParams.get('u') === '1';
 
-    console.log(`📧 Tracking event: ${eventType} for campaign ${campaignId}, email: ${email}`);
+    console.log(`📧 Tracking event: ${eventType} for campaign ${campaignId}, email: ${email}, unsubscribe: ${unsubscribe}`);
 
     if (!campaignId || !email) {
       console.error('Missing required parameters');
@@ -41,12 +42,39 @@ serve(async (req) => {
     const ipAddress = req.headers.get('x-forwarded-for')?.split(',')[0] || 
                       req.headers.get('cf-connecting-ip') || '';
 
+    const decodedEmail = decodeURIComponent(email).toLowerCase();
+
+    if (unsubscribe) {
+      const { data: existingUnsub } = await supabase
+        .from('email_unsubscribes')
+        .select('id')
+        .eq('email', decodedEmail)
+        .maybeSingle();
+
+      if (!existingUnsub) {
+        const { error: unsubError } = await supabase
+          .from('email_unsubscribes')
+          .insert({ email: decodedEmail, category: 'general' });
+
+        if (unsubError) {
+          console.error('Failed to insert unsubscribe:', unsubError);
+        } else {
+          console.log(`✅ Unsubscribed ${decodedEmail}`);
+        }
+      } else {
+        console.log(`⏭️ ${decodedEmail} already unsubscribed`);
+      }
+
+      const landingUrl = redirectUrl || (Deno.env.get('APP_BASE_URL') || 'https://sentra.ng');
+      return Response.redirect(landingUrl, 302);
+    }
+
     // Check for duplicate events (prevent counting multiple opens)
     const { data: existingEvent } = await supabase
       .from('email_tracking_events')
       .select('id')
       .eq('campaign_id', campaignId)
-      .eq('recipient_email', decodeURIComponent(email))
+      .eq('recipient_email', decodedEmail)
       .eq('event_type', eventType)
       .maybeSingle();
 
@@ -56,7 +84,7 @@ serve(async (req) => {
         .from('email_tracking_events')
         .insert({
           campaign_id: campaignId,
-          recipient_email: decodeURIComponent(email),
+          recipient_email: decodedEmail,
           event_type: eventType,
           link_url: redirectUrl || null,
           user_agent: userAgent,

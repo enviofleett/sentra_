@@ -837,47 +837,10 @@ Deno.serve(async (req: Request) => {
           transaction_id: transactionId 
         }), { status: 200 });
       } else if (paymentType === 'agent_subscription') {
-        // --- AGENT SUBSCRIPTION ---
-        const userId = metadata?.user_id;
-        const planId = metadata?.plan_id;
-        const durationDays = metadata?.duration_days || 30;
-
-        if (!userId || !planId) {
-          console.error("[Paystack Webhook] ERROR: agent_subscription missing user_id or plan_id");
-          return new Response(JSON.stringify({ error: "Missing metadata" }), { status: 400 });
-        }
-
-        console.log(`[Paystack Webhook] Agent Subscription - User: ${userId}, Plan: ${planId}`);
-
-        // Calculate expiration date
-        const startDate = new Date();
-        const expiresDate = new Date();
-        expiresDate.setDate(startDate.getDate() + parseInt(durationDays));
-
-        // Insert subscription record
-        const { error: subError } = await supabase
-          .from("user_agent_subscriptions")
-          .insert({
-            user_id: userId,
-            plan_id: planId,
-            starts_at: startDate.toISOString(),
-            expires_at: expiresDate.toISOString(),
-            is_active: true,
-            payment_reference: reference
-          });
-
-        if (subError) {
-          console.error(`[Paystack Webhook] Subscription insert error:`, subError);
-          return new Response(JSON.stringify({ error: "Failed to create subscription" }), { status: 500 });
-        }
-
-        console.log(`[Paystack Webhook] SUCCESS: Subscription created for user ${userId}`);
-
-        // Send confirmation email (optional, assuming template exists or generic one)
-        // For now, we just log it.
-        
+        // Agent subscription logic has been retired. Acknowledge legacy webhook payloads.
+        console.log("[Paystack Webhook] agent_subscription payload received; feature retired, no-op acknowledged.");
         return new Response(JSON.stringify({ 
-          message: "Subscription processed successfully" 
+          message: "Agent subscription flow retired; no-op acknowledged" 
         }), { status: 200 });
       }
 

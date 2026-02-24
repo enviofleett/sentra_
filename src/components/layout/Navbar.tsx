@@ -8,9 +8,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { NavigationMenu, NavigationMenuContent, NavigationMenuItem, NavigationMenuLink, NavigationMenuList, NavigationMenuTrigger } from '@/components/ui/navigation-menu';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { Command, CommandInput, CommandList, CommandEmpty, CommandItem, CommandGroup } from '@/components/ui/command';
+import { SmartSearchDialog } from '@/components/search/SmartSearch';
 import { supabase } from '@/integrations/supabase/client';
 import { useState, useEffect } from 'react';
+
 export const Navbar = () => {
   const {
     user,
@@ -21,10 +22,10 @@ export const Navbar = () => {
   } = useCart();
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [featuredProducts, setFeaturedProducts] = useState<any[]>([]);
-  const [suggestions, setSuggestions] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [brands, setBrands] = useState<any[]>([]);
+  const [isBrandsOpen, setIsBrandsOpen] = useState(true);
   const navigate = useNavigate();
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -41,47 +42,18 @@ export const Navbar = () => {
   }, [user]);
   useEffect(() => {
     const fetchData = async () => {
-      const [productsRes, categoriesRes] = await Promise.all([supabase.from('products').select('id, name, image_url, price, brand').eq('is_active', true).eq('is_featured', true).limit(4), supabase.from('categories').select('id, name, slug').eq('is_active', true).order('name').limit(6)]);
+      const [productsRes, categoriesRes, brandsRes] = await Promise.all([
+        supabase.from('products').select('id, name, image_url, price, brand').eq('is_active', true).eq('is_featured', true).limit(4),
+        supabase.from('categories').select('id, name, slug').eq('is_active', true).order('name').limit(6),
+        supabase.from('featured_brands').select('id, name, logo_url').eq('is_active', true).order('display_order', { ascending: true })
+      ]);
       if (productsRes.data) setFeaturedProducts(productsRes.data);
       if (categoriesRes.data) setCategories(categoriesRes.data);
+      if (brandsRes.data) setBrands(brandsRes.data);
     };
     fetchData();
   }, []);
 
-  useEffect(() => {
-    const fetchSuggestions = async () => {
-      if (!searchQuery.trim()) {
-        setSuggestions([]);
-        return;
-      }
-
-      const { data } = await supabase
-        .from('products')
-        .select('id, name, brand, image_url, price')
-        .eq('is_active', true)
-        .ilike('name', `%${searchQuery}%`)
-        .limit(5);
-      
-      if (data) setSuggestions(data);
-    };
-
-    const debounce = setTimeout(fetchSuggestions, 300);
-    return () => clearTimeout(debounce);
-  }, [searchQuery]);
-
-  const handleSearchSubmit = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (searchQuery.trim()) {
-      setIsSearchOpen(false);
-      navigate(`/products?q=${encodeURIComponent(searchQuery.trim())}`);
-      setSearchQuery('');
-    }
-  };
-  const handleProductSelect = (productId: string) => {
-    setIsSearchOpen(false);
-    setSearchQuery('');
-    navigate(`/products/${productId}`);
-  };
   const navigation = [{
     name: 'Home',
     href: '/'
@@ -196,6 +168,60 @@ export const Navbar = () => {
                 {categories.map(category => <Link key={category.id} to={`/products?category=${category.slug}`} className="text-base text-foreground/60 hover:text-foreground transition-colors pl-4">
                     {category.name}
                   </Link>)}
+                
+                {/* Brands Section */}
+                <div className="border-t border-border/50 pt-2">
+                  <button
+                    onClick={() => setIsBrandsOpen(!isBrandsOpen)}
+                    className="flex w-full items-center justify-between py-2 text-lg font-serif text-foreground/80 hover:text-foreground transition-colors min-h-[44px]"
+                    aria-expanded={isBrandsOpen}
+                    aria-controls="mobile-brands-list"
+                  >
+                    <span>Brands</span>
+                    <ChevronDown
+                      className={`h-5 w-5 transition-transform duration-300 ease-in-out ${
+                        isBrandsOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+                  
+                  <div
+                    id="mobile-brands-list"
+                    className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${
+                      isBrandsOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                    }`}
+                    aria-hidden={!isBrandsOpen}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="flex flex-col space-y-1 pt-1 pl-4 pb-2">
+                        {brands.length > 0 ? (
+                          brands.map((brand) => (
+                            <Link
+                              key={brand.id}
+                              to={`/products?brand=${encodeURIComponent(brand.name)}`}
+                              className="flex items-center gap-3 py-2 text-base text-foreground/60 hover:text-foreground transition-colors min-h-[44px]"
+                            >
+                              {brand.logo_url && (
+                                <div className="h-8 w-8 rounded-full bg-muted/30 flex items-center justify-center overflow-hidden flex-shrink-0">
+                                  <img 
+                                    src={brand.logo_url} 
+                                    alt="" 
+                                    className="h-full w-full object-contain p-1"
+                                    loading="lazy"
+                                  />
+                                </div>
+                              )}
+                              <span className="truncate">{brand.name}</span>
+                            </Link>
+                          ))
+                        ) : (
+                          <span className="text-sm text-muted-foreground pl-2 py-2">Loading brands...</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <Link to="/products" className="text-lg font-serif text-foreground/80 hover:text-foreground transition-colors">
                   Circles
                 </Link>
@@ -267,90 +293,6 @@ export const Navbar = () => {
       </nav>
 
       {/* Search Modal */}
-      <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
-        <DialogContent className="overflow-hidden p-0 max-w-lg bg-background border-border" aria-describedby="search-modal-description">
-          <div className="sr-only">
-             <DialogTitle>Search Products</DialogTitle>
-             <p id="search-modal-description">Search for perfumes and products in the catalog.</p>
-          </div>
-          <Command className="bg-transparent" shouldFilter={false}>
-            <form onSubmit={handleSearchSubmit}>
-              <div className="flex items-center border-b border-border px-4">
-                <Search className="mr-3 h-4 w-4 shrink-0 text-muted-foreground" />
-                <CommandInput value={searchQuery} onValueChange={setSearchQuery} placeholder="Search our collection..." autoFocus className="flex h-14 w-full bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 border-0" />
-              </div>
-            </form>
-            <CommandList className="max-h-[400px] overflow-y-auto p-2">
-              {suggestions.length > 0 && (
-                <CommandGroup heading="Suggestions">
-                  {suggestions.map((product) => (
-                    <CommandItem
-                      key={product.id}
-                      onSelect={() => handleProductSelect(product.id)}
-                      className="cursor-pointer flex items-center gap-3 p-3 rounded-lg hover:bg-accent"
-                    >
-                      {product.image_url ? (
-                        <div className="w-12 h-12 bg-accent rounded-lg flex items-center justify-center overflow-hidden">
-                          <img
-                            src={product.image_url}
-                            alt={product.name}
-                            className="w-full h-full object-contain p-1"
-                          />
-                        </div>
-                      ) : (
-                        <div className="w-12 h-12 bg-accent rounded-lg flex items-center justify-center">
-                          <Sparkles className="h-5 w-5 text-muted-foreground" />
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">{product.name}</p>
-                        {product.brand && (
-                          <p className="text-xs uppercase tracking-wider text-muted-foreground">
-                            {product.brand}
-                          </p>
-                        )}
-                      </div>
-                      <span className="text-sm font-medium">
-                        ₦{product.price?.toLocaleString()}
-                      </span>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              )}
-
-              {!searchQuery && featuredProducts.length > 0 && <CommandGroup heading={<span className="flex items-center gap-2 text-xs uppercase tracking-[0.15em] text-muted-foreground px-2">
-                    <Sparkles className="h-3 w-3" />
-                    Curated for You
-                  </span>}>
-                  {featuredProducts.map(product => <CommandItem key={product.id} onSelect={() => handleProductSelect(product.id)} className="cursor-pointer flex items-center gap-3 p-3 rounded-lg hover:bg-accent">
-                      {product.image_url ? <div className="w-12 h-12 bg-accent rounded-lg flex items-center justify-center overflow-hidden">
-                          <img src={product.image_url} alt={product.name} className="w-full h-full object-contain p-1" />
-                        </div> : <div className="w-12 h-12 bg-accent rounded-lg flex items-center justify-center">
-                          <Sparkles className="h-5 w-5 text-muted-foreground" />
-                        </div>}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">{product.name}</p>
-                        {product.brand && <p className="text-xs uppercase tracking-wider text-muted-foreground">
-                            {product.brand}
-                          </p>}
-                      </div>
-                      <span className="text-sm font-medium">
-                        ₦{product.price?.toLocaleString()}
-                      </span>
-                    </CommandItem>)}
-                </CommandGroup>}
-              
-              <CommandEmpty className="py-8 text-center text-sm text-muted-foreground">
-                {searchQuery ? 'No fragrances found.' : 'Start typing to search...'}
-              </CommandEmpty>
-              
-              {searchQuery && <CommandItem onSelect={() => handleSearchSubmit()} className="cursor-pointer flex items-center gap-3 p-3 rounded-lg">
-                  <Search className="h-4 w-4 text-muted-foreground" />
-                  <span>Search for "<span className="font-medium">{searchQuery}</span>"</span>
-                </CommandItem>}
-            </CommandList>
-          </Command>
-        </DialogContent>
-      </Dialog>
+      <SmartSearchDialog open={isSearchOpen} onOpenChange={setIsSearchOpen} />
     </header>;
 };

@@ -80,6 +80,30 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Check unsubscribe list for this recipient
+    const { data: unsubscribe } = await supabase
+      .from('email_unsubscribes')
+      .select('id')
+      .eq('email', to.toLowerCase())
+      .maybeSingle();
+
+    if (unsubscribe) {
+      console.log(`⏭️ Skipping email to ${to} because they unsubscribed`);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          skipped: true,
+          reason: 'unsubscribed',
+          to,
+          subject: ''
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
     // Fetch email template
     const { data: template, error: templateError } = await supabase
       .from('email_templates')
@@ -107,6 +131,13 @@ serve(async (req) => {
       compiledSubject = compiledSubject.replace(regex, String(value));
       compiledText = compiledText.replace(regex, String(value));
     });
+
+    const baseUrl = Deno.env.get('APP_BASE_URL') || 'https://sentra.ng';
+    const encodedEmail = encodeURIComponent(to.toLowerCase());
+    const unsubscribeLink = `${baseUrl}/functions/v1/track-email?c=system&e=${encodedEmail}&t=clicked&u=1`;
+
+    compiledHtml = compiledHtml.replace(/{{unsubscribe_link}}/g, unsubscribeLink);
+    compiledText = compiledText.replace(/{{unsubscribe_link}}/g, unsubscribeLink);
 
     // Minify HTML to prevent =20 encoding artifacts
     const minifiedHtml = minifyHtml(compiledHtml);

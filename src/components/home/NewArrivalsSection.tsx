@@ -5,6 +5,7 @@ import { useCart } from '@/contexts/CartContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SmartSearchInput } from '@/components/search/SmartSearch';
 
 interface Product {
   id: string;
@@ -82,6 +83,9 @@ export function NewArrivalsSection({ products, loading = false }: NewArrivalsSec
           <p className="text-muted-foreground max-w-2xl mx-auto text-lg">
             Discover the latest additions to our curated collection
           </p>
+          <div className="max-w-md mx-auto mt-8">
+            <SmartSearchInput placeholder="Search new arrivals..." />
+          </div>
         </div>
 
         {/* Product Grid */}

@@ -25,6 +25,9 @@ interface Profile {
   wallet_balance_real?: number;
   wallet_balance_promo?: number;
   membership_balance?: number;
+  is_influencer?: boolean;
+  influencer_moq_enabled?: boolean;
+  influencer_last_paid_orders_30d?: number;
 }
 
 type BulkResetTarget = 'all' | 'before_date' | 'selected';
@@ -34,6 +37,7 @@ export function UsersManagement() {
   const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [loadError, setLoadError] = useState<string | null>(null);
   
   // Bulk reset state
   const [bulkResetOpen, setBulkResetOpen] = useState(false);
@@ -42,6 +46,7 @@ export function UsersManagement() {
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [sendingBulkReset, setSendingBulkReset] = useState(false);
   const [bulkResetProgress, setBulkResetProgress] = useState({ sent: 0, total: 0 });
+  const [updatingInfluencerUserId, setUpdatingInfluencerUserId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchUsers();
@@ -49,23 +54,28 @@ export function UsersManagement() {
 
   const fetchUsers = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
-      // 1. Fetch all profiles
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('id, email, full_name, phone, created_at')
         .order('created_at', { ascending: false });
 
-      if (profilesError) throw profilesError;
+      if (profilesError) {
+        console.error('Error fetching profiles for admin customer list:', profilesError);
+        setLoadError('Failed to load customer profiles. Please try again.');
+        setUsers([]);
+        return;
+      }
 
-      // 2. Fetch all orders (lightweight)
       const { data: orders, error: ordersError } = await supabase
         .from('orders')
         .select('id, user_id, total_amount, status, payment_status, paystack_status');
 
-      if (ordersError) throw ordersError;
+      if (ordersError) {
+        console.error('Error fetching orders for admin customer list:', ordersError);
+      }
 
-      // 3. Fetch user wallets
       const { data: userWallets, error: userWalletsError } = await supabase
         .from('user_wallets')
         .select('user_id, balance_real, balance_promo');
@@ -84,24 +94,23 @@ export function UsersManagement() {
         console.error('Error fetching membership wallets:', membershipWalletsError);
         // Don't throw
       }
-
       // Filter out admin users
       const { data: adminRoles } = await supabase
         .from('user_roles')
         .select('user_id')
-        .eq('role', 'admin');
 
       const adminIds = new Set(adminRoles?.map(r => r.user_id) || []);
       
       console.log('Fetched profiles:', profiles?.length);
       console.log('Fetched admin roles:', adminRoles?.length);
+      console.log('Fetched orders for customers:', orders?.length);
+      console.log('Fetched user wallets:', userWallets?.length);
+      console.log('Fetched membership wallets:', membershipWallets?.length);
       
       const customers = profiles
         ?.map(profile => {
-          // Find orders for this user
           const userOrders = orders?.filter(o => o.user_id === profile.id) || [];
           
-          // Count valid orders (completed/delivered or paid)
           const validOrders = userOrders.filter(o => 
             o.status === 'delivered' || 
             o.payment_status === 'paid' || 
@@ -199,7 +208,7 @@ export function UsersManagement() {
       const { data: adminProfile } = await supabase
         .from('profiles')
         .select('email')
-        .eq('id', adminUser?.id)
+        .eq('id', adminUser?.id as string)
         .single();
 
       const { data, error } = await supabase.functions.invoke('send-password-reset', {
@@ -236,6 +245,73 @@ export function UsersManagement() {
     }
   };
 
+  const updateInfluencerProfile = async (user: Profile, isInfluencer: boolean, enableMoq: boolean) => {
+    setUpdatingInfluencerUserId(user.id);
+    try {
+      const wasInfluencer = !!user.is_influencer;
+      const wasMoqEnabled = !!user.influencer_moq_enabled;
+
+      const { data, error } = await supabase.rpc('admin_set_influencer_profile', {
+        p_user_id: user.id,
+        p_is_influencer: isInfluencer,
+        p_enable_moq: enableMoq,
+      });
+
+      if (error) throw error;
+
+      const result = Array.isArray(data) ? data[0] : null;
+      const currentMoq = Number(result?.required_moq || 4);
+      const paidOrders = Number(result?.paid_orders_last_30d || 0);
+
+      toast.success(
+        `Influencer updated: MOQ ${currentMoq}${isInfluencer ? ` • Paid orders (30d): ${paidOrders}` : ''}`
+      );
+
+      const dashboardLink = `${window.location.origin}/profile`;
+
+      if (!wasInfluencer && isInfluencer && user.email) {
+        await supabase.functions.invoke('send-email', {
+          body: {
+            to: user.email,
+            templateId: 'INFLUENCER_PROMOTION',
+            data: {
+              name: user.full_name || user.email,
+              email: user.email,
+              required_moq: String(currentMoq),
+              paid_orders_30d: String(paidOrders),
+              dashboard_link: dashboardLink,
+              current_year: String(new Date().getFullYear()),
+            },
+          },
+        });
+      }
+
+      if (isInfluencer && enableMoq && !wasMoqEnabled && user.email) {
+        await supabase.functions.invoke('send-email', {
+          body: {
+            to: user.email,
+            templateId: 'INFLUENCER_MOQ_SUCCESS',
+            data: {
+              name: user.full_name || user.email,
+              email: user.email,
+              required_moq: String(currentMoq),
+              paid_orders_30d: String(paidOrders),
+              dashboard_link: dashboardLink,
+              current_year: String(new Date().getFullYear()),
+            },
+          },
+        });
+      }
+
+      await fetchUsers();
+    } catch (error: any) {
+      console.error('Error updating influencer profile:', error);
+      toast.error(error.message || 'Failed to update influencer profile');
+    } finally {
+      setUpdatingInfluencerUserId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -263,6 +339,14 @@ export function UsersManagement() {
         <h1 className="text-3xl font-bold mb-2">Customer Management</h1>
         <p className="text-muted-foreground">View and manage all registered customers</p>
       </div>
+
+      {loadError && (
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardContent className="py-3">
+            <p className="text-sm text-destructive">{loadError}</p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-3">
@@ -425,6 +509,7 @@ export function UsersManagement() {
                   <TableHead>Phone</TableHead>
                   <TableHead>Total Orders</TableHead>
                   <TableHead>Total Spent</TableHead>
+                  <TableHead>Influencer</TableHead>
                   <TableHead>Wallet Balances</TableHead>
                   <TableHead>Registration Date</TableHead>
                 </TableRow>
@@ -432,7 +517,7 @@ export function UsersManagement() {
               <TableBody>
                 {filteredUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={bulkResetTarget === 'selected' ? 7 : 6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={bulkResetTarget === 'selected' ? 9 : 8} className="text-center py-8 text-muted-foreground">
                       {searchQuery ? 'No customers found matching your search' : 'No customers yet'}
                     </TableCell>
                   </TableRow>
@@ -474,6 +559,56 @@ export function UsersManagement() {
                       <TableCell>{user.phone || 'N/A'}</TableCell>
                       <TableCell>{user.total_orders || 0}</TableCell>
                       <TableCell>₦{(user.total_spent || 0).toLocaleString()}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-xs">
+                            {user.is_influencer ? (user.influencer_moq_enabled ? 'Active MOQ 1' : 'Assigned (MOQ off)') : 'Not assigned'}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground">
+                            Paid 30d: {user.influencer_last_paid_orders_30d || 0}
+                          </span>
+                          <div className="flex gap-1">
+                            {user.is_influencer ? (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={updatingInfluencerUserId === user.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateInfluencerProfile(user, false, false);
+                                  }}
+                                >
+                                  Remove
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant={user.influencer_moq_enabled ? 'secondary' : 'default'}
+                                  disabled={updatingInfluencerUserId === user.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateInfluencerProfile(user, true, !user.influencer_moq_enabled);
+                                  }}
+                                >
+                                  {user.influencer_moq_enabled ? 'Disable MOQ1' : 'Enable MOQ1'}
+                                </Button>
+                              </>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={updatingInfluencerUserId === user.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  updateInfluencerProfile(user, true, false);
+                                }}
+                              >
+                                Assign
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <div className="flex flex-col space-y-1 text-xs">
                           <div className="flex justify-between w-32">
@@ -520,14 +655,19 @@ export function UsersManagement() {
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between">
                       <div>
-                        <div className="font-medium mb-1">
-                          {user.full_name || 'No name provided'}
-                          {user.is_admin && (
-                            <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">
-                              Admin
-                            </span>
-                          )}
-                        </div>
+                          <div className="font-medium mb-1">
+                            {user.full_name || 'No name provided'}
+                            {user.is_admin && (
+                              <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">
+                                Admin
+                              </span>
+                            )}
+                            {user.is_influencer && (
+                              <span className="ml-2 text-xs bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded-full">
+                                {user.influencer_moq_enabled ? 'Influencer MOQ1' : 'Influencer'}
+                              </span>
+                            )}
+                          </div>
                         <div className="text-sm text-muted-foreground space-y-1">
                           <div>{user.email}</div>
                           {user.phone && <div>{user.phone}</div>}
@@ -535,6 +675,16 @@ export function UsersManagement() {
                             {user.total_orders || 0} Orders • ₦{(user.total_spent || 0).toLocaleString()} Spent
                           </div>
                           <div className="text-xs space-y-0.5 mt-1 bg-muted p-2 rounded">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Influencer:</span>
+                              <span className="font-medium">
+                                {user.is_influencer ? (user.influencer_moq_enabled ? 'MOQ1 Active' : 'Assigned') : 'No'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Paid (30d):</span>
+                              <span className="font-medium">{user.influencer_last_paid_orders_30d || 0}</span>
+                            </div>
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Main Wallet:</span>
                               <span className="font-medium">₦{(user.wallet_balance_real || 0).toLocaleString()}</span>

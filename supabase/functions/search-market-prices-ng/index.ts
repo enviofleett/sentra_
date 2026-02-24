@@ -159,20 +159,6 @@ serve(async (req) => {
       });
     }
 
-    const authenticatedUserId = auth.user.id;
-    const { data: hasSub } = await supabase.rpc("has_active_agent_subscription", { p_user_id: authenticatedUserId });
-    const { data: isAdmin } = await supabase.rpc("has_role", { _role: "admin", _user_id: authenticatedUserId });
-    if (!hasSub && !isAdmin) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: "Subscription required",
-          code: "NO_SUBSCRIPTION",
-        }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
     const body = (await req.json().catch(() => ({}))) as Partial<Body>;
     const product_id = body.product_id ? String(body.product_id).trim() : null;
     const product_name = String(body.product_name || "").trim();
@@ -378,4 +364,3 @@ serve(async (req) => {
     });
   }
 });
-

@@ -11,10 +11,14 @@ import { ShoppingBag, Minus, Plus, Trash2, ArrowRight, Gift, AlertCircle } from 
 import { useCartIncentive } from '@/hooks/useCartIncentive';
 import { Progress } from '@/components/ui/progress';
 import { MIN_ORDER_UNITS } from '@/utils/constants';
+import { useCheckoutPolicy } from '@/hooks/useCheckoutPolicy';
+import { Badge } from '@/components/ui/badge';
 
 export default function Cart() {
   const navigate = useNavigate();
   const { items, subtotal, totalItems, updateQuantity, removeFromCart } = useCart();
+  const { user } = useAuth();
+  const { policy, loading: policyLoading, ready: policyReady } = useCheckoutPolicy();
   
   // Cart Incentive Hook
   const {
@@ -25,8 +29,9 @@ export default function Cart() {
     unlockedThreshold
   } = useCartIncentive(subtotal, totalItems);
 
-  const remainingForMoq = Math.max(0, MIN_ORDER_UNITS - totalItems);
-  const isMoqMet = totalItems >= MIN_ORDER_UNITS;
+  const requiredMoq = policy.required_moq || MIN_ORDER_UNITS;
+  const remainingForMoq = Math.max(0, requiredMoq - totalItems);
+  const isMoqMet = totalItems >= requiredMoq;
 
   if (items.length === 0) {
     return (
@@ -155,6 +160,22 @@ export default function Cart() {
                 </div>
 
                 <div className="border-t pt-4">
+                  {user && (
+                    <div className="mb-3 p-3 rounded-lg border bg-muted/30">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium">Checkout Policy</p>
+                        {policy.is_influencer && (
+                          <Badge variant="secondary">
+                            {policy.influencer_moq_enabled ? 'Influencer Active' : 'Influencer Inactive'}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Required MOQ: {requiredMoq} unit{requiredMoq > 1 ? 's' : ''} • Paid orders in last 30 days: {policy.paid_orders_last_30d}
+                      </p>
+                    </div>
+                  )}
+
                   <div className="flex justify-between font-bold text-lg mb-4">
                     <span>Total</span>
                     <span>₦{subtotal.toLocaleString()}</span>
@@ -165,7 +186,7 @@ export default function Cart() {
                       <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
                       <div>
                         <p className="font-medium">Minimum Order Required</p>
-                        <p>Please add {remainingForMoq} more unit{remainingForMoq > 1 ? 's' : ''} to proceed. Minimum {MIN_ORDER_UNITS} units required.</p>
+                        <p>Please add {remainingForMoq} more unit{remainingForMoq > 1 ? 's' : ''} to proceed. Minimum {requiredMoq} units required.</p>
                       </div>
                     </div>
                   )}
@@ -174,7 +195,7 @@ export default function Cart() {
                     className="w-full" 
                     size="lg" 
                     onClick={() => navigate('/checkout')}
-                    disabled={!isMoqMet}
+                    disabled={!isMoqMet || policyLoading || !policyReady}
                   >
                     {isMoqMet ? (
                       <>

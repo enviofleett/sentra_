@@ -804,7 +804,10 @@ function EmailTemplateManager() {
         reward_amount: '100,000',
         order_id: 'TEST-12345',
         total_amount: '₦50,000',
-        tracking_number: 'TRK123456789'
+        tracking_number: 'TRK123456789',
+        required_moq: '4',
+        paid_orders_30d: '3',
+        dashboard_link: 'https://app.sentra.ng/influencer'
       };
 
       const { data, error } = await supabase.functions.invoke('send-email', {
@@ -951,7 +954,7 @@ function EmailTemplateManager() {
           <div>
             <Label>Template ID (read-only)</Label>
             <Input value={currentTemplate.template_id} disabled className="bg-muted/50" />
-            <p className="text-xs text-muted-foreground mt-1">Available variables: {"{{name}}"}, {"{{email}}"}, {"{{reward_amount}}"}, {"{{order_id}}"}, {"{{total_amount}}"}, {"{{tracking_number}}"}</p>
+            <p className="text-xs text-muted-foreground mt-1">Available variables: {"{{name}}"}, {"{{email}}"}, {"{{reward_amount}}"}, {"{{order_id}}"}, {"{{total_amount}}"}, {"{{tracking_number}}"}, {"{{required_moq}}"}, {"{{paid_orders_30d}}"}, {"{{dashboard_link}}"}, plus any custom variables you add.</p>
           </div>
 
           <div>

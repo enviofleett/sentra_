@@ -188,6 +188,30 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Checkout policy evaluation (influencer MOQ override + compliance check)
+    const { data: checkoutPolicy, error: policyError } = await supabase.rpc('get_user_checkout_policy');
+    if (policyError) {
+      console.error('[Initialize Payment] Failed to fetch checkout policy:', policyError);
+      return new Response(JSON.stringify({ error: 'Failed to validate checkout policy' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const policy = Array.isArray(checkoutPolicy) ? checkoutPolicy[0] : null;
+    const requiredMoq = Number(policy?.required_moq) || 4;
+
+    const totalUnits = orderItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    if (totalUnits < requiredMoq) {
+      return new Response(JSON.stringify({
+        error: 'Minimum order quantity not met',
+        details: `Your checkout policy requires at least ${requiredMoq} unit(s).`,
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // MOQ VALIDATION: Check minimum order quantities per vendor
     const vendorQuantities: Record<string, {
       vendorName: string;
@@ -203,10 +227,12 @@ Deno.serve(async (req) => {
       const vendor = (product as any).vendor;
 
       if (vendorId && vendor) {
+        const vendorMoq = Number(vendor.min_order_quantity || 1);
+        const effectiveVendorMoq = requiredMoq === 1 ? 1 : vendorMoq;
         if (!vendorQuantities[vendorId]) {
           vendorQuantities[vendorId] = {
             vendorName: vendor.rep_full_name || 'Unknown Vendor',
-            moq: vendor.min_order_quantity || 1,
+            moq: effectiveVendorMoq,
             totalQty: 0
           };
         }

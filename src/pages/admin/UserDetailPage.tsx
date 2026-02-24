@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Separator } from '@/components/ui/separator';
 
 interface Profile {
   id: string;
@@ -27,6 +28,14 @@ interface Profile {
   wallet_balance_real?: number;
   wallet_balance_promo?: number;
   membership_balance?: number;
+  is_influencer?: boolean;
+  influencer_moq_enabled?: boolean;
+  influencer_assigned_at?: string | null;
+  influencer_assigned_by?: string | null;
+  influencer_disabled_at?: string | null;
+  influencer_disable_reason?: string | null;
+  influencer_last_paid_orders_30d?: number;
+  influencer_last_evaluated_at?: string | null;
 }
 
 type Order = Pick<
@@ -48,6 +57,7 @@ export function UserDetailPage() {
   const [creditType, setCreditType] = useState<'real' | 'promo'>('real');
   const [creditReason, setCreditReason] = useState('');
   const [crediting, setCrediting] = useState(false);
+  const [updatingInfluencer, setUpdatingInfluencer] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -59,16 +69,20 @@ export function UserDetailPage() {
     setLoading(true);
     try {
       const userId = id as string;
-      // Fetch user profile
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
 
-      if (profileError) throw profileError;
+      if (profileError) {
+        console.error('Error fetching profile for admin user detail:', profileError, 'userId:', userId);
+        toast.error('Failed to load customer profile. Please try again.');
+        setProfile(null);
+        setOrders([]);
+        return;
+      }
 
-      // Fetch wallet balances
       const { data: userWallet } = await supabase
         .from('user_wallets')
         .select('balance_real, balance_promo')
@@ -88,17 +102,20 @@ export function UserDetailPage() {
         membership_balance: membershipWallet?.balance || 0
       });
 
-      // Fetch user orders
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select('id, created_at, total_amount, status, payment_status, paystack_status, items, promo_discount_applied')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
-      if (ordersError) throw ordersError;
+      if (ordersError) {
+        console.error('Error fetching orders for admin user detail:', ordersError, 'userId:', userId);
+        toast.error('Failed to load order history for this customer.');
+      }
       setOrders((ordersData || []) as Order[]);
     } catch (error: unknown) {
-      console.error('Error fetching user data:', error);
+      console.error('Unexpected error fetching admin user data:', error, 'userId:', id);
+      toast.error('Unexpected error loading customer details.');
     } finally {
       setLoading(false);
     }
@@ -220,6 +237,74 @@ export function UserDetailPage() {
       toast.error(error.message || 'Failed to credit wallet');
     } finally {
       setCrediting(false);
+    }
+  };
+
+  const handleInfluencerUpdate = async (isInfluencer: boolean, enableMoq: boolean) => {
+    if (!profile) return;
+    setUpdatingInfluencer(true);
+    try {
+      const wasInfluencer = !!profile.is_influencer;
+      const wasMoqEnabled = !!profile.influencer_moq_enabled;
+
+      const { data, error } = await supabase.rpc('admin_set_influencer_profile', {
+        p_user_id: profile.id,
+        p_is_influencer: isInfluencer,
+        p_enable_moq: enableMoq,
+      });
+
+      if (error) throw error;
+
+      const result = Array.isArray(data) ? data[0] : null;
+      const currentMoq = Number(result?.required_moq || 4);
+      const paidOrders = Number(result?.paid_orders_last_30d || 0);
+
+      toast.success(
+        `Influencer profile updated. MOQ: ${currentMoq} • Paid orders (30d): ${paidOrders}`
+      );
+
+      const dashboardLink = `${window.location.origin}/profile`;
+
+      if (!wasInfluencer && isInfluencer && profile.email) {
+        await supabase.functions.invoke('send-email', {
+          body: {
+            to: profile.email,
+            templateId: 'INFLUENCER_PROMOTION',
+            data: {
+              name: profile.full_name || profile.email,
+              email: profile.email,
+              required_moq: String(currentMoq),
+              paid_orders_30d: String(paidOrders),
+              dashboard_link: dashboardLink,
+              current_year: String(new Date().getFullYear()),
+            },
+          },
+        });
+      }
+
+      if (isInfluencer && enableMoq && !wasMoqEnabled && profile.email) {
+        await supabase.functions.invoke('send-email', {
+          body: {
+            to: profile.email,
+            templateId: 'INFLUENCER_MOQ_SUCCESS',
+            data: {
+              name: profile.full_name || profile.email,
+              email: profile.email,
+              required_moq: String(currentMoq),
+              paid_orders_30d: String(paidOrders),
+              dashboard_link: dashboardLink,
+              current_year: String(new Date().getFullYear()),
+            },
+          },
+        });
+      }
+
+      await fetchUserData();
+    } catch (error: any) {
+      console.error('Error updating influencer profile:', error);
+      toast.error(error.message || 'Failed to update influencer profile');
+    } finally {
+      setUpdatingInfluencer(false);
     }
   };
 
@@ -383,6 +468,69 @@ export function UserDetailPage() {
               </div>
 
               <div className="pt-4 border-t flex flex-col gap-2">
+                <Card className="border-dashed">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Influencer Profile</CardTitle>
+                    <CardDescription>Manage MOQ 1 privilege with 30-day paid-order compliance.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Status</span>
+                      <Badge variant={profile.is_influencer ? 'secondary' : 'outline'}>
+                        {profile.is_influencer ? (profile.influencer_moq_enabled ? 'Influencer Active' : 'Influencer Assigned') : 'Not Influencer'}
+                      </Badge>
+                    </div>
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      <p>Paid orders last 30 days: {profile.influencer_last_paid_orders_30d || 0}</p>
+                      <p>Last evaluated: {formatDateSafe(profile.influencer_last_evaluated_at || null, 'MMM d, yyyy h:mm a')}</p>
+                      {profile.influencer_assigned_at && (
+                        <p>Assigned: {formatDateSafe(profile.influencer_assigned_at, 'MMM d, yyyy h:mm a')}</p>
+                      )}
+                      {profile.influencer_disabled_at && (
+                        <p>Disabled: {formatDateSafe(profile.influencer_disabled_at, 'MMM d, yyyy h:mm a')}</p>
+                      )}
+                      {profile.influencer_disable_reason && (
+                        <p>Reason: {profile.influencer_disable_reason}</p>
+                      )}
+                    </div>
+                    <Separator />
+                    <div className="flex flex-wrap gap-2">
+                      {profile.is_influencer ? (
+                        <>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={updatingInfluencer}
+                            onClick={() => handleInfluencerUpdate(false, false)}
+                          >
+                            Remove Influencer
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={updatingInfluencer}
+                            variant={profile.influencer_moq_enabled ? 'secondary' : 'default'}
+                            onClick={() => handleInfluencerUpdate(true, !profile.influencer_moq_enabled)}
+                          >
+                            {profile.influencer_moq_enabled ? 'Disable MOQ1' : 'Enable MOQ1'}
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={updatingInfluencer}
+                          onClick={() => handleInfluencerUpdate(true, false)}
+                        >
+                          Assign Influencer
+                        </Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
                 <Dialog open={creditDialogOpen} onOpenChange={setCreditDialogOpen}>
                   <DialogTrigger asChild>
                     <Button variant="default" className="w-full">

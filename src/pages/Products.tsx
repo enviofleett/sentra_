@@ -28,7 +28,12 @@ export default function Products() {
   const [categories, setCategories] = useState<any[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
   const [brandSearchQuery, setBrandSearchQuery] = useState('');
-  const [brandsOpen, setBrandsOpen] = useState(false);
+  const [brandsOpen, setBrandsOpen] = useState(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return false;
+    }
+    return window.matchMedia('(max-width: 1023px)').matches;
+  });
   const [loading, setLoading] = useState(true);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
@@ -323,8 +328,8 @@ export default function Products() {
                     </Badge>}
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="bg-background">
-                <div className="mt-8">
+              <SheetContent side="left" className="bg-background overflow-y-auto">
+                <div className="mt-8 pb-6">
                   <FilterSidebar />
                 </div>
               </SheetContent>

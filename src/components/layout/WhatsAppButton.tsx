@@ -10,10 +10,6 @@ export function WhatsAppButton() {
   if (location.pathname.startsWith('/admin')) {
     return null;
   }
-  // Don't show on consultant pages
-  if (location.pathname.startsWith('/consultant')) {
-    return null;
-  }
 
   // Adjust position for product detail pages where MobileBuyBar is present
   const isProductDetail = location.pathname.startsWith('/products/') && location.pathname.length > 10;

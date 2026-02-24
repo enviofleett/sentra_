@@ -24,13 +24,6 @@ interface Analytics {
   todayRevenue: number;
 }
 
-interface ConsultantKpis {
-  engagements: number;
-  opens: number;
-  chats: number;
-  conversionsProxy: number;
-}
-
 export function DashboardAnalytics() {
   const [analytics, setAnalytics] = useState<Analytics>({
     totalProducts: 0,
@@ -45,12 +38,10 @@ export function DashboardAnalytics() {
   const [orderStatusData, setOrderStatusData] = useState<OrderStatusBreakdown[]>([]);
   const [topProducts, setTopProducts] = useState<ProductAnalytics[]>([]);
   const [chartsLoading, setChartsLoading] = useState(true);
-  const [consultant, setConsultant] = useState<ConsultantKpis>({ engagements: 0, opens: 0, chats: 0, conversionsProxy: 0 });
 
   useEffect(() => {
     fetchAnalytics();
     fetchChartData();
-    fetchConsultantKpis();
   }, []);
 
   useEffect(() => {
@@ -83,31 +74,6 @@ export function DashboardAnalytics() {
       todayRevenue,
     });
     setLoading(false);
-  };
-
-  const fetchConsultantKpis = async () => {
-    const since = startOfDay(new Date());
-    const types = [
-      { key: 'engagements', event: 'engaged_prompt_shown' },
-      { key: 'opens', event: 'opened_consultant' },
-      { key: 'chats', event: 'message_sent' },
-      { key: 'conversionsProxy', event: 'added_to_cart_after_consult' },
-    ] as const;
-    const results = await Promise.all(
-      types.map(t =>
-        supabase
-          .from('consultant_engagements' as any)
-          .select('id', { count: 'exact', head: true })
-          .gte('created_at', since.toISOString())
-          .eq('event_type', t.event)
-      )
-    );
-    setConsultant({
-      engagements: results[0].count || 0,
-      opens: results[1].count || 0,
-      chats: results[2].count || 0,
-      conversionsProxy: results[3].count || 0,
-    });
   };
 
   const fetchRevenueData = async () => {
@@ -199,19 +165,6 @@ export function DashboardAnalytics() {
           <CardContent>
             <div className="text-2xl font-bold">{analytics.totalProducts}</div>
             <p className="text-xs text-muted-foreground mt-1">In catalog</p>
-          </CardContent>
-        </Card>
-        <Card className="hover-scale">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Consultant (Today)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xs grid grid-cols-2 gap-x-4 gap-y-1">
-              <span>Engagements</span><span className="text-right font-semibold">{consultant.engagements}</span>
-              <span>Opens</span><span className="text-right font-semibold">{consultant.opens}</span>
-              <span>Chats</span><span className="text-right font-semibold">{consultant.chats}</span>
-              <span>Conversions</span><span className="text-right font-semibold">{consultant.conversionsProxy}</span>
-            </div>
           </CardContent>
         </Card>
       </div>

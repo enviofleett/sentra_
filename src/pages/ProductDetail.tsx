@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useLocation, useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { useCart } from '@/contexts/CartContext';
-import { useAuth } from '@/contexts/AuthContext';
 import { Sparkles, Minus, Plus, ShoppingCart, Info } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { GroupBuyCampaignWidget } from '@/components/groupbuy/GroupBuyCampaignWidget';
@@ -20,9 +19,7 @@ import { useMetaTags } from '@/hooks/useMetaTags';
 export default function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
   const { addToCart } = useCart();
-  const { user } = useAuth();
   const [product, setProduct] = useState<any>(null);
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -53,15 +50,15 @@ export default function ProductDetail() {
 
   useEffect(() => {
     if (id) {
-      loadProduct(id);
+      loadProduct();
     }
   }, [id]);
 
-  const loadProduct = async (productId: string) => {
+  const loadProduct = async () => {
     const { data, error } = await supabase
       .from('products')
       .select('*')
-      .eq('id', productId)
+      .eq('id', id)
       .eq('is_active', true)
       .single();
 
@@ -101,15 +98,6 @@ export default function ProductDetail() {
     return { top: [], heart: [], base: [] };
   };
 
-  const productImages =
-    product?.images && Array.isArray(product.images) && product.images.length > 0
-      ? product.images
-      : product?.image_url
-      ? [product.image_url]
-      : [];
-
-  const primaryImage = productImages[0] || null;
-
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
@@ -132,21 +120,13 @@ export default function ProductDetail() {
 
   if (!product) return null;
 
-  const scentNotes = parseScentNotes();
-  const resellerBrief = (product?.metadata && typeof product.metadata === 'object')
-    ? (product.metadata as any)?.reseller_sales?.content
-    : null;
+  const productImages = product.images && Array.isArray(product.images) && product.images.length > 0 
+    ? product.images 
+    : product.image_url 
+    ? [product.image_url] 
+    : [];
 
-  const renderBullets = (items: any) => {
-    if (!Array.isArray(items) || items.length === 0) return null;
-    return (
-      <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground">
-        {items.map((it: any, idx: number) => (
-          <li key={idx}>{String(it)}</li>
-        ))}
-      </ul>
-    );
-  };
+  const scentNotes = parseScentNotes();
 
   return (
     <div className="min-h-screen bg-background pb-24 lg:pb-0">
@@ -272,7 +252,6 @@ export default function ProductDetail() {
                 />
               </div>
             )}
-
 
             {/* Stock Status */}
             <p className="text-sm text-muted-foreground">

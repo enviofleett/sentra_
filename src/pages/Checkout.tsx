@@ -15,15 +15,18 @@ import { Label } from '@/components/ui/label';
 import { AddressBook, Address } from '@/components/checkout/AddressBook';
 import { ShipmentSplitter, ShipmentGroup } from '@/components/checkout/ShipmentSplitter';
 import { calculateShipping } from '@/utils/shippingCalculator';
-import { Loader2, ArrowRight, CreditCard, Building } from 'lucide-react';
+import { Loader2, ArrowRight, CreditCard, Building, AlertCircle } from 'lucide-react';
 
 import { MIN_ORDER_UNITS } from '@/utils/constants';
+import { useCheckoutPolicy } from '@/hooks/useCheckoutPolicy';
+import { Badge } from '@/components/ui/badge';
 import { normalizeOrderItem } from '@/utils/orderItems';
 
 export default function Checkout() {
   const navigate = useNavigate();
   const { items, subtotal, totalItems, clearCart, taxAmount, vatRate } = useCart();
   const { user, loading: authLoading } = useAuth();
+  const { policy, loading: policyLoading, ready: policyReady } = useCheckoutPolicy();
   
   const [mode, setMode] = useState<'single' | 'multi'>('single');
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
@@ -78,6 +81,8 @@ export default function Checkout() {
     }
   }, [user, authLoading, navigate]);
 
+  const requiredMoq = policy.required_moq || MIN_ORDER_UNITS;
+
   // Redirect if empty or MOQ not met
   useEffect(() => {
     if (items.length === 0) {
@@ -85,11 +90,11 @@ export default function Checkout() {
       return;
     }
     
-    if (totalItems < MIN_ORDER_UNITS) {
-      toast.error(`Minimum order quantity of ${MIN_ORDER_UNITS} units not met`);
+    if (user && policyReady && !policyLoading && totalItems < requiredMoq) {
+      toast.error(`Minimum order quantity of ${requiredMoq} units not met`);
       navigate('/cart');
     }
-  }, [items, totalItems, navigate]);
+  }, [items, totalItems, navigate, policyLoading, policyReady, requiredMoq, user]);
 
   // Calculate shipping when shipments change
   useEffect(() => {
@@ -164,26 +169,44 @@ export default function Checkout() {
         return;
       }
     }
+    if (processing) {
+      return;
+    }
 
-    setProcessing(true);
     try {
-      // 1. Create Master Order
-      const masterAddress = mode === 'single' ? selectedAddress : shipments[0].address; // Use first address as billing/primary
-      const toCanonicalOrderItem = (item: any) =>
+      setProcessing(true);
+
+      const buildAddressPayload = (address: Address) => ({
+        fullName: address.full_name,
+        phone: address.phone,
+        address: address.street,
+        city: address.city,
+        state: address.state,
+        country: address.country,
+      });
+
+      let masterAddress: any;
+
+      if (mode === 'single' && selectedAddress) {
+        masterAddress = buildAddressPayload(selectedAddress);
+      } else if (mode === 'multi' && shipments.length > 0) {
+        masterAddress = buildAddressPayload(shipments[0].address);
+      } else {
+        throw new Error('No shipping address selected');
+      }
+
+      const normalizedOrderItems = items.map((item) =>
         normalizeOrderItem({
           product_id: item.product_id,
+          name: item.product?.name,
           quantity: item.quantity,
-          product: item.product,
-          name: item.name,
-          price: item.price,
-          image_url: item.image_url,
-          vendor_id: item.vendor_id,
-          vendor_name: item.vendor_name || item.product?.vendor?.rep_full_name || null,
-        });
-      const normalizedOrderItems = items.map((item) =>
-        toCanonicalOrderItem(item)
+          price: item.product?.price,
+          vendor_id: item.product?.vendor_id,
+          vendor_name: item.product?.vendor?.rep_full_name,
+          image_url: item.product?.image_url,
+        })
       );
-      
+
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
@@ -195,60 +218,103 @@ export default function Checkout() {
           tax: taxAmount,
           shipping_cost: totalShipping,
           total_amount: subtotal + totalShipping + taxAmount,
-          shipping_address: masterAddress, // Primary contact
+          shipping_address: masterAddress,
           billing_address: masterAddress,
           items: normalizedOrderItems,
-          notes: mode === 'multi' ? 'Multi-address shipment' : null
+          notes: mode === 'multi' ? 'Multi-address shipment' : null,
         })
         .select()
         .single();
 
       if (orderError) throw orderError;
 
-      // 2. Create Order Shipments
-      const shipmentRecords = [];
-      if (mode === 'single') {
+      const shipmentRecords: any[] = [];
+
+      if (mode === 'single' && selectedAddress) {
+        const addressPayload = buildAddressPayload(selectedAddress);
+
+        const shipmentItems = items.map((item) => {
+          const base = normalizeOrderItem({
+            product_id: item.product_id,
+            name: item.product?.name,
+            quantity: item.quantity,
+            price: item.product?.price,
+            vendor_id: item.product?.vendor_id,
+            vendor_name: item.product?.vendor?.rep_full_name,
+            image_url: item.product?.image_url,
+          });
+
+          return {
+            ...base,
+            weight: item.product?.weight || 0,
+          };
+        });
+
         shipmentRecords.push({
           order_id: order.id,
-          shipping_address: selectedAddress,
-          items: items.map((item) => ({
-            ...toCanonicalOrderItem(item),
-            weight: item.product?.weight || 0,
-          })),
+          shipping_address: addressPayload,
+          items: shipmentItems,
           shipping_cost: totalShipping,
-          status: 'pending'
+          status: 'pending',
         });
-      } else {
-        shipments.forEach(group => {
+      } else if (mode === 'multi') {
+        shipments.forEach((group) => {
+          const addressPayload = buildAddressPayload(group.address);
+
+          const shipmentItems = group.items.map((item) => {
+            const base = normalizeOrderItem({
+              product_id: item.product_id,
+              name: item.name,
+              quantity: item.quantity,
+              price: item.product?.price,
+              vendor_id: item.vendor_id ?? item.product?.vendor_id,
+              vendor_name: item.product?.vendor?.rep_full_name,
+              image_url: item.product?.image_url,
+            });
+
+            return {
+              ...base,
+              weight: item.weight || item.product?.weight || 0,
+            };
+          });
+
           shipmentRecords.push({
             order_id: order.id,
-            shipping_address: group.address,
-            items: group.items.map((item) => ({
-              ...toCanonicalOrderItem(item),
-              weight: item.weight || item.product?.weight || 0,
-            })),
+            shipping_address: addressPayload,
+            items: shipmentItems,
             shipping_cost: shippingCosts[group.id] || 0,
-            status: 'pending'
+            status: 'pending',
           });
         });
       }
 
-      const { error: shipmentError } = await supabase
-        .from('order_shipments')
-        .insert(shipmentRecords);
+      if (shipmentRecords.length > 0) {
+        const { error: shipmentError } = await supabase
+          .from('order_shipments')
+          .insert(shipmentRecords);
 
-      if (shipmentError) throw shipmentError;
+        if (shipmentError) throw shipmentError;
+      }
 
-      // 3. Handle Payment (Paystack)
-      // Call initialize-standard-payment edge function
-      const { data: paymentResult, error: paymentError } = await supabase.functions.invoke('initialize-standard-payment', {
-        body: {
-          orderId: order.id,
-          customerEmail: user!.email!,
-          customerName: masterAddress.full_name,
-          promoDiscount: promoDiscount
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+
+      const { data: paymentResult, error: paymentError } = await supabase.functions.invoke(
+        'initialize-standard-payment',
+        {
+          body: {
+            orderId: order.id,
+            customerEmail: user!.email!,
+            customerName: masterAddress.fullName,
+            promoDiscount: promoDiscount,
+          },
+          headers: accessToken
+            ? {
+                Authorization: `Bearer ${accessToken}`,
+              }
+            : undefined,
         }
-      });
+      );
 
       if (paymentError) {
         console.error('Payment initialization error:', paymentError);
@@ -263,13 +329,11 @@ export default function Checkout() {
         throw new Error('No payment URL returned');
       }
 
-      // Redirect to Paystack
       window.location.href = paymentResult.paymentUrl;
-
     } catch (error: any) {
       console.error('Checkout error:', error);
       toast.error(error.message || 'Failed to place order');
-      setProcessing(false); // Only stop processing on error (redirect handles success)
+      setProcessing(false);
     }
   };
 
@@ -278,6 +342,33 @@ export default function Checkout() {
       <Navbar />
       <div className="container mx-auto px-4 py-12">
         <h1 className="text-3xl font-bold mb-8">Checkout</h1>
+        <Card className="mb-6">
+          <CardContent className="pt-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="font-medium">Checkout Policy</p>
+                <p className="text-sm text-muted-foreground">
+                  Minimum order: {requiredMoq} unit{requiredMoq > 1 ? 's' : ''} • Paid orders in last 30 days: {policy.paid_orders_last_30d}
+                </p>
+                {policy.is_influencer && !policy.influencer_moq_enabled && (
+                  <p className="text-xs text-amber-700 mt-1">
+                    Influencer profile is assigned, but MOQ privilege is currently disabled until admin re-enables it.
+                  </p>
+                )}
+                {policy.is_influencer && policy.influencer_moq_enabled && policy.paid_orders_last_30d <= 4 && (
+                  <p className="text-xs text-amber-700 mt-1">
+                    You are at the threshold. Keep at least 4 paid orders in rolling 30 days to retain MOQ 1.
+                  </p>
+                )}
+              </div>
+              {policy.is_influencer && (
+                <Badge variant="secondary">
+                  {policy.influencer_moq_enabled ? 'Influencer Active' : 'Influencer Inactive'}
+                </Badge>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
@@ -417,11 +508,17 @@ export default function Checkout() {
                   className="w-full" 
                   size="lg" 
                   onClick={handlePlaceOrder}
-                  disabled={processing || calculating}
+                  disabled={processing || calculating || policyLoading || !policyReady || totalItems < requiredMoq}
                 >
                   {processing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}
                   Place Order
                 </Button>
+                {totalItems < requiredMoq && (
+                  <div className="text-xs text-amber-700 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    Add {requiredMoq - totalItems} more unit{requiredMoq - totalItems > 1 ? 's' : ''} to proceed.
+                  </div>
+                )}
               </CardContent>
             </Card>
 

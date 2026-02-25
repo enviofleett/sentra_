@@ -17,6 +17,8 @@ import { useSmartSearch } from './useSmartSearch';
 interface SmartSearchProps {
   placeholder?: string;
   className?: string;
+  initialQuery?: string;
+  onSearchChange?: (query: string) => void;
 }
 
 const SearchFiltersPanel = ({ 
@@ -33,6 +35,14 @@ const SearchFiltersPanel = ({
   onClose: () => void
 }) => {
   const [priceRange, setPriceRange] = useState(filters.priceRange || [0, 500000]);
+
+  useEffect(() => {
+    if (filters.priceRange) {
+      setPriceRange(filters.priceRange);
+    } else {
+      setPriceRange([0, 500000]);
+    }
+  }, [filters.priceRange]);
 
   return (
     <div className="p-4 w-80 space-y-6">
@@ -65,7 +75,7 @@ const SearchFiltersPanel = ({
 
         <div>
           <Label className="mb-2 block">Brands</Label>
-          <ScrollArea className="h-32 rounded-md border p-2">
+          <ScrollArea className="h-48 rounded-md border p-2">
             <div className="space-y-2">
               {brands.map(brand => (
                 <div key={brand} className="flex items-center space-x-2">
@@ -119,7 +129,12 @@ const SearchFiltersPanel = ({
   );
 };
 
-export const SmartSearchInput: React.FC<SmartSearchProps> = ({ placeholder = "Search...", className }) => {
+export const SmartSearchInput: React.FC<SmartSearchProps> = ({ 
+  placeholder = "Search...", 
+  className,
+  initialQuery = '',
+  onSearchChange 
+}) => {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -135,7 +150,7 @@ export const SmartSearchInput: React.FC<SmartSearchProps> = ({ placeholder = "Se
     setFilters,
     brands,
     categories
-  } = useSmartSearch();
+  } = useSmartSearch(initialQuery);
 
   const handleSelect = (id: string) => {
     addToHistory(query);
@@ -165,12 +180,17 @@ export const SmartSearchInput: React.FC<SmartSearchProps> = ({ placeholder = "Se
                 value={query}
                 onChange={(e) => {
                   setQuery(e.target.value);
+                  onSearchChange?.(e.target.value);
                   setOpen(true);
                 }}
                 onFocus={() => setOpen(true)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     handleSearch();
+                  } else if (e.key === 'ArrowDown') {
+                    // Prevent default scrolling
+                    e.preventDefault();
+                    // Focus logic would go here if we had a ref to the list
                   }
                 }}
               />
@@ -179,6 +199,7 @@ export const SmartSearchInput: React.FC<SmartSearchProps> = ({ placeholder = "Se
                   onClick={(e) => {
                     e.stopPropagation();
                     setQuery('');
+                    onSearchChange?.('');
                     inputRef.current?.focus();
                   }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 hover:bg-muted"
@@ -188,8 +209,12 @@ export const SmartSearchInput: React.FC<SmartSearchProps> = ({ placeholder = "Se
               )}
             </div>
           </PopoverTrigger>
-          <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)] min-w-[300px]" align="start">
-            <Command className="rounded-lg border shadow-md">
+          <PopoverContent 
+            className="p-0 w-[var(--radix-popover-trigger-width)] min-w-[300px]" 
+            align="start"
+            onOpenAutoFocus={(e) => e.preventDefault()}
+          >
+            <Command className="rounded-lg border shadow-md" shouldFilter={false}>
               <CommandList className="max-h-[300px]">
                 {loading && <div className="p-4 text-sm text-center text-muted-foreground">Loading...</div>}
                 
@@ -205,6 +230,7 @@ export const SmartSearchInput: React.FC<SmartSearchProps> = ({ placeholder = "Se
                         value={`history-${item.term}`}
                         onSelect={() => {
                           setQuery(item.term);
+                          onSearchChange?.(item.term);
                         }}
                       >
                         <Clock className="mr-2 h-4 w-4 text-muted-foreground" />

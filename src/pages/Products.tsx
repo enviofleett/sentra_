@@ -22,6 +22,8 @@ interface GroupBuyCampaign {
   goal_quantity: number;
   expiry_at: string;
 }
+import { SmartSearchInput } from '@/components/search/SmartSearch';
+
 export default function Products() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState<any[]>([]);
@@ -196,9 +198,6 @@ export default function Products() {
   const toggleBrand = (brand: string) => {
     setSelectedBrands(prev => prev.includes(brand) ? prev.filter(b => b !== brand) : [...prev, brand]);
   };
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value);
-  };
   const FilterSidebar = () => <div className="space-y-8">
       <div>
         
@@ -287,22 +286,11 @@ export default function Products() {
           
           {/* Main Search Bar */}
           <div className="mt-6 max-w-md mx-auto">
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Search products, brands..."
-                value={searchQuery}
-                onChange={handleSearchChange}
-                className="w-full pl-12 pr-4 py-3 h-12 text-base rounded-full border-muted-foreground/20 focus:border-primary"
-                list="product-suggestions"
-              />
-              <datalist id="product-suggestions">
-                {products.slice(0, 5).map((product) => (
-                  <option key={product.id} value={product.name} />
-                ))}
-              </datalist>
-            </div>
+            <SmartSearchInput
+              placeholder="Search products, brands..."
+              initialQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+            />
           </div>
         </motion.div>
 

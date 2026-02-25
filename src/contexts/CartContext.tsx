@@ -63,12 +63,28 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(false);
-  // Hardcoded VAT rate for production stability
-  const [vatRate] = useState(7.5);
+  const [vatRate, setVatRate] = useState(7.5); // Default fallback
+
+  const fetchVatRate = async () => {
+    try {
+      const { data } = await supabase
+        .from('vat_settings' as any)
+        .select('rate')
+        .eq('is_active', true)
+        .maybeSingle();
+      
+      if (data) {
+        setVatRate(Number((data as any).rate));
+      }
+    } catch (err) {
+      console.error('Failed to fetch VAT rate', err);
+    }
+  };
 
   // Sync guest cart to DB on login, or load appropriate cart
   useEffect(() => {
-    // fetchVatRate(); // Disabled dynamic fetching
+    fetchVatRate();
+    
     const syncAndLoad = async () => {
       setLoading(true);
       
@@ -118,22 +134,6 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     syncAndLoad();
   }, [user]);
 
-  const fetchVatRate = async () => {
-    try {
-      const { data } = await supabase
-        .from('vat_settings')
-        .select('rate')
-        .eq('is_active', true)
-        .maybeSingle();
-      
-      if (data) {
-        setVatRate(Number(data.rate));
-      }
-    } catch (err) {
-      console.error('Failed to fetch VAT rate', err);
-    }
-  };
-
   const loadUserCart = async () => {
     if (!user) return;
     
@@ -152,7 +152,16 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       console.error('Error loading cart:', error);
       toast({ title: 'Error', description: 'Failed to load cart', variant: 'destructive' });
     } else {
-      const enrichedItems = await enrichItemsWithVendorInfo(data || []);
+      // Fix type mismatch for image_url (null -> undefined)
+      const formattedData = (data || []).map((item: any) => ({
+        ...item,
+        product: item.product ? {
+          ...item.product,
+          image_url: item.product.image_url || undefined,
+          vendor: item.product.vendor || undefined
+        } : undefined
+      }));
+      const enrichedItems = await enrichItemsWithVendorInfo(formattedData);
       setItems(enrichedItems);
     }
   };
@@ -183,7 +192,11 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
             id: `guest_${localItem.product_id}`,
             product_id: localItem.product_id,
             quantity: localItem.quantity,
-            product
+            product: {
+              ...product,
+              image_url: product.image_url || undefined,
+              vendor: product.vendor || undefined
+            }
           };
         })
         .filter(Boolean) as CartItem[];
@@ -266,7 +279,19 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         console.error('Error adding to cart:', error);
         toast({ title: 'Error', description: 'Failed to add item to cart', variant: 'destructive' });
       } else {
-        const enrichedData = (await enrichItemsWithVendorInfo([data]))[0];
+        const sanitizedData = {
+          ...data,
+          product: data.product ? {
+            ...data.product,
+            image_url: data.product.image_url || undefined,
+            stock_quantity: data.product.stock_quantity || 0,
+            vendor_id: data.product.vendor_id || undefined,
+            weight: data.product.weight || undefined,
+            size: data.product.size || undefined,
+            vendor: data.product.vendor || undefined
+          } : undefined
+        };
+        const enrichedData = (await enrichItemsWithVendorInfo([sanitizedData]))[0];
         setItems([...items, enrichedData]);
         toast({ title: 'Added to cart', description: 'Item added to your cart' });
       }

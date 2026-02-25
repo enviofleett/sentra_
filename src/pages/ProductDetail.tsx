@@ -13,6 +13,7 @@ import { GroupBuyCampaignWidget } from '@/components/groupbuy/GroupBuyCampaignWi
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ScentPyramid } from '@/components/product/ScentPyramid';
 import { MobileBuyBar } from '@/components/product/MobileBuyBar';
+import { ProductRecommendations } from '@/components/product/ProductRecommendations';
 import { motion } from 'framer-motion';
 import { useMetaTags } from '@/hooks/useMetaTags';
 
@@ -55,6 +56,8 @@ export default function ProductDetail() {
   }, [id]);
 
   const loadProduct = async () => {
+    if (!id) return;
+    
     const { data, error } = await supabase
       .from('products')
       .select('*')
@@ -353,6 +356,9 @@ export default function ProductDetail() {
             )}
           </motion.div>
         </div>
+        
+        {/* Product Recommendations */}
+        <ProductRecommendations currentProduct={product} />
       </div>
 
       {/* Mobile Buy Bar */}

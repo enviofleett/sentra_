@@ -18,12 +18,32 @@ export default function TaxManagement() {
   const [history, setHistory] = useState<any[]>([]);
 
   useEffect(() => {
-    // Manually set rate for UI consistency with hardcoded backend
-    setCurrentRate(7.5);
-    setNewRate('7.5');
-    // Still fetch history if available
+    fetchCurrentRate();
     fetchHistory();
   }, []);
+
+  const fetchCurrentRate = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('vat_settings')
+        .select('rate')
+        .eq('is_active', true)
+        .single();
+      
+      if (error) throw error;
+      if (data) {
+        setCurrentRate(data.rate);
+        setNewRate(data.rate.toString());
+      }
+    } catch (error) {
+      console.error('Error fetching VAT rate:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load current VAT rate",
+        variant: "destructive"
+      });
+    }
+  };
 
   const fetchHistory = async () => {
     setLoading(true);
@@ -46,10 +66,80 @@ export default function TaxManagement() {
   };
 
   const handleUpdateRate = async () => {
-    toast({
-      title: "System Update",
-      description: "VAT Rate is currently hardcoded to 7.5% for production stability. Database updates are disabled.",
-    });
+    if (!newRate) return;
+    setSaving(true);
+    
+    try {
+      const rateValue = parseFloat(newRate);
+      if (isNaN(rateValue) || rateValue < 0 || rateValue > 100) {
+        throw new Error('Invalid VAT rate');
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // 1. Log the change
+      const { error: logError } = await supabase
+        .from('vat_audit_logs')
+        .insert({
+          old_rate: currentRate,
+          new_rate: rateValue,
+          changed_by: user.id
+        });
+
+      if (logError) throw logError;
+
+      // 2. Update the setting
+      // First try to update existing active record
+      const { data: existing, error: fetchError } = await supabase
+        .from('vat_settings')
+        .select('id')
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (fetchError) throw fetchError;
+
+      if (existing) {
+        const { error: updateError } = await supabase
+          .from('vat_settings')
+          .update({ 
+            rate: rateValue,
+            updated_at: new Date().toISOString(),
+            updated_by: user.id
+          })
+          .eq('id', existing.id);
+          
+        if (updateError) throw updateError;
+      } else {
+        // Create new if none exists
+        const { error: insertError } = await supabase
+          .from('vat_settings')
+          .insert({
+            rate: rateValue,
+            is_active: true,
+            updated_by: user.id
+          });
+          
+        if (insertError) throw insertError;
+      }
+
+      toast({
+        title: "Success",
+        description: "VAT Rate updated successfully",
+      });
+
+      setCurrentRate(rateValue);
+      fetchHistory();
+    } catch (error: any) {
+      console.error('Error updating VAT rate:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update VAT rate",
+        variant: "destructive"
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -83,29 +173,18 @@ export default function TaxManagement() {
                   value={newRate}
                   onChange={(e) => setNewRate(e.target.value)}
                   placeholder="e.g. 7.5"
-                  disabled={true}
                 />
-                <Button onClick={handleUpdateRate} disabled={true}>
+                <Button onClick={handleUpdateRate} disabled={saving}>
                   {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Update Rate'}
                 </Button>
               </div>
             </div>
-
-            <Alert className="bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800">
-              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              <AlertTitle>System Locked</AlertTitle>
-              <AlertDescription className="text-amber-700 dark:text-amber-300">
-                VAT rate is currently hardcoded to 7.5% for production stability. Please contact the development team to re-enable dynamic updates.
-              </AlertDescription>
-            </Alert>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <History className="h-5 w-5" /> Audit Log
-            </CardTitle>
+            <CardTitle>Change History</CardTitle>
             <CardDescription>Recent changes to tax settings.</CardDescription>
           </CardHeader>
           <CardContent>

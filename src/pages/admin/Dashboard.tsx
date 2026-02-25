@@ -7,6 +7,8 @@ import { DashboardAnalytics } from './DashboardAnalytics';
 import { ProductsManagement } from './ProductsManagement';
 import { CategoriesManagement } from './CategoriesManagement';
 import { OrdersManagement } from './OrdersManagement';
+import { CreateOrder } from './CreateOrder';
+import TaxManagement from './TaxManagement';
 import { VendorsManagement } from './VendorsManagement';
 import SettingsManagement from './SettingsManagement';
 import GroupBuyCampaignsManagement from './GroupBuyCampaignsManagement';
@@ -76,6 +78,8 @@ export default function AdminDashboard() {
           <Route path="/products" element={<ProductsManagement />} />
           <Route path="/categories" element={<CategoriesManagement />} />
           <Route path="/orders" element={<OrdersManagement />} />
+          <Route path="/orders/create" element={<CreateOrder />} />
+          <Route path="/tax" element={<TaxManagement />} />
           <Route path="/vendors" element={<VendorsManagement />} />
           <Route path="/groupbuys" element={<GroupBuyCampaignsManagement />} />
           <Route path="/discounts" element={<DiscountThresholdsManagement />} />

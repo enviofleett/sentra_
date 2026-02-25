@@ -1,3 +1,4 @@
+/// <reference path="../_types/deno-modules.d.ts" />
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { createSmtpClient, minifyHtml } from "../_shared/email-utils.ts";
@@ -183,6 +184,36 @@ async function notifyAdminsOfNewOrder(
   }
 }
 
+// Helper function to log to payment_audit_logs
+async function logAudit(
+  supabase: any,
+  data: {
+    order_id?: string;
+    payment_reference?: string;
+    event_type: string;
+    status: 'success' | 'failed' | 'pending' | 'warning';
+    payload?: any;
+    error_message?: string;
+    metadata?: any;
+  }
+) {
+  try {
+    // Fire and forget, but catch errors to avoid crashing the webhook
+    await supabase.from('payment_audit_logs').insert({
+      order_id: data.order_id,
+      payment_reference: data.payment_reference,
+      event_type: data.event_type,
+      status: data.status,
+      payload: data.payload,
+      error_message: data.error_message,
+      metadata: data.metadata,
+      provider: 'paystack'
+    });
+  } catch (err) {
+    console.error('[Paystack Webhook] Failed to write audit log:', err);
+  }
+}
+
 Deno.serve(async (req: Request) => {
   const requestTime = new Date().toISOString();
   console.log(`[Paystack Webhook] ========================================`);
@@ -274,6 +305,16 @@ Deno.serve(async (req: Request) => {
     );
     console.log(`[Paystack Webhook] Supabase client initialized`);
 
+    // Log the incoming event
+    await logAudit(supabase, {
+      payment_reference: reference,
+      event_type: event,
+      status: 'pending',
+      payload: webhookData,
+      metadata: metadata,
+      order_id: metadata?.order_id
+    });
+
     if (event === "charge.success") {
       const paymentType = metadata?.type || 'standard_order';
       console.log(`[Paystack Webhook] Processing SUCCESS - Type: ${paymentType}`);
@@ -283,14 +324,36 @@ Deno.serve(async (req: Request) => {
         const orderId = metadata?.order_id;
         console.log(`[Paystack Webhook] Standard Order - Looking up by reference: ${reference}`);
 
-        const { data: order, error: fetchError } = await supabase
+        let order;
+        let fetchError;
+
+        // primary lookup by reference
+        ({ data: order, error: fetchError } = await supabase
           .from("orders")
           .select("id, total_amount, paystack_status, user_id, promo_discount_applied")
           .eq("payment_reference", reference)
-          .single();
+          .single());
+
+        // fallback lookup by metadata.order_id if reference fails
+        if ((fetchError || !order) && orderId) {
+             console.log(`[Paystack Webhook] Reference lookup failed, trying metadata.order_id: ${orderId}`);
+             ({ data: order, error: fetchError } = await supabase
+              .from("orders")
+              .select("id, total_amount, paystack_status, user_id, promo_discount_applied")
+              .eq("id", orderId)
+              .single());
+        }
 
         if (fetchError || !order) {
-          console.error(`[Paystack Webhook] ERROR: Order not found for reference: ${reference}`, fetchError);
+          const errMsg = `Order not found for reference: ${reference}`;
+          console.error(`[Paystack Webhook] ERROR: ${errMsg}`, fetchError);
+          await logAudit(supabase, {
+             payment_reference: reference,
+             event_type: event,
+             status: 'failed',
+             error_message: errMsg,
+             metadata: { fetchError }
+          });
           // Return 200 to prevent Paystack retries - order may have been deleted
           return new Response(JSON.stringify({ received: true, error: "Order not found" }), { 
             status: 200,
@@ -310,13 +373,25 @@ Deno.serve(async (req: Request) => {
         console.log(`[Paystack Webhook] Amount check - Expected: ${expectedAmount} kobo, Received: ${amount} kobo`);
 
         if (amount !== expectedAmount) {
-          console.error(`[Paystack Webhook] SECURITY: Amount mismatch for order ${order.id} - Expected ${expectedAmount}, Got ${amount}`);
+          const errMsg = `Amount mismatch for order ${order.id} - Expected ${expectedAmount}, Got ${amount}`;
+          console.error(`[Paystack Webhook] SECURITY: ${errMsg}`);
           
+          await logAudit(supabase, {
+             order_id: order.id,
+             payment_reference: reference,
+             event_type: event,
+             status: 'warning',
+             error_message: errMsg,
+             metadata: { expected: expectedAmount, received: amount }
+          });
+
           // Update order with mismatch status but return 200 to prevent retries
+          // Use ID for update to ensure it works even if reference is missing/mismatched
           await supabase.from("orders").update({ 
             paystack_status: "amount_mismatch",
+            payment_reference: reference, // Ensure reference is saved
             updated_at: new Date().toISOString()
-          }).eq("payment_reference", reference);
+          }).eq("id", order.id);
 
           // Fetch user profile for email
           const { data: profile } = await supabase
@@ -339,7 +414,7 @@ Deno.serve(async (req: Request) => {
                   paid_amount: (amount / 100).toLocaleString(),
                 }
               }
-            }).catch(err => console.error('[Paystack Webhook] Discrepancy email error:', err));
+            }).catch((err: any) => console.error('[Paystack Webhook] Discrepancy email error:', err));
           }
           
           return new Response(JSON.stringify({ 
@@ -354,22 +429,65 @@ Deno.serve(async (req: Request) => {
 
         if (order.paystack_status === 'success') {
           console.log(`[Paystack Webhook] Order ${order.id} already processed (idempotency check), skipping`);
+          await logAudit(supabase, {
+             order_id: order.id,
+             payment_reference: reference,
+             event_type: event,
+             status: 'success', // Already success
+             error_message: 'Idempotency check: already processed'
+          });
           return new Response(JSON.stringify({ message: "Already processed" }), { status: 200 });
         }
 
         const { error: updateError } = await supabase
           .from("orders")
           .update({
-            status: "processing",
+            status: "processing", // changed from 'completed' to 'processing' based on enum
             payment_status: "paid",
             paystack_status: "success",
+            payment_reference: reference, // Ensure reference is saved/synced
             updated_at: new Date().toISOString(),
           })
-          .eq("payment_reference", reference);
+          .eq("id", order.id); // CRITICAL FIX: Update by ID, not reference
 
         if (updateError) {
-          console.error(`[Paystack Webhook] ERROR: Failed to update order ${order.id}:`, updateError);
+          const errMsg = `Failed to update order ${order.id}`;
+          console.error(`[Paystack Webhook] ERROR: ${errMsg}:`, updateError);
+          await logAudit(supabase, {
+             order_id: order.id,
+             payment_reference: reference,
+             event_type: event,
+             status: 'failed',
+             error_message: errMsg,
+             metadata: { updateError }
+          });
           return new Response(JSON.stringify({ error: "Failed to update order" }), { status: 500 });
+        }
+        
+        // Send success email to customer
+        try {
+          const { data: userProfile } = await supabase
+            .from('profiles')
+            .select('email, full_name')
+            .eq('id', order.user_id)
+            .single();
+
+          if (userProfile?.email) {
+              console.log(`[Paystack Webhook] Sending success email to ${userProfile.email}`);
+              supabase.functions.invoke('send-email', {
+                body: {
+                  to: userProfile.email,
+                  templateId: 'order_update',
+                  data: {
+                    customerName: userProfile.full_name || 'Customer',
+                    orderId: order.id.slice(0, 8),
+                    status: 'Payment Successful - Order Processing'
+                  }
+                }
+              }).catch((err: any) => console.error('[Paystack Webhook] Success email error:', err));
+          }
+        } catch (emailError) {
+           console.error('[Paystack Webhook] Failed to prepare success email:', emailError);
         }
         
         // Record 4-way profit split
@@ -405,6 +523,14 @@ Deno.serve(async (req: Request) => {
           profileName?.full_name || 'Customer'
         );
 
+        await logAudit(supabase, {
+           order_id: order.id,
+           payment_reference: reference,
+           event_type: event,
+           status: 'success',
+           metadata: { amount, type: 'standard_order' }
+        });
+
         console.log(`[Paystack Webhook] SUCCESS: Order ${order.id} updated to 'processing'`);
         return new Response(JSON.stringify({ message: "Order processed successfully" }), { status: 200 });
 
@@ -429,7 +555,15 @@ Deno.serve(async (req: Request) => {
           .single();
         
         if (fetchError || !commitment) {
-          console.error(`[Paystack Webhook] ERROR: Commitment not found: ${commitmentId}`, fetchError);
+          const errMsg = `Commitment not found: ${commitmentId}`;
+          console.error(`[Paystack Webhook] ERROR: ${errMsg}`, fetchError);
+          await logAudit(supabase, {
+             payment_reference: reference,
+             event_type: event,
+             status: 'failed',
+             error_message: errMsg,
+             metadata: { fetchError, commitmentId }
+          });
           return new Response(JSON.stringify({ error: "Commitment not found" }), { status: 404 });
         }
 
@@ -437,8 +571,18 @@ Deno.serve(async (req: Request) => {
         console.log(`[Paystack Webhook] Amount check - Expected: ${expectedAmount} kobo, Received: ${amount} kobo`);
 
         if (amount !== expectedAmount) {
-          console.error(`[Paystack Webhook] SECURITY: Amount mismatch for commitment ${commitmentId}`);
+          const errMsg = `Amount mismatch for commitment ${commitmentId} - Expected ${expectedAmount}, Got ${amount}`;
+          console.error(`[Paystack Webhook] SECURITY: ${errMsg}`);
           
+          await logAudit(supabase, {
+             order_id: commitment.order_id, // Might be null
+             payment_reference: reference,
+             event_type: event,
+             status: 'warning',
+             error_message: errMsg,
+             metadata: { expected: expectedAmount, received: amount, commitmentId }
+          });
+
           const profile = commitment.profiles as any;
           if (profile?.email) {
              console.log(`[Paystack Webhook] Sending discrepancy email to ${profile.email}`);
@@ -462,6 +606,13 @@ Deno.serve(async (req: Request) => {
 
         if (commitment.status === 'committed_paid' || commitment.status === 'paid_finalized') {
           console.log(`[Paystack Webhook] Commitment ${commitmentId} already processed (idempotency), skipping`);
+          await logAudit(supabase, {
+             payment_reference: reference,
+             event_type: event,
+             status: 'success',
+             error_message: 'Idempotency check: already processed',
+             metadata: { commitmentId }
+          });
           return new Response(JSON.stringify({ message: "Already processed" }), { status: 200 });
         }
 
@@ -477,7 +628,15 @@ Deno.serve(async (req: Request) => {
           .eq("id", commitmentId);
 
         if (updateError) {
-          console.error(`[Paystack Webhook] ERROR: Failed to update commitment ${commitmentId}:`, updateError);
+          const errMsg = `Failed to update commitment ${commitmentId}`;
+          console.error(`[Paystack Webhook] ERROR: ${errMsg}:`, updateError);
+          await logAudit(supabase, {
+             payment_reference: reference,
+             event_type: event,
+             status: 'failed',
+             error_message: errMsg,
+             metadata: { updateError, commitmentId }
+          });
           return new Response(JSON.stringify({ error: "Failed to update commitment" }), { status: 500 });
         }
         
@@ -493,6 +652,13 @@ Deno.serve(async (req: Request) => {
         if (campaignError || !campaign) {
           console.error(`[Paystack Webhook] Campaign fetch error:`, campaignError);
           // Still return success - commitment was updated
+          await logAudit(supabase, {
+             payment_reference: reference,
+             event_type: event,
+             status: 'warning',
+             error_message: 'Commitment processed but campaign check failed',
+             metadata: { campaignError, commitmentId }
+          });
           return new Response(JSON.stringify({ message: "Commitment processed, campaign check skipped" }), { status: 200 });
         }
 
@@ -538,7 +704,15 @@ Deno.serve(async (req: Request) => {
             .single();
 
           if (orderError) {
-            console.error(`[Paystack Webhook] Order creation failed:`, orderError);
+            const errMsg = `Order creation failed for commitment ${commitmentId}`;
+            console.error(`[Paystack Webhook] ${errMsg}:`, orderError);
+            await logAudit(supabase, {
+               payment_reference: reference,
+               event_type: event,
+               status: 'warning',
+               error_message: errMsg,
+               metadata: { orderError, commitmentId }
+            });
             // Commitment is paid, but order failed - log but don't fail webhook
             return new Response(JSON.stringify({ 
               message: "Commitment processed, order creation pending",
@@ -585,6 +759,14 @@ Deno.serve(async (req: Request) => {
 
           console.log(`[Paystack Webhook] SUCCESS: Order ${newOrder.id} created for commitment ${commitmentId}`);
 
+          await logAudit(supabase, {
+             order_id: newOrder.id,
+             payment_reference: reference,
+             event_type: event,
+             status: 'success',
+             metadata: { commitmentId, amount: totalAmount * 100, type: 'group_buy_commitment_immediate_order' }
+          });
+
           // Send confirmation email
           supabase.functions.invoke('send-email', {
             body: {
@@ -596,7 +778,7 @@ Deno.serve(async (req: Request) => {
                 order_id: newOrder.id.slice(0, 8),
               }
             }
-          }).catch(err => console.error('[Paystack Webhook] Email error (non-blocking):', err));
+          }).catch((err: any) => console.error('[Paystack Webhook] Email error (non-blocking):', err));
 
           return new Response(JSON.stringify({ 
             message: "Commitment processed and order created",
@@ -606,6 +788,14 @@ Deno.serve(async (req: Request) => {
 
         // Goal not yet reached - order will be created when goal is met
         console.log(`[Paystack Webhook] SUCCESS: Commitment ${commitmentId} paid, awaiting campaign goal`);
+        
+        await logAudit(supabase, {
+           payment_reference: reference,
+           event_type: event,
+           status: 'success',
+           metadata: { commitmentId, type: 'group_buy_commitment_pending_goal' }
+        });
+
         return new Response(JSON.stringify({ message: "Commitment processed successfully" }), { status: 200 });
 
       } else if (paymentType === 'group_buy_final_payment') {
@@ -779,7 +969,7 @@ Deno.serve(async (req: Request) => {
               order_id: newOrder.id.slice(0, 8),
             }
           }
-        }).catch(err => console.error('[Paystack Webhook] Email error (non-blocking):', err));
+        }).catch((err: any) => console.error('[Paystack Webhook] Email error (non-blocking):', err));
 
         return new Response(JSON.stringify({ 
           message: "Final payment processed successfully",
@@ -829,7 +1019,7 @@ Deno.serve(async (req: Request) => {
                 amount: depositAmount.toLocaleString(),
               }
             }
-          }).catch(err => console.error('[Paystack Webhook] Email error:', err));
+          }).catch((err: any) => console.error('[Paystack Webhook] Email error:', err));
         }
 
         return new Response(JSON.stringify({ 
@@ -850,6 +1040,14 @@ Deno.serve(async (req: Request) => {
     if (event === "charge.failed") {
       console.log(`[Paystack Webhook] Processing FAILED payment - Reference: ${reference}`);
       
+      await logAudit(supabase, {
+         payment_reference: reference,
+         event_type: event,
+         status: 'failed',
+         error_message: 'Payment failed reported by Paystack',
+         metadata: metadata
+      });
+
       if (metadata?.type === 'standard_order') {
         console.log(`[Paystack Webhook] Updating standard order to failed`);
         await supabase
@@ -877,11 +1075,37 @@ Deno.serve(async (req: Request) => {
     }
 
     console.log(`[Paystack Webhook] Event ${event} acknowledged (no action required)`);
+    
+    await logAudit(supabase, {
+       payment_reference: reference,
+       event_type: event,
+       status: 'warning',
+       error_message: 'Event type not handled',
+       metadata: { event, type: metadata?.type }
+    });
+
     return new Response(JSON.stringify({ message: "Event received" }), { status: 200 });
 
   } catch (error: any) {
     console.error("[Paystack Webhook] CRITICAL ERROR:", error.message);
     console.error("[Paystack Webhook] Stack:", error.stack);
+    
+    // Attempt to log if supabase is available (it might not be if init failed)
+    try {
+        const supabase = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+        );
+        await logAudit(supabase, {
+           event_type: 'unknown',
+           status: 'failed',
+           error_message: `CRITICAL: ${error.message}`,
+           metadata: { stack: error.stack }
+        });
+    } catch (e) {
+        console.error('Failed to log critical error to DB:', e);
+    }
+
     // IMPORTANT: Always return 200 to Paystack to prevent retry storms
     // The error has been logged and can be investigated manually
     return new Response(JSON.stringify({ 

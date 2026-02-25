@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Eye, Clock, Package, TruckIcon, CheckCircle, XCircle, RefreshCw, CreditCard, Loader2, AlertCircle, Send, Mail, MessageSquare, Phone, MapPin, Calendar, CreditCard as CreditCardIcon } from 'lucide-react';
+import { Eye, Clock, Package, TruckIcon, CheckCircle, XCircle, RefreshCw, CreditCard, Loader2, AlertCircle, Send, Mail, MessageSquare, Phone, MapPin, Calendar, CreditCard as CreditCardIcon, Plus } from 'lucide-react';
 import { getOrderStatusBreakdown, getOrdersTimeline, OrderStatusBreakdown } from '@/utils/analytics';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Badge } from '@/components/ui/badge';
@@ -66,6 +67,7 @@ interface OrderCommunication {
 }
 
 export function OrdersManagement() {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<Order[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -636,18 +638,24 @@ export function OrdersManagement() {
           <h2 className="text-3xl font-bold tracking-tight">Order Management</h2>
           <p className="text-muted-foreground">Track and manage all customer orders</p>
         </div>
-        {selectedOrders.length > 0 && (
-          <div className="flex items-center gap-2 bg-primary/10 px-4 py-2 rounded-lg border border-primary/20 animate-in fade-in slide-in-from-top-2">
-            <span className="text-sm font-medium">{selectedOrders.length} selected</span>
-            <Separator orientation="vertical" className="h-4 bg-primary/20" />
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-muted-foreground uppercase mr-1">Mark as:</span>
-              <Button size="sm" className="h-7 px-2 text-xs" variant="outline" onClick={() => handleBulkStatusUpdate('processing')}>Processing</Button>
-              <Button size="sm" className="h-7 px-2 text-xs" variant="outline" onClick={() => handleBulkStatusUpdate('shipped')}>Shipped</Button>
-              <Button size="sm" className="h-7 px-2 text-xs" variant="outline" onClick={() => handleBulkStatusUpdate('delivered')}>Delivered</Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => navigate('/admin/orders/create')}>
+            <Plus className="h-4 w-4 mr-2" />
+            Create Order
+          </Button>
+          {selectedOrders.length > 0 && (
+            <div className="flex items-center gap-2 bg-primary/10 px-4 py-2 rounded-lg border border-primary/20 animate-in fade-in slide-in-from-top-2">
+              <span className="text-sm font-medium">{selectedOrders.length} selected</span>
+              <Separator orientation="vertical" className="h-4 bg-primary/20" />
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-muted-foreground uppercase mr-1">Mark as:</span>
+                <Button size="sm" className="h-7 px-2 text-xs" variant="outline" onClick={() => handleBulkStatusUpdate('processing')}>Processing</Button>
+                <Button size="sm" className="h-7 px-2 text-xs" variant="outline" onClick={() => handleBulkStatusUpdate('shipped')}>Shipped</Button>
+                <Button size="sm" className="h-7 px-2 text-xs" variant="outline" onClick={() => handleBulkStatusUpdate('delivered')}>Delivered</Button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Order Status Cards */}

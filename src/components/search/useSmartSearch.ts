@@ -20,11 +20,15 @@ const useDebounceValue = <T>(value: T, delay: number): T => {
   return debouncedValue;
 };
 
-export const useSmartSearch = () => {
-  const [query, setQuery] = useState('');
+export const useSmartSearch = (initialQuery: string = '') => {
+  const [query, setQuery] = useState(initialQuery);
+
+  useEffect(() => {
+    setQuery(initialQuery);
+  }, [initialQuery]);
+
   const debouncedQuery = useDebounceValue(query, 300);
   const [results, setResults] = useState<SearchResult[]>([]);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<SearchHistoryItem[]>([]);
   const [filters, setFilters] = useState<SearchFilters>({});
@@ -48,24 +52,29 @@ export const useSmartSearch = () => {
   }, []);
 
   const fetchFilterOptions = async () => {
-    const [brandsRes, categoriesRes] = await Promise.all([
-      supabase.from('featured_brands').select('name').order('name'),
-      supabase.from('categories').select('id, name').eq('is_active', true).order('name')
-    ]);
+    try {
+      const [categoriesRes, productsRes] = await Promise.all([
+        supabase.from('categories').select('id, name').eq('is_active', true).order('name'),
+        supabase.from('products').select('brand').not('brand', 'is', null).eq('is_active', true)
+      ]);
 
-    if (brandsRes.data) {
-      setBrands(brandsRes.data.map(b => b.name));
-    }
-    
-    if (categoriesRes.data) {
-      setCategories(categoriesRes.data);
-    }
+      if (categoriesRes.data) {
+        setCategories(categoriesRes.data);
+      }
 
-    // For scent profiles, we might need to fetch distinct values from products
-    // This is expensive on large datasets without a dedicated table/view, 
-    // so we'll skip or use a static list if needed.
-    // For now, let's just use a hardcoded list of common profiles
-    setScentProfiles(['Floral', 'Woody', 'Fresh', 'Oriental', 'Spicy', 'Citrus', 'Fruity', 'Gourmand']);
+      if (productsRes.data) {
+        const uniqueBrands = Array.from(new Set(productsRes.data.map(p => p.brand).filter((b): b is string => !!b))).sort();
+        setBrands(uniqueBrands);
+      }
+      
+      // For scent profiles, we might need to fetch distinct values from products
+      // This is expensive on large datasets without a dedicated table/view, 
+      // so we'll skip or use a static list if needed.
+      // For now, let's just use a hardcoded list of common profiles
+      setScentProfiles(['Floral', 'Woody', 'Fresh', 'Oriental', 'Spicy', 'Citrus', 'Fruity', 'Gourmand']);
+    } catch (error) {
+      console.error('Error fetching filter options:', error);
+    }
   };
 
   const addToHistory = (term: string) => {
@@ -85,7 +94,6 @@ export const useSmartSearch = () => {
     const fetchResults = async () => {
       if (!debouncedQuery.trim() && Object.keys(filters).length === 0) {
         setResults([]);
-        setSuggestions([]);
         return;
       }
 
@@ -99,7 +107,8 @@ export const useSmartSearch = () => {
         if (debouncedQuery.trim()) {
           // Fuzzy match on name or brand
           // Note: Supabase/PostgREST doesn't support OR across columns easily without .or() syntax
-          queryBuilder = queryBuilder.or(`name.ilike.%${debouncedQuery}%,brand.ilike.%${debouncedQuery}%`);
+          const sanitizedQuery = debouncedQuery.replace(/[%,]/g, '');
+          queryBuilder = queryBuilder.or(`name.ilike.%${sanitizedQuery}%,brand.ilike.%${sanitizedQuery}%`);
         }
 
         // Apply filters
@@ -127,11 +136,6 @@ export const useSmartSearch = () => {
 
         if (data) {
           setResults(data);
-          // Extract unique names for suggestions if query is short
-          if (debouncedQuery.length > 2) {
-             const names = data.map(d => d.name).slice(0, 5);
-             setSuggestions(names);
-          }
         }
       } catch (error) {
         console.error('Search error:', error);
@@ -147,7 +151,6 @@ export const useSmartSearch = () => {
     query,
     setQuery,
     results,
-    suggestions,
     loading,
     history,
     addToHistory,
